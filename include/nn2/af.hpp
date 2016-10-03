@@ -82,7 +82,7 @@ namespace nn {
     template <typename P = float>
     struct AfTanhNoBias : public Af<P> {
         typedef params::Dummy params_t;
-        BOOST_STATIC_CONSTEXPR float lambda = 0.1f;
+        BOOST_STATIC_CONSTEXPR float lambda = 1.0f;
         AfTanhNoBias() {}
         float operator()(float p) const
         {
