@@ -4,6 +4,7 @@
 
 #include <medrops/medrops.hpp>
 #include <medrops/linear_policy.hpp>
+#include <medrops/nn_policy.hpp>
 #include <medrops/gp_model.hpp>
 #include <medrops/exp_sq_ard.hpp>
 
@@ -123,12 +124,18 @@ struct Params {
         BO_PARAM(double, max_u, 2.5);
     };
 
+    struct nn_policy {
+        BO_PARAM(int, state_dim, 3);
+        BO_PARAM(double, max_u, 2.5);
+        BO_PARAM(int, hidden_neurons, 5);
+    };
+
     struct mean_constant {
         BO_PARAM(double, constant, 0.0);
     };
 
     struct opt_cmaes : public limbo::defaults::opt_cmaes {
-        // BO_PARAM(double, max_fun_evals, 1000);
+        BO_PARAM(double, max_fun_evals, 5000);
     };
 
     // struct kernel_squared_exp_ard : public limbo::defaults::kernel_squared_exp_ard {
@@ -140,7 +147,7 @@ struct Pendulum {
     typedef std::vector<double> ode_state_type;
 
     template <typename Policy>
-    std::vector<std::tuple<Eigen::VectorXd, Eigen::VectorXd, Eigen::VectorXd>> execute(Policy policy, size_t steps)
+    std::vector<std::tuple<Eigen::VectorXd, Eigen::VectorXd, Eigen::VectorXd>> execute(const Policy& policy, size_t steps)
     {
         double dt = 0.1;
         std::vector<std::tuple<Eigen::VectorXd, Eigen::VectorXd, Eigen::VectorXd>> res;
@@ -159,7 +166,7 @@ struct Pendulum {
             Eigen::VectorXd init_diff = Eigen::VectorXd::Map(pend_state.data(), pend_state.size());
 
             _u = policy.next(init)[0];
-            ode_stepper.do_step(std::bind(&Pendulum::dynamics, *this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3), pend_state, t, dt);
+            ode_stepper.do_step(std::bind(&Pendulum::dynamics, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3), pend_state, t, dt);
             t += dt;
             Eigen::VectorXd final = Eigen::VectorXd::Map(pend_state.data(), pend_state.size());
             res.push_back(std::make_tuple(init, limbo::tools::make_vector(_u), final - init_diff));
@@ -182,7 +189,7 @@ struct Pendulum {
     }
 
     template <typename Policy, typename Model>
-    void execute_dummy(Policy policy, Model model, size_t steps)
+    void execute_dummy(const Policy& policy, Model model, size_t steps) const
     {
         double dt = 0.1;
         // init state
@@ -232,7 +239,7 @@ struct Pendulum {
     }
 
     template <typename Policy, typename Model, typename Reward>
-    double predict_policy(Policy policy, Model model, Reward world, size_t steps) const
+    double predict_policy(const Policy& policy, Model model, Reward world, size_t steps) const
     {
         size_t N = Params::parallel_evaluations();
 
@@ -320,7 +327,7 @@ int main()
     }
 #endif
 
-    medrops::Medrops<Params, medrops::GPModel<Params, GP_t>, Pendulum, medrops::LinearPolicy<Params>, limbo::opt::Cmaes<Params>, RewardFunction> pendulum_system;
+    medrops::Medrops<Params, medrops::GPModel<Params, GP_t>, Pendulum, medrops::NNPolicy<Params>, limbo::opt::Cmaes<Params>, RewardFunction> pendulum_system;
 
     pendulum_system.learn(1, 10);
 

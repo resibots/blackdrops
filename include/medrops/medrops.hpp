@@ -29,7 +29,7 @@ namespace medrops {
             PolicyOptimizer policy_optimizer;
 
             // For now optimize policy without gradients
-            Eigen::VectorXd params_star = policy_optimizer(std::bind(&Medrops::_optimize_policy, *this, std::placeholders::_1, std::placeholders::_2), _policy.params(), false);
+            Eigen::VectorXd params_star = policy_optimizer(std::bind(&Medrops::_optimize_policy, this, std::placeholders::_1, std::placeholders::_2), _policy.params(), false);
 
             _policy.set_params(params_star);
 
@@ -47,11 +47,13 @@ namespace medrops {
 
             std::cout << "Starting learning..." << std::endl;
             for (size_t i = 0; i < iterations; i++) {
+                std::cout << "Learning iteration #" << (i + 1) << std::endl;
                 learn_model();
                 std::cout << "Learned model..." << std::endl;
                 optimize_policy();
                 std::cout << "Optimized policy..." << std::endl;
                 execute_and_record_data();
+                std::cout << "Executed action..." << std::endl;
             }
         }
 

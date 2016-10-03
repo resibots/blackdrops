@@ -10,7 +10,7 @@ namespace medrops {
 
         LinearPolicy() { _random = false; }
 
-        Eigen::VectorXd next(const Eigen::VectorXd& state)
+        Eigen::VectorXd next(const Eigen::VectorXd& state) const
         {
             if (_random || _params.size() == 0) {
                 return Params::linear_policy::max_u() * (limbo::tools::random_vector(Params::action_dim()).array() * 2 - 1.0);
@@ -49,7 +49,7 @@ namespace medrops {
             _random = false;
         }
 
-        Eigen::VectorXd params()
+        Eigen::VectorXd params() const
         {
             if (_random || _params.size() == 0)
                 return limbo::tools::random_vector((Params::linear_policy::state_dim() + 1) * Params::action_dim());
