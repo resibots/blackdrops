@@ -147,14 +147,15 @@ struct Params {
 struct Pendulum {
     typedef std::vector<double> ode_state_type;
 
-    template <typename Policy>
-    std::vector<std::tuple<Eigen::VectorXd, Eigen::VectorXd, Eigen::VectorXd>> execute(const Policy& policy, size_t steps)
+    template <typename Policy, typename Reward>
+    std::vector<std::tuple<Eigen::VectorXd, Eigen::VectorXd, Eigen::VectorXd>> execute(const Policy& policy, const Reward& world, size_t steps, std::vector<double>& R)
     {
         double dt = 0.1;
         std::vector<std::tuple<Eigen::VectorXd, Eigen::VectorXd, Eigen::VectorXd>> res;
 
         boost::numeric::odeint::runge_kutta_dopri5<ode_state_type> ode_stepper;
         double t = 0.0;
+        R = std::vector<double>();
 
         ode_state_type pend_state(2, 0.0);
 
@@ -171,6 +172,7 @@ struct Pendulum {
             t += dt;
             Eigen::VectorXd final = Eigen::VectorXd::Map(pend_state.data(), pend_state.size());
             res.push_back(std::make_tuple(init, limbo::tools::make_vector(_u), final - init_diff));
+            R.push_back(world(init, limbo::tools::make_vector(_u), final));
 #ifdef USE_SDL
             //Clear screen
             SDL_SetRenderDrawColor(renderer, 0xFF, 0xFF, 0xFF, 0xFF);
@@ -189,10 +191,11 @@ struct Pendulum {
         return res;
     }
 
-    template <typename Policy, typename Model>
-    void execute_dummy(const Policy& policy, Model model, size_t steps) const
+    template <typename Policy, typename Model, typename Reward>
+    void execute_dummy(const Policy& policy, const Model& model, const Reward& world, size_t steps, std::vector<double>& R) const
     {
         double dt = 0.1;
+        R = std::vector<double>();
         // init state
         Eigen::VectorXd init_diff = Eigen::VectorXd::Zero(Params::model_pred_dim());
         Eigen::VectorXd init = Eigen::VectorXd::Zero(Params::model_input_dim());
@@ -217,6 +220,7 @@ struct Pendulum {
             // }
 
             Eigen::VectorXd final = init_diff + mu;
+            R.push_back(world(init_diff, mu, final));
             // reward += world(init_diff, u, final);
             init_diff = final;
             init(0) = final(0);
@@ -240,7 +244,7 @@ struct Pendulum {
     }
 
     template <typename Policy, typename Model, typename Reward>
-    double predict_policy(const Policy& policy, Model model, Reward world, size_t steps) const
+    double predict_policy(const Policy& policy, const Model& model, const Reward& world, size_t steps) const
     {
         size_t N = Params::parallel_evaluations();
 
@@ -305,7 +309,7 @@ protected:
 };
 
 struct RewardFunction {
-    double operator()(const Eigen::VectorXd& from_state, const Eigen::VectorXd& action, const Eigen::VectorXd& to_state)
+    double operator()(const Eigen::VectorXd& from_state, const Eigen::VectorXd& action, const Eigen::VectorXd& to_state) const
     {
         double s_c_sq = 0.5 * 0.5;
         double dx = to_state(1) - Params::goal_pos();

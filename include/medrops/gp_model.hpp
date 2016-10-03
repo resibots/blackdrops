@@ -28,7 +28,7 @@ namespace medrops {
             _gp_model.recompute(false);
         }
 
-        std::tuple<Eigen::VectorXd, double> predict(const Eigen::VectorXd& x)
+        std::tuple<Eigen::VectorXd, double> predict(const Eigen::VectorXd& x) const
         {
             return _gp_model.query(x);
         }

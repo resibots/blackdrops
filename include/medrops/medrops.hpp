@@ -2,6 +2,7 @@
 #define MEDROPS_MEDROPS_HPP
 
 #include <limbo/opt/optimizer.hpp>
+#include <fstream>
 
 namespace medrops {
 
@@ -13,10 +14,17 @@ namespace medrops {
 
         void execute_and_record_data()
         {
+            std::vector<double> R;
+            RewardFunction world;
             // Execute best policy so far on robot
-            auto obs_new = _robot.execute(_policy, Params::medrops::rollout_steps());
+            auto obs_new = _robot.execute(_policy, world, Params::medrops::rollout_steps(), R);
             // Append recorded data
             _observations.insert(_observations.end(), obs_new.begin(), obs_new.end());
+
+            // _ofs << R << std::endl;
+            for (auto r : R)
+                _ofs << r << " ";
+            _ofs << std::endl;
         }
 
         void learn_model()
@@ -33,11 +41,18 @@ namespace medrops {
 
             _policy.set_params(params_star);
 
-            _robot.execute_dummy(_policy, _model, Params::medrops::rollout_steps());
+            std::vector<double> R;
+            RewardFunction world;
+            _robot.execute_dummy(_policy, _model, world, Params::medrops::rollout_steps(), R);
+            // _ofs << R << " ";
+            for (auto r : R)
+                _ofs << r << " ";
+            _ofs << std::endl;
         }
 
         void learn(size_t init, size_t iterations)
         {
+            _ofs.open("results.dat");
             _policy.set_random_policy();
 
             std::cout << "Executing random actions..." << std::endl;
@@ -55,12 +70,14 @@ namespace medrops {
                 execute_and_record_data();
                 std::cout << "Executed action..." << std::endl;
             }
+            _ofs.close();
         }
 
     protected:
         Robot _robot;
         Policy _policy;
         Model _model;
+        std::ofstream _ofs;
 
         // state, action, prediction
         std::vector<std::tuple<Eigen::VectorXd, Eigen::VectorXd, Eigen::VectorXd>> _observations;
