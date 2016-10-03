@@ -1,6 +1,7 @@
 #include <limbo/limbo.hpp>
 
 #include <boost/numeric/odeint.hpp>
+#include <boost/program_options.hpp>
 
 #include <medrops/medrops.hpp>
 #include <medrops/linear_policy.hpp>
@@ -106,7 +107,7 @@ struct Params {
     BO_PARAM(size_t, model_input_dim, 3);
     BO_PARAM(size_t, model_pred_dim, 2);
 
-    BO_PARAM(size_t, parallel_evaluations, 100);
+    BO_DYN_PARAM(size_t, parallel_evaluations);
 
     BO_PARAM(double, goal_pos, M_PI);
     BO_PARAM(double, goal_vel, 0.0);
@@ -116,7 +117,7 @@ struct Params {
     };
 
     struct gp_model {
-        BO_PARAM(double, noise, 1e-5);
+        BO_PARAM(double, noise, 1e-10);
     };
 
     struct linear_policy {
@@ -127,7 +128,7 @@ struct Params {
     struct nn_policy {
         BO_PARAM(int, state_dim, 3);
         BO_PARAM(double, max_u, 2.5);
-        BO_PARAM(int, hidden_neurons, 5);
+        BO_DYN_PARAM(int, hidden_neurons);
     };
 
     struct mean_constant {
@@ -135,7 +136,7 @@ struct Params {
     };
 
     struct opt_cmaes : public limbo::defaults::opt_cmaes {
-        BO_PARAM(double, max_fun_evals, 5000);
+        BO_DYN_PARAM(double, max_fun_evals);
     };
 
     // struct kernel_squared_exp_ard : public limbo::defaults::kernel_squared_exp_ard {
@@ -318,8 +319,58 @@ using kernel_t = medrops::SquaredExpARD<Params>;
 using mean_t = limbo::mean::Constant<Params>;
 using GP_t = limbo::model::GP<Params, kernel_t, mean_t, limbo::model::gp::KernelLFOpt<Params, limbo::opt::Cmaes<Params>>>;
 
-int main()
+BO_DECLARE_DYN_PARAM(size_t, Params, parallel_evaluations);
+BO_DECLARE_DYN_PARAM(int, Params::nn_policy, hidden_neurons);
+BO_DECLARE_DYN_PARAM(double, Params::opt_cmaes, max_fun_evals);
+
+int main(int argc, char** argv)
 {
+    namespace po = boost::program_options;
+    po::options_description desc("Command line arguments");
+    desc.add_options()("help,h", "Prints this help message")("parallel_evaluations,p", po::value<int>(), "Number of parallel monte carlo evaluations for policy reward estimation.")("hidden_neurons,h", po::value<int>(), "Number of hidden neurons in NN policy.")("max_evals,m", po::value<int>(), "Max funtion evaluations for cmaes to optimize the policy.");
+
+    try {
+        po::variables_map vm;
+        po::store(po::parse_command_line(argc, argv, desc), vm);
+        if (vm.count("help")) {
+            std::cout << desc << std::endl;
+            return 0;
+        }
+
+        po::notify(vm);
+
+        if (vm.count("parallel_evaluations")) {
+            int c = vm["parallel_evaluations"].as<int>();
+            if (c < 0)
+                c = 0;
+            Params::set_parallel_evaluations(c);
+        }
+        else {
+            Params::set_parallel_evaluations(100);
+        }
+        if (vm.count("hidden_neurons")) {
+            int c = vm["hidden_neurons"].as<int>();
+            if (c < 1)
+                c = 1;
+            Params::nn_policy::set_hidden_neurons(c);
+        }
+        else {
+            Params::nn_policy::set_hidden_neurons(5);
+        }
+        if (vm.count("max_evals")) {
+            int c = vm["max_evals"].as<int>();
+            if (c < 1)
+                c = 1;
+            Params::opt_cmaes::set_max_fun_evals(c);
+        }
+        else {
+            Params::opt_cmaes::set_max_fun_evals(1000);
+        }
+    }
+    catch (po::error& e) {
+        std::cerr << "[Exception caught while parsing command line arguments]: " << e.what() << std::endl;
+        return 1;
+    }
 #ifdef USE_SDL
     //Initialize
     if (!sdl_init()) {
