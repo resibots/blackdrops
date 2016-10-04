@@ -117,7 +117,7 @@ struct Params {
     };
 
     struct gp_model {
-        BO_PARAM(double, noise, 1e-10);
+        BO_PARAM(double, noise, 0.01);
     };
 
     struct linear_policy {
@@ -143,8 +143,9 @@ struct Params {
         BO_PARAM(int, iterations, 1000);
     };
 
-    // struct kernel_squared_exp_ard : public limbo::defaults::kernel_squared_exp_ard {
-    //     BO_PARAM(double, sigma_sq, 0.2);
+    // struct kernel_exp {
+    //     BO_PARAM(double, sigma_sq, 1);
+    //     BO_PARAM(double, l, 0.75);
     // };
 };
 
@@ -152,6 +153,79 @@ struct GPParams {
     struct opt_cmaes : public limbo::defaults::opt_cmaes {
     };
 };
+
+struct BOParams {
+    struct bayes_opt_bobase {
+        BO_PARAM(bool, stats_enabled, false);
+    };
+
+    struct bayes_opt_boptimizer : public limbo::defaults::bayes_opt_boptimizer {
+        BO_PARAM(double, noise, 1e-10);
+    };
+
+    struct init_randomsampling {
+        BO_PARAM(int, samples, 10);
+    };
+
+    struct stop_maxiterations {
+        BO_PARAM(int, iterations, 490);
+    };
+
+    struct kernel_exp {
+        BO_PARAM(double, sigma_sq, 1);
+        BO_PARAM(double, l, 0.3);
+    };
+
+    struct acqui_ucb {
+        BO_PARAM(double, alpha, 5.0);
+    };
+
+    struct opt_nloptnograd : public limbo::defaults::opt_nloptnograd {
+    };
+
+    struct mean_constant {
+        BO_PARAM(double, constant, 0.0);
+    };
+};
+
+using bo_kernel_t = limbo::kernel::Exp<BOParams>;
+using bo_mean_t = limbo::mean::Constant<BOParams>;
+using bo_gp_t = limbo::model::GP<BOParams, bo_kernel_t, bo_mean_t>;
+using bo_acqui_t = limbo::acqui::UCB<BOParams, bo_gp_t>;
+using bo_opt_t = limbo::bayes_opt::BOptimizer<BOParams, limbo::modelfun<bo_gp_t>, limbo::acquifun<bo_acqui_t>>;
+
+template <typename Params>
+struct BO {
+public:
+    struct dummy_f {
+        static size_t dim_in;
+        static constexpr size_t dim_out = 1;
+        std::function<limbo::opt::eval_t(const Eigen::VectorXd&, bool)> func;
+
+        Eigen::VectorXd operator()(const Eigen::VectorXd& x) const
+        {
+            Eigen::VectorXd xx = x.array() * 5 - 2.5;
+            return limbo::tools::make_vector(limbo::opt::fun(func(x, false)));
+        }
+    };
+
+    template <typename F>
+    Eigen::VectorXd operator()(const F& f, const Eigen::VectorXd& init, double bounded) const
+    {
+        bo_opt_t bo;
+
+        dummy_f ff;
+        dummy_f::dim_in = init.size();
+        ff.func = f;
+
+        bo.optimize(ff);
+
+        return bo.best_sample().array() * 5 - 2.5;
+    }
+};
+
+template <typename Params>
+size_t BO<Params>::dummy_f::dim_in;
 
 struct Pendulum {
     typedef std::vector<double> ode_state_type;
@@ -203,7 +277,6 @@ struct Pendulum {
     template <typename Policy, typename Model, typename Reward>
     void execute_dummy(const Policy& policy, const Model& model, const Reward& world, size_t steps, std::vector<double>& R) const
     {
-        double dt = 0.1;
         R = std::vector<double>();
         // init state
         Eigen::VectorXd init_diff = Eigen::VectorXd::Zero(Params::model_pred_dim());
@@ -219,14 +292,12 @@ struct Pendulum {
             Eigen::VectorXd mu;
             double sigma;
             std::tie(mu, sigma) = model.predict(query_vec);
-            // for (int i = 0; i < mu.size(); i++) {
-            //     double s = gaussian_rand(mu(i), sigma);
-            //     // if (s < (mu(i) - sigma))
-            //     //     s = mu(i) - sigma;
-            //     // if (s > (mu(i) + sigma))
-            //     //     s = mu(i) + sigma;
-            //     mu(i) = s;
-            // }
+            sigma = std::sqrt(sigma);
+            // std::cout << sigma << std::endl;
+            for (int i = 0; i < mu.size(); i++) {
+                double s = gaussian_rand(mu(i), sigma);
+                mu(i) = std::max(mu(i) - sigma, std::min(s, mu(i) + sigma));
+            }
 
             Eigen::VectorXd final = init_diff + mu;
             R.push_back(world(init_diff, mu, final));
@@ -237,6 +308,7 @@ struct Pendulum {
             init(2) = std::sin(final(1));
 
 #ifdef USE_SDL
+            double dt = 0.1;
             //Clear screen
             SDL_SetRenderDrawColor(renderer, 0xFF, 0xFF, 0xFF, 0xFF);
             SDL_RenderClear(renderer);
@@ -275,13 +347,10 @@ struct Pendulum {
               Eigen::VectorXd mu;
               double sigma;
               std::tie(mu, sigma) = model.predict(query_vec);
+              sigma = std::sqrt(sigma);
               for (int i = 0; i < mu.size(); i++) {
                   double s = gaussian_rand(mu(i), sigma);
-                  // if (s < (mu(i) - sigma))
-                  //     s = mu(i) - sigma;
-                  // if (s > (mu(i) + sigma))
-                  //     s = mu(i) + sigma;
-                  mu(i) = s;
+                  mu(i) = std::max(mu(i) - sigma, std::min(s, mu(i) + sigma));
               }
 
               Eigen::VectorXd final = init_diff + mu;
@@ -329,6 +398,7 @@ struct RewardFunction {
 };
 
 using kernel_t = medrops::SquaredExpARD<Params>;
+// using kernel_t = limbo::kernel::Exp<Params>;
 using mean_t = limbo::mean::Constant<Params>;
 using GP_t = limbo::model::GP<Params, kernel_t, mean_t, limbo::model::gp::KernelLFOpt<Params, limbo::opt::Cmaes<GPParams>>>;
 
@@ -389,7 +459,7 @@ int main(int argc, char** argv)
     }
 #endif
 
-    medrops::Medrops<Params, medrops::GPModel<Params, GP_t>, Pendulum, medrops::LinearPolicy<Params>, limbo::opt::Cmaes<Params>, RewardFunction> pendulum_system;
+    medrops::Medrops<Params, medrops::GPModel<Params, GP_t>, Pendulum, medrops::LinearPolicy<Params>, BO<Params>, RewardFunction> pendulum_system;
 
     pendulum_system.learn(1, 10);
 
