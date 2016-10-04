@@ -8,7 +8,7 @@ namespace medrops {
     template <typename Params>
     struct NNPolicy {
 
-        using nn_t = nn::Mlp<nn::Neuron<nn::PfWSum<double>, nn::AfTanhNoBias<double>>, nn::Connection<double, double>>;
+        using nn_t = nn::Mlp<nn::Neuron<nn::PfWSum<double>, nn::AfGaussian<double>>, nn::Connection<double, double>>;
 
         NNPolicy()
         {
@@ -48,19 +48,13 @@ namespace medrops {
             _mlp->step(inputs);
             _mlp->step(inputs);
             outputs = _mlp->get_outf();
-            // std::cout << "inputs: " << std::endl;
-            // for (auto d : inputs) {
-            //     if (std::isnan(d))
-            //         exit(1);
-            //     std::cout << d << " ";
-            // }
-            // std::cout << std::endl;
-            // std::cout << "output: " << outputs[0] << std::endl;
-            // if (std::isnan(outputs[0]))
-            //     exit(1);
+
             Eigen::VectorXd act = Eigen::VectorXd::Map(outputs.data(), outputs.size());
 
-            return act.array() * Params::nn_policy::max_u();
+            act = act.unaryExpr([](double x) {
+                return Params::linear_policy::max_u() * (9 * std::sin(x) / 8.0 + std::sin(3 * x) / 8.0);
+            });
+            return act;
         }
 
         void set_random_policy()

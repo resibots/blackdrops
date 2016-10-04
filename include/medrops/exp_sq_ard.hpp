@@ -11,7 +11,7 @@ namespace medrops {
             this->set_h_params(p);
         }
 
-        size_t h_params_size() const { return _ell.size() + _ell.size() * Params::kernel_squared_exp_ard::k(); }
+        size_t h_params_size() const { return _ell.size() + 1; }
 
         // Return the hyper parameters in log-space
         const Eigen::VectorXd& h_params() const { return _h_params; }
@@ -27,7 +27,7 @@ namespace medrops {
 
         Eigen::VectorXd grad(const Eigen::VectorXd& x1, const Eigen::VectorXd& x2) const
         {
-            Eigen::VectorXd grad(_input_dim);
+            Eigen::VectorXd grad(_input_dim + 1);
             Eigen::VectorXd z = (x1 - x2).cwiseQuotient(_ell).array().square();
             double k = _sf2 * std::exp(-0.5 * z.sum());
             grad.head(_input_dim) = z * k;

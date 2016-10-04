@@ -139,6 +139,17 @@ namespace nn {
             return p;
         }
     };
+
+    // copy input to output
+    // store an arbitrary parameter
+    template <typename P = params::Dummy>
+    struct AfGaussian : public Af<P> {
+        typedef P params_t;
+        float operator()(float p) const
+        {
+            return std::exp(-0.5 * p * p);
+        }
+    };
 }
 
 #endif

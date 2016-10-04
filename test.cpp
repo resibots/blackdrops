@@ -139,9 +139,18 @@ struct Params {
         BO_DYN_PARAM(double, max_fun_evals);
     };
 
+    struct opt_nloptgrad : public limbo::defaults::opt_nloptgrad {
+        BO_PARAM(int, iterations, 1000);
+    };
+
     // struct kernel_squared_exp_ard : public limbo::defaults::kernel_squared_exp_ard {
     //     BO_PARAM(double, sigma_sq, 0.2);
     // };
+};
+
+struct GPParams {
+    struct opt_cmaes : public limbo::defaults::opt_cmaes {
+    };
 };
 
 struct Pendulum {
@@ -321,7 +330,7 @@ struct RewardFunction {
 
 using kernel_t = medrops::SquaredExpARD<Params>;
 using mean_t = limbo::mean::Constant<Params>;
-using GP_t = limbo::model::GP<Params, kernel_t, mean_t, limbo::model::gp::KernelLFOpt<Params, limbo::opt::Cmaes<Params>>>;
+using GP_t = limbo::model::GP<Params, kernel_t, mean_t, limbo::model::gp::KernelLFOpt<Params, limbo::opt::Cmaes<GPParams>>>;
 
 BO_DECLARE_DYN_PARAM(size_t, Params, parallel_evaluations);
 BO_DECLARE_DYN_PARAM(int, Params::nn_policy, hidden_neurons);
@@ -363,8 +372,6 @@ int main(int argc, char** argv)
         }
         if (vm.count("max_evals")) {
             int c = vm["max_evals"].as<int>();
-            if (c < 1)
-                c = 1;
             Params::opt_cmaes::set_max_fun_evals(c);
         }
         else {
@@ -382,7 +389,7 @@ int main(int argc, char** argv)
     }
 #endif
 
-    medrops::Medrops<Params, medrops::GPModel<Params, GP_t>, Pendulum, medrops::NNPolicy<Params>, limbo::opt::Cmaes<Params>, RewardFunction> pendulum_system;
+    medrops::Medrops<Params, medrops::GPModel<Params, GP_t>, Pendulum, medrops::LinearPolicy<Params>, limbo::opt::Cmaes<Params>, RewardFunction> pendulum_system;
 
     pendulum_system.learn(1, 10);
 
