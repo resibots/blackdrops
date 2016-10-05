@@ -160,7 +160,7 @@ struct BOParams {
     };
 
     struct bayes_opt_boptimizer : public limbo::defaults::bayes_opt_boptimizer {
-        BO_PARAM(double, noise, 1e-10);
+        BO_PARAM(double, noise, 0.2);
     };
 
     struct init_randomsampling {
@@ -168,16 +168,16 @@ struct BOParams {
     };
 
     struct stop_maxiterations {
-        BO_PARAM(int, iterations, 490);
+        BO_PARAM(int, iterations, 990);
     };
 
     struct kernel_exp {
-        BO_PARAM(double, sigma_sq, 1);
-        BO_PARAM(double, l, 0.3);
+        BO_PARAM(double, sigma_sq, 2);
+        BO_PARAM(double, l, 1);
     };
 
     struct acqui_ucb {
-        BO_PARAM(double, alpha, 5.0);
+        BO_PARAM(double, alpha, 1.0);
     };
 
     struct opt_nloptnograd : public limbo::defaults::opt_nloptnograd {
@@ -187,6 +187,16 @@ struct BOParams {
         BO_PARAM(double, constant, 0.0);
     };
 };
+
+inline double angle_dist(double a, double b)
+{
+    double theta = b - a;
+    while (theta < -M_PI)
+        theta += 2 * M_PI;
+    while (theta > M_PI)
+        theta -= 2 * M_PI;
+    return theta;
+}
 
 using bo_kernel_t = limbo::kernel::Exp<BOParams>;
 using bo_mean_t = limbo::mean::Constant<BOParams>;
@@ -205,7 +215,9 @@ public:
         Eigen::VectorXd operator()(const Eigen::VectorXd& x) const
         {
             Eigen::VectorXd xx = x.array() * 5 - 2.5;
-            return limbo::tools::make_vector(limbo::opt::fun(func(x, false)));
+            double v = limbo::opt::fun(func(x, false));
+            // std::cout << v << std::endl;
+            return limbo::tools::make_vector(v);
         }
     };
 
@@ -219,8 +231,10 @@ public:
         ff.func = f;
 
         bo.optimize(ff);
+        Eigen::VectorXd b = bo.best_sample();
+        // std::cout << "BEST: " << ff(b) << " vs " << bo.best_observation() << std::endl;
 
-        return bo.best_sample().array() * 5 - 2.5;
+        return b.array() * 5 - 2.5;
     }
 };
 
@@ -249,13 +263,22 @@ struct Pendulum {
             init(2) = std::sin(pend_state[1]);
 
             Eigen::VectorXd init_diff = Eigen::VectorXd::Map(pend_state.data(), pend_state.size());
+            // while (init_diff(1) < -M_PI)
+            //     init_diff(1) += 2 * M_PI;
+            // while (init_diff(1) > M_PI)
+            //     init_diff(1) -= 2 * M_PI;
 
             _u = policy.next(init)[0];
             ode_stepper.do_step(std::bind(&Pendulum::dynamics, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3), pend_state, t, dt);
             t += dt;
             Eigen::VectorXd final = Eigen::VectorXd::Map(pend_state.data(), pend_state.size());
+            // while (final(1) < -M_PI)
+            //     final(1) += 2 * M_PI;
+            // while (final(1) > M_PI)
+            //     final(1) -= 2 * M_PI;
             res.push_back(std::make_tuple(init, limbo::tools::make_vector(_u), final - init_diff));
-            R.push_back(world(init, limbo::tools::make_vector(_u), final));
+            double r = world(init, limbo::tools::make_vector(_u), final);
+            R.push_back(r);
 #ifdef USE_SDL
             //Clear screen
             SDL_SetRenderDrawColor(renderer, 0xFF, 0xFF, 0xFF, 0xFF);
@@ -263,6 +286,14 @@ struct Pendulum {
 
             draw_pendulum(pend_state[1]);
             draw_goal(0, -1);
+
+            SDL_SetRenderDrawColor(renderer, 0x00, 0xFF, 0x00, 0xFF);
+            SDL_Rect outlineRect = {SCREEN_WIDTH / 2 + 0.05 * SCREEN_HEIGHT / 4, SCREEN_HEIGHT / 4 + 2.05 * SCREEN_HEIGHT / 4, _u / 2.5 * SCREEN_HEIGHT / 4, 0.1 * SCREEN_HEIGHT / 4};
+            SDL_RenderFillRect(renderer, &outlineRect);
+
+            SDL_SetRenderDrawColor(renderer, 0x00, 0xFF, 0xFF, 0xFF);
+            outlineRect = {SCREEN_WIDTH / 2 + 0.05 * SCREEN_HEIGHT / 4, SCREEN_HEIGHT / 4 + 2.55 * SCREEN_HEIGHT / 4, r * SCREEN_HEIGHT / 4, 0.1 * SCREEN_HEIGHT / 4};
+            SDL_RenderFillRect(renderer, &outlineRect);
 
             //Update screen
             SDL_RenderPresent(renderer);
@@ -300,7 +331,12 @@ struct Pendulum {
             }
 
             Eigen::VectorXd final = init_diff + mu;
-            R.push_back(world(init_diff, mu, final));
+            // while (final(1) < -M_PI)
+            //     final(1) += 2 * M_PI;
+            // while (final(1) > M_PI)
+            //     final(1) -= 2 * M_PI;
+            double r = world(init_diff, mu, final);
+            R.push_back(r);
             // reward += world(init_diff, u, final);
             init_diff = final;
             init(0) = final(0);
@@ -315,6 +351,14 @@ struct Pendulum {
 
             draw_pendulum(init_diff[1], true);
             draw_goal(0, -1);
+
+            SDL_SetRenderDrawColor(renderer, 0x00, 0xFF, 0x00, 0xFF);
+            SDL_Rect outlineRect = {SCREEN_WIDTH / 2 + 0.05 * SCREEN_HEIGHT / 4, SCREEN_HEIGHT / 4 + 2.05 * SCREEN_HEIGHT / 4, u[0] / 2.5 * SCREEN_HEIGHT / 4, 0.1 * SCREEN_HEIGHT / 4};
+            SDL_RenderFillRect(renderer, &outlineRect);
+
+            SDL_SetRenderDrawColor(renderer, 0x00, 0xFF, 0xFF, 0xFF);
+            outlineRect = {SCREEN_WIDTH / 2 + 0.05 * SCREEN_HEIGHT / 4, SCREEN_HEIGHT / 4 + 2.55 * SCREEN_HEIGHT / 4, r * SCREEN_HEIGHT / 4, 0.1 * SCREEN_HEIGHT / 4};
+            SDL_RenderFillRect(renderer, &outlineRect);
 
             //Update screen
             SDL_RenderPresent(renderer);
@@ -354,6 +398,10 @@ struct Pendulum {
               }
 
               Eigen::VectorXd final = init_diff + mu;
+              // while (final(1) < -M_PI)
+              //     final(1) += 2 * M_PI;
+              // while (final(1) > M_PI)
+              //     final(1) -= 2 * M_PI;
               reward += world(init_diff, u, final);
               init_diff = final;
               init(0) = final(0);
@@ -367,6 +415,15 @@ struct Pendulum {
         for (size_t i = 0; i < N; i++)
             r += rews[i];
         r /= double(N);
+        // std::vector<double> scores(rews, rews + N);
+        // std::sort(scores.begin(), scores.end());
+        //
+        // if (N % 2 == 0) {
+        //     r = (scores[N / 2 - 1] + scores[N / 2]) / 2;
+        // }
+        // else {
+        //     r = scores[N / 2];
+        // }
 
         delete[] rews;
 
@@ -390,7 +447,7 @@ struct RewardFunction {
     double operator()(const Eigen::VectorXd& from_state, const Eigen::VectorXd& action, const Eigen::VectorXd& to_state) const
     {
         double s_c_sq = 0.5 * 0.5;
-        double dx = to_state(1) - Params::goal_pos();
+        double dx = angle_dist(to_state(1), Params::goal_pos());
         double dy = to_state(0) - Params::goal_vel();
 
         return std::exp(-0.5 / s_c_sq * (dx * dx + dy * dy));
@@ -459,7 +516,7 @@ int main(int argc, char** argv)
     }
 #endif
 
-    medrops::Medrops<Params, medrops::GPModel<Params, GP_t>, Pendulum, medrops::LinearPolicy<Params>, BO<Params>, RewardFunction> pendulum_system;
+    medrops::Medrops<Params, medrops::GPModel<Params, GP_t>, Pendulum, medrops::LinearPolicy<Params>, limbo::opt::Cmaes<Params>, RewardFunction> pendulum_system;
 
     pendulum_system.learn(1, 10);
 
