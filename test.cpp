@@ -198,6 +198,11 @@ inline double angle_dist(double a, double b)
     return theta;
 }
 
+namespace global {
+    std::vector<Eigen::VectorXd> _tried_policies;
+    std::vector<Eigen::VectorXd> _tried_rewards;
+}
+
 using bo_kernel_t = limbo::kernel::Exp<BOParams>;
 using bo_mean_t = limbo::mean::Constant<BOParams>;
 using bo_gp_t = limbo::model::GP<BOParams, bo_kernel_t, bo_mean_t>;
@@ -229,6 +234,10 @@ public:
         dummy_f ff;
         dummy_f::dim_in = init.size();
         ff.func = f;
+
+        for (size_t i = 0; i < global::_tried_policies.size(); i++) {
+            bo.add_new_sample((2.5 + global::_tried_policies[i].array()) / 5.0, global::_tried_rewards[i]);
+        }
 
         bo.optimize(ff);
         Eigen::VectorXd b = bo.best_sample();
@@ -300,6 +309,12 @@ struct Pendulum {
 
             SDL_Delay(dt * 1000);
 #endif
+        }
+
+        if (!policy.random()) {
+            global::_tried_policies.push_back(policy.params());
+            double rr = std::accumulate(R.begin(), R.end(), 0);
+            global::_tried_rewards.push_back(limbo::tools::make_vector(rr));
         }
 
         return res;

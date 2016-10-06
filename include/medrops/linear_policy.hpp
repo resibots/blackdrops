@@ -29,6 +29,11 @@ namespace medrops {
             _random = true;
         }
 
+        bool random() const
+        {
+            return _random;
+        }
+
         void set_params(const Eigen::VectorXd& params)
         {
             size_t M = Params::action_dim();
