@@ -168,11 +168,11 @@ struct BOParams {
     };
 
     struct stop_maxiterations {
-        BO_PARAM(int, iterations, 990);
+        BO_PARAM(int, iterations, 490);
     };
 
     struct kernel_exp {
-        BO_PARAM(double, sigma_sq, 2);
+        BO_PARAM(double, sigma_sq, 1);
         BO_PARAM(double, l, 1);
     };
 
@@ -215,7 +215,7 @@ public:
         Eigen::VectorXd operator()(const Eigen::VectorXd& x) const
         {
             Eigen::VectorXd xx = x.array() * 5 - 2.5;
-            double v = limbo::opt::fun(func(x, false));
+            double v = limbo::opt::fun(func(xx, false));
             // std::cout << v << std::endl;
             return limbo::tools::make_vector(v);
         }
@@ -516,7 +516,7 @@ int main(int argc, char** argv)
     }
 #endif
 
-    medrops::Medrops<Params, medrops::GPModel<Params, GP_t>, Pendulum, medrops::LinearPolicy<Params>, limbo::opt::Cmaes<Params>, RewardFunction> pendulum_system;
+    medrops::Medrops<Params, medrops::GPModel<Params, GP_t>, Pendulum, medrops::LinearPolicy<Params>, BO<Params>, RewardFunction> pendulum_system;
 
     pendulum_system.learn(1, 10);
 
