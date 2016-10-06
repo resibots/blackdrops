@@ -135,18 +135,9 @@ struct Params {
         BO_PARAM(double, constant, 0.0);
     };
 
-    struct opt_cmaes : public limbo::defaults::opt_cmaes {
-        BO_DYN_PARAM(double, max_fun_evals);
-    };
-
     struct opt_nloptgrad : public limbo::defaults::opt_nloptgrad {
         BO_PARAM(int, iterations, 1000);
     };
-
-    // struct kernel_exp {
-    //     BO_PARAM(double, sigma_sq, 1);
-    //     BO_PARAM(double, l, 0.75);
-    // };
 };
 
 struct GPParams {
@@ -164,11 +155,11 @@ struct BOParams {
     };
 
     struct init_randomsampling {
-        BO_PARAM(int, samples, 10);
+        BO_DYN_PARAM(int, samples);
     };
 
     struct stop_maxiterations {
-        BO_PARAM(int, iterations, 490);
+        BO_DYN_PARAM(int, iterations);
     };
 
     struct kernel_exp {
@@ -476,7 +467,8 @@ using GP_t = limbo::model::GP<Params, kernel_t, mean_t, limbo::model::gp::Kernel
 
 BO_DECLARE_DYN_PARAM(size_t, Params, parallel_evaluations);
 BO_DECLARE_DYN_PARAM(int, Params::nn_policy, hidden_neurons);
-BO_DECLARE_DYN_PARAM(double, Params::opt_cmaes, max_fun_evals);
+BO_DECLARE_DYN_PARAM(int, BOParams::init_randomsampling, samples);
+BO_DECLARE_DYN_PARAM(int, BOParams::stop_maxiterations, iterations);
 
 int main(int argc, char** argv)
 {
@@ -514,10 +506,12 @@ int main(int argc, char** argv)
         }
         if (vm.count("max_evals")) {
             int c = vm["max_evals"].as<int>();
-            Params::opt_cmaes::set_max_fun_evals(c);
+            BOParams::stop_maxiterations::set_iterations(0.95 * c);
+            BOParams::init_randomsampling::set_samples(c - BOParams::stop_maxiterations::iterations());
         }
         else {
-            Params::opt_cmaes::set_max_fun_evals(1000);
+            BOParams::stop_maxiterations::set_iterations(190);
+            BOParams::init_randomsampling::set_samples(10);
         }
     }
     catch (po::error& e) {
