@@ -39,7 +39,7 @@ namespace medrops {
             // For now optimize policy without gradients
             Eigen::VectorXd params_star = policy_optimizer(std::bind(&Medrops::_optimize_policy, this, std::placeholders::_1, std::placeholders::_2), _policy.params(), false);
 
-            std::cout << "BEST: " << limbo::opt::fun(_optimize_policy(params_star)) << std::endl;
+            // std::cout << "BEST: " << limbo::opt::fun(_optimize_policy(params_star)) << std::endl;
 
             _policy.set_params(params_star);
 

@@ -151,7 +151,7 @@ struct BOParams {
     };
 
     struct bayes_opt_boptimizer : public limbo::defaults::bayes_opt_boptimizer {
-        BO_PARAM(double, noise, 0.2);
+        BO_PARAM(double, noise, 0.1);
     };
 
     struct init_randomsampling {
@@ -163,19 +163,19 @@ struct BOParams {
     };
 
     struct kernel_exp {
-        BO_PARAM(double, sigma_sq, 1);
+        BO_PARAM(double, sigma_sq, 10);
         BO_PARAM(double, l, 1);
     };
 
     struct acqui_ucb {
-        BO_PARAM(double, alpha, 1.0);
+        BO_PARAM(double, alpha, 10.0);
     };
 
     struct opt_nloptnograd : public limbo::defaults::opt_nloptnograd {
     };
 
     struct mean_constant {
-        BO_PARAM(double, constant, 0.0);
+        BO_PARAM(double, constant, 15.0);
     };
 };
 
@@ -190,8 +190,8 @@ inline double angle_dist(double a, double b)
 }
 
 namespace global {
-    std::vector<Eigen::VectorXd> _tried_policies;
-    std::vector<Eigen::VectorXd> _tried_rewards;
+    std::vector<Eigen::VectorXd> _tried_policies = std::vector<Eigen::VectorXd>();
+    std::vector<Eigen::VectorXd> _tried_rewards = std::vector<Eigen::VectorXd>();
 }
 
 using bo_kernel_t = limbo::kernel::Exp<BOParams>;
@@ -211,9 +211,7 @@ public:
         Eigen::VectorXd operator()(const Eigen::VectorXd& x) const
         {
             Eigen::VectorXd xx = x.array() * 5 - 2.5;
-            double v = limbo::opt::fun(func(xx, false));
-            // std::cout << v << std::endl;
-            return limbo::tools::make_vector(v);
+            return limbo::tools::make_vector(limbo::opt::fun(func(xx, false)));
         }
     };
 
@@ -227,12 +225,15 @@ public:
         ff.func = f;
 
         for (size_t i = 0; i < global::_tried_policies.size(); i++) {
-            bo.add_new_sample((2.5 + global::_tried_policies[i].array()) / 5.0, global::_tried_rewards[i]);
+            Eigen::VectorXd s = (2.5 + global::_tried_policies[i].array()) / 5.0;
+            bo.add_new_sample(s, global::_tried_rewards[i]);
         }
+        // if (global::_tried_policies.size() > 0)
+        //     bo.add_new_sample((2.5 + global::_tried_policies.back().array()) / 5.0, ff((2.5 + global::_tried_policies.back().array()) / 5.0));
 
-        bo.optimize(ff);
+        bo.optimize(ff, limbo::FirstElem(), global::_tried_policies.size() == 0);
         Eigen::VectorXd b = bo.best_sample();
-        // std::cout << "BEST: " << ff(b) << " vs " << bo.best_observation() << std::endl;
+        std::cout << "BEST: " << ff(b) << " vs " << bo.best_observation() << std::endl;
 
         return b.array() * 5 - 2.5;
     }
@@ -304,7 +305,8 @@ struct Pendulum {
 
         if (!policy.random()) {
             global::_tried_policies.push_back(policy.params());
-            double rr = std::accumulate(R.begin(), R.end(), 0);
+            double rr = std::accumulate(R.begin(), R.end(), 0.0);
+            std::cout << "Reward: " << rr << std::endl;
             global::_tried_rewards.push_back(limbo::tools::make_vector(rr));
         }
 
