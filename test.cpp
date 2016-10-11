@@ -138,6 +138,10 @@ struct Params {
     struct opt_nloptgrad : public limbo::defaults::opt_nloptgrad {
         BO_PARAM(int, iterations, 1000);
     };
+
+    struct opt_cmaes : public limbo::defaults::opt_cmaes {
+        BO_DYN_PARAM(double, max_fun_evals);
+    };
 };
 
 struct GPParams {
@@ -174,6 +178,9 @@ struct BOParams {
     struct opt_nloptnograd : public limbo::defaults::opt_nloptnograd {
     };
 
+    // struct opt_cmaes : public limbo::defaults::opt_cmaes {
+    // };
+
     struct mean_constant {
         BO_PARAM(double, constant, 15.0);
     };
@@ -198,7 +205,8 @@ using bo_kernel_t = limbo::kernel::Exp<BOParams>;
 using bo_mean_t = limbo::mean::Constant<BOParams>;
 using bo_gp_t = limbo::model::GP<BOParams, bo_kernel_t, bo_mean_t>;
 using bo_acqui_t = limbo::acqui::UCB<BOParams, bo_gp_t>;
-using bo_opt_t = limbo::bayes_opt::BOptimizer<BOParams, limbo::modelfun<bo_gp_t>, limbo::acquifun<bo_acqui_t>>;
+// using bo_acqui_opt_t = limbo::opt::Cmaes<BOParams>;
+using bo_opt_t = limbo::bayes_opt::BOptimizer<BOParams, limbo::modelfun<bo_gp_t>, limbo::acquifun<bo_acqui_t>>; //, limbo::acquiopt<bo_acqui_opt_t>>;
 
 template <typename Params>
 struct BO {
@@ -251,9 +259,10 @@ struct Pendulum {
         double dt = 0.1;
         std::vector<std::tuple<Eigen::VectorXd, Eigen::VectorXd, Eigen::VectorXd>> res;
 
-        boost::numeric::odeint::runge_kutta_dopri5<ode_state_type> ode_stepper;
+        boost::numeric::odeint::runge_kutta4<ode_state_type> ode_stepper;
         double t = 0.0;
         R = std::vector<double>();
+        std::cout << "Executing policy: " << policy.params().transpose() << std::endl;
 
         ode_state_type pend_state(2, 0.0);
 
@@ -471,12 +480,15 @@ BO_DECLARE_DYN_PARAM(size_t, Params, parallel_evaluations);
 BO_DECLARE_DYN_PARAM(int, Params::nn_policy, hidden_neurons);
 BO_DECLARE_DYN_PARAM(int, BOParams::init_randomsampling, samples);
 BO_DECLARE_DYN_PARAM(int, BOParams::stop_maxiterations, iterations);
+BO_DECLARE_DYN_PARAM(double, Params::opt_cmaes, max_fun_evals);
 
 int main(int argc, char** argv)
 {
+    // int max_fun_evals = -1;
+    // bool bo;
     namespace po = boost::program_options;
     po::options_description desc("Command line arguments");
-    desc.add_options()("help,h", "Prints this help message")("parallel_evaluations,p", po::value<int>(), "Number of parallel monte carlo evaluations for policy reward estimation.")("hidden_neurons,n", po::value<int>(), "Number of hidden neurons in NN policy.")("max_evals,m", po::value<int>(), "Max funtion evaluations for cmaes to optimize the policy.");
+    desc.add_options()("help,h", "Prints this help message")("parallel_evaluations,p", po::value<int>(), "Number of parallel monte carlo evaluations for policy reward estimation.")("hidden_neurons,n", po::value<int>(), "Number of hidden neurons in NN policy.")("max_evals,m", po::value<int>(), "Max funtion evaluations to optimize the policy."); //("bo,b", po::bool_switch(&bo), "Use Bayesian Optimization instead of Cmaes to optimize");
 
     try {
         po::variables_map vm;
@@ -508,12 +520,12 @@ int main(int argc, char** argv)
         }
         if (vm.count("max_evals")) {
             int c = vm["max_evals"].as<int>();
-            BOParams::stop_maxiterations::set_iterations(0.95 * c);
-            BOParams::init_randomsampling::set_samples(c - BOParams::stop_maxiterations::iterations());
+            if (c < 1)
+                c = 10000;
+            Params::opt_cmaes::set_max_fun_evals(c);
         }
         else {
-            BOParams::stop_maxiterations::set_iterations(190);
-            BOParams::init_randomsampling::set_samples(10);
+            Params::opt_cmaes::set_max_fun_evals(10000);
         }
     }
     catch (po::error& e) {
@@ -527,7 +539,19 @@ int main(int argc, char** argv)
     }
 #endif
 
-    medrops::Medrops<Params, medrops::GPModel<Params, GP_t>, Pendulum, medrops::LinearPolicy<Params>, BO<Params>, RewardFunction> pendulum_system;
+    // if (bo) {
+    //     if (max_fun_evals == -1)
+    //         max_fun_evals = 200;
+    //     BOParams::stop_maxiterations::set_iterations(0.95 * max_fun_evals);
+    //     BOParams::init_randomsampling::set_samples(max_fun_evals - BOParams::stop_maxiterations::iterations());
+    // }
+    // else {
+    //     if (max_fun_evals == -1)
+    //         max_fun_evals = 10000;
+    //     Params::opt_cmaes::set_max_fun_evals(max_fun_evals);
+    // }
+
+    medrops::Medrops<Params, medrops::GPModel<Params, GP_t>, Pendulum, medrops::NNPolicy<Params>, limbo::opt::Cmaes<Params>, RewardFunction> pendulum_system;
 
     pendulum_system.learn(1, 10);
 

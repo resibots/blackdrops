@@ -30,6 +30,14 @@ def build(bld):
                       variants = ['SIMU'])
 
     limbo.create_variants(bld,
+                      source='test_cp.cpp',
+                      includes='. ../../src ../ ./include',
+                      target='test_cp',
+                      uselib=libs,
+                      uselib_local='limbo',
+                      variants = ['SIMU'])
+
+    limbo.create_variants(bld,
                       source='ode_test.cpp',
                       includes='. ../../src ../ ./include',
                       target='ode_test',

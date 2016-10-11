@@ -26,7 +26,6 @@ namespace medrops {
             std::cout << "GP Samples: " << samples.size() << std::endl;
             _gp_model.compute(samples, obs, Eigen::VectorXd::Constant(samples.size(), Params::gp_model::noise()));
             _gp_model.optimize_hyperparams();
-            _gp_model.recompute(false);
         }
 
         std::tuple<Eigen::VectorXd, double> predict(const Eigen::VectorXd& x) const
