@@ -488,7 +488,7 @@ int main(int argc, char** argv)
     // bool bo;
     namespace po = boost::program_options;
     po::options_description desc("Command line arguments");
-    desc.add_options()("help,h", "Prints this help message")("parallel_evaluations,p", po::value<int>(), "Number of parallel monte carlo evaluations for policy reward estimation.")("hidden_neurons,n", po::value<int>(), "Number of hidden neurons in NN policy.")("max_evals,m", po::value<int>(), "Max funtion evaluations to optimize the policy."); //("bo,b", po::bool_switch(&bo), "Use Bayesian Optimization instead of Cmaes to optimize");
+    desc.add_options()("help,h", "Prints this help message")("parallel_evaluations,p", po::value<int>(), "Number of parallel monte carlo evaluations for policy reward estimation.")("hidden_neurons,n", po::value<int>(), "Number of hidden neurons in NN policy.")("max_evals,m", po::value<int>(), "Max function evaluations to optimize the policy."); //("bo,b", po::bool_switch(&bo), "Use Bayesian Optimization instead of Cmaes to optimize");
 
     try {
         po::variables_map vm;
@@ -520,8 +520,6 @@ int main(int argc, char** argv)
         }
         if (vm.count("max_evals")) {
             int c = vm["max_evals"].as<int>();
-            if (c < 1)
-                c = 10000;
             Params::opt_cmaes::set_max_fun_evals(c);
         }
         else {

@@ -32,7 +32,7 @@ bool sdl_init()
         return false;
     }
 
-    window = SDL_CreateWindow("Pendulum Task", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, SCREEN_WIDTH, SCREEN_HEIGHT, SDL_WINDOW_SHOWN);
+    window = SDL_CreateWindow("Cartpole Task", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, SCREEN_WIDTH, SCREEN_HEIGHT, SDL_WINDOW_SHOWN);
     if (window == NULL) {
         std::cout << "Window could not be created! SDL_Error: " << SDL_GetError() << std::endl;
         return false;
@@ -140,44 +140,14 @@ struct Params {
     struct opt_nloptgrad : public limbo::defaults::opt_nloptgrad {
         BO_PARAM(int, iterations, 1000);
     };
+
+    struct opt_cmaes : public limbo::defaults::opt_cmaes {
+        BO_DYN_PARAM(double, max_fun_evals);
+    };
 };
 
 struct GPParams {
     struct opt_cmaes : public limbo::defaults::opt_cmaes {
-    };
-};
-
-struct BOParams {
-    struct bayes_opt_bobase {
-        BO_PARAM(bool, stats_enabled, false);
-    };
-
-    struct bayes_opt_boptimizer : public limbo::defaults::bayes_opt_boptimizer {
-        BO_PARAM(double, noise, 0.1);
-    };
-
-    struct init_randomsampling {
-        BO_DYN_PARAM(int, samples);
-    };
-
-    struct stop_maxiterations {
-        BO_DYN_PARAM(int, iterations);
-    };
-
-    struct kernel_exp {
-        BO_PARAM(double, sigma_sq, 10);
-        BO_PARAM(double, l, 1);
-    };
-
-    struct acqui_ucb {
-        BO_PARAM(double, alpha, 10.0);
-    };
-
-    struct opt_nloptnograd : public limbo::defaults::opt_nloptnograd {
-    };
-
-    struct mean_constant {
-        BO_PARAM(double, constant, 15.0);
     };
 };
 
@@ -195,54 +165,6 @@ namespace global {
     std::vector<Eigen::VectorXd> _tried_policies = std::vector<Eigen::VectorXd>();
     std::vector<Eigen::VectorXd> _tried_rewards = std::vector<Eigen::VectorXd>();
 }
-
-using bo_kernel_t = limbo::kernel::Exp<BOParams>;
-using bo_mean_t = limbo::mean::Constant<BOParams>;
-using bo_gp_t = limbo::model::GP<BOParams, bo_kernel_t, bo_mean_t>;
-using bo_acqui_t = limbo::acqui::UCB<BOParams, bo_gp_t>;
-using bo_opt_t = limbo::bayes_opt::BOptimizer<BOParams, limbo::modelfun<bo_gp_t>, limbo::acquifun<bo_acqui_t>>;
-
-template <typename Params>
-struct BO {
-public:
-    struct dummy_f {
-        static size_t dim_in;
-        static constexpr size_t dim_out = 1;
-        std::function<limbo::opt::eval_t(const Eigen::VectorXd&, bool)> func;
-
-        Eigen::VectorXd operator()(const Eigen::VectorXd& x) const
-        {
-            Eigen::VectorXd xx = x.array() * 10.0 - 5.0;
-            return limbo::tools::make_vector(limbo::opt::fun(func(xx, false)));
-        }
-    };
-
-    template <typename F>
-    Eigen::VectorXd operator()(const F& f, const Eigen::VectorXd& init, double bounded) const
-    {
-        bo_opt_t bo;
-
-        dummy_f ff;
-        dummy_f::dim_in = init.size();
-        ff.func = f;
-
-        for (size_t i = 0; i < global::_tried_policies.size(); i++) {
-            Eigen::VectorXd s = (5.0 + global::_tried_policies[i].array()) / 10.0;
-            bo.add_new_sample(s, global::_tried_rewards[i]);
-        }
-        // if (global::_tried_policies.size() > 0)
-        //     bo.add_new_sample((2.5 + global::_tried_policies.back().array()) / 5.0, ff((2.5 + global::_tried_policies.back().array()) / 5.0));
-
-        bo.optimize(ff, limbo::FirstElem(), global::_tried_policies.size() == 0);
-        Eigen::VectorXd b = bo.best_sample();
-        std::cout << "BEST: " << ff(b) << " vs " << bo.best_observation() << std::endl;
-
-        return b.array() * 10.0 - 5.0;
-    }
-};
-
-template <typename Params>
-size_t BO<Params>::dummy_f::dim_in;
 
 struct CartPole {
     typedef std::vector<double> ode_state_type;
@@ -492,37 +414,13 @@ using GP_t = limbo::model::GP<Params, kernel_t, mean_t, limbo::model::gp::Kernel
 
 BO_DECLARE_DYN_PARAM(size_t, Params, parallel_evaluations);
 BO_DECLARE_DYN_PARAM(int, Params::nn_policy, hidden_neurons);
-BO_DECLARE_DYN_PARAM(int, BOParams::init_randomsampling, samples);
-BO_DECLARE_DYN_PARAM(int, BOParams::stop_maxiterations, iterations);
+BO_DECLARE_DYN_PARAM(double, Params::opt_cmaes, max_fun_evals);
 
 int main(int argc, char** argv)
 {
-    // std::srand(std::time(NULL));
-    // medrops::MLP<medrops::NNLayer<medrops::Neuron<medrops::AfGaussian>, medrops::PfSum>, medrops::NNLayer<medrops::Neuron<medrops::AfDirect>, medrops::PfSum>> mlp(10, std::vector<size_t>(1, 50), 10);
-    //
-    // std::cout << mlp.n_weights() << " parameters" << std::endl;
-    //
-    // std::vector<double> w(mlp.n_weights(), 1.0);
-    // std::generate(w.begin(), w.end(), [] { return std::rand() % (40 + 1) - 20; });
-    // // for (size_t k = 0; k < w.size(); k++) {
-    // //     w[k] = int(k) / double(k + 1);
-    // //     if (k % 2 == 0)
-    // //         w[k] = -w[k];
-    // // }
-    // mlp.set_weights(w);
-    //
-    // std::vector<double> i(10, 0.2);
-    // // i[0] = -10.0;
-    // std::generate(i.begin(), i.end(), [] { return std::rand() % (40 + 1) - 20; });
-    // auto v = mlp.compute(i);
-    // for (auto k : v)
-    //     std::cout << k << " ";
-    // std::cout << std::endl;
-    // exit(1);
-
     namespace po = boost::program_options;
     po::options_description desc("Command line arguments");
-    desc.add_options()("help,h", "Prints this help message")("parallel_evaluations,p", po::value<int>(), "Number of parallel monte carlo evaluations for policy reward estimation.")("hidden_neurons,n", po::value<int>(), "Number of hidden neurons in NN policy.")("max_evals,m", po::value<int>(), "Max funtion evaluations for cmaes to optimize the policy.");
+    desc.add_options()("help,h", "Prints this help message")("parallel_evaluations,p", po::value<int>(), "Number of parallel monte carlo evaluations for policy reward estimation.")("hidden_neurons,n", po::value<int>(), "Number of hidden neurons in NN policy.")("max_evals,m", po::value<int>(), "Max function evaluations to optimize the policy.");
 
     try {
         po::variables_map vm;
@@ -554,12 +452,10 @@ int main(int argc, char** argv)
         }
         if (vm.count("max_evals")) {
             int c = vm["max_evals"].as<int>();
-            BOParams::stop_maxiterations::set_iterations(0.95 * c);
-            BOParams::init_randomsampling::set_samples(c - BOParams::stop_maxiterations::iterations());
+            Params::opt_cmaes::set_max_fun_evals(c);
         }
         else {
-            BOParams::stop_maxiterations::set_iterations(190);
-            BOParams::init_randomsampling::set_samples(10);
+            Params::opt_cmaes::set_max_fun_evals(10000);
         }
     }
     catch (po::error& e) {
@@ -573,7 +469,7 @@ int main(int argc, char** argv)
     }
 #endif
 
-    medrops::Medrops<Params, medrops::GPModel<Params, GP_t>, CartPole, medrops::LinearPolicy<Params>, BO<Params>, RewardFunction> cp_system;
+    medrops::Medrops<Params, medrops::GPModel<Params, GP_t>, CartPole, medrops::NNPolicy<Params>, limbo::opt::Cmaes<Params>, RewardFunction> cp_system;
 
     cp_system.learn(1, 10);
 
