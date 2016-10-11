@@ -266,7 +266,6 @@ struct CartPole {
             double sigma;
             std::tie(mu, sigma) = model.predict(query_vec);
             sigma = std::sqrt(sigma);
-            // std::cout << sigma << std::endl;
             for (int i = 0; i < mu.size(); i++) {
                 double s = gaussian_rand(mu(i), sigma);
                 mu(i) = std::max(mu(i) - sigma, std::min(s, mu(i) + sigma));
