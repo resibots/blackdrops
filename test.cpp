@@ -150,7 +150,7 @@ struct GPParams {
 };
 
 struct BOParams {
-    struct bayes_opt_bobase {
+    struct bayes_opt_bobase : public limbo::defaults::bayes_opt_bobase {
         BO_PARAM(bool, stats_enabled, false);
     };
 
