@@ -143,6 +143,7 @@ struct Params {
 
     struct opt_cmaes : public limbo::defaults::opt_cmaes {
         BO_DYN_PARAM(double, max_fun_evals);
+        BO_PARAM(int, restarts, 5);
     };
 };
 
@@ -265,11 +266,11 @@ struct CartPole {
             Eigen::VectorXd mu;
             double sigma;
             std::tie(mu, sigma) = model.predict(query_vec);
-            sigma = std::sqrt(sigma);
-            for (int i = 0; i < mu.size(); i++) {
-                double s = gaussian_rand(mu(i), sigma);
-                mu(i) = std::max(mu(i) - sigma, std::min(s, mu(i) + sigma));
-            }
+            // sigma = std::sqrt(sigma);
+            // for (int i = 0; i < mu.size(); i++) {
+            //     double s = gaussian_rand(mu(i), sigma);
+            //     mu(i) = std::max(mu(i) - sigma, std::min(s, mu(i) + sigma));
+            // }
 
             Eigen::VectorXd final = init_diff + mu;
             // if (final(0) < -2)
@@ -398,11 +399,11 @@ struct RewardFunction {
     {
         double s_c_sq = 0.25 * 0.25;
         double dx = angle_dist(to_state(3), Params::goal_pos());
-        double dy = to_state(2) - Params::goal_vel();
-        double dz = to_state(1) - Params::goal_vel_x();
+        // double dy = to_state(2) - Params::goal_vel();
+        // double dz = to_state(1) - Params::goal_vel_x();
         double dw = to_state(0) - Params::goal_pos_x();
 
-        return std::exp(-0.5 / s_c_sq * (dx * dx + dy * dy + dz * dz + dw * dw));
+        return std::exp(-0.5 / s_c_sq * (dx * dx /*+ dy * dy + dz * dz*/ + dw * dw));
     }
 };
 
