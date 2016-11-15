@@ -24,7 +24,7 @@ def check_sdl(conf):
 
 	try:
 		conf.start_msg('Checking for SDL 2 C++ includes')
-		res = conf.find_file('SDL/SDL.h', includes_check)
+		res = conf.find_file('SDL2/SDL.h', includes_check)
 		conf.end_msg('ok')
 	except:
 		conf.end_msg('Not found', 'RED')
