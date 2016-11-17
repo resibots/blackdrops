@@ -57,7 +57,7 @@ bool draw_pendulum(double theta)
 {
     double x = std::cos(theta), y = std::sin(theta);
 
-    SDL_Rect outlineRect = {SCREEN_WIDTH / 2 - 0.05 * SCREEN_HEIGHT / 4, SCREEN_HEIGHT / 2 - 0.05 * SCREEN_HEIGHT / 4, 0.1 * SCREEN_HEIGHT / 4, 0.1 * SCREEN_HEIGHT / 4};
+    SDL_Rect outlineRect = {static_cast<int>(SCREEN_WIDTH / 2 - 0.05 * SCREEN_HEIGHT / 4), static_cast<int>(SCREEN_HEIGHT / 2 - 0.05 * SCREEN_HEIGHT / 4), static_cast<int>(0.1 * SCREEN_HEIGHT / 4, 0.1 * SCREEN_HEIGHT / 4)};
     SDL_SetRenderDrawColor(renderer, 0x00, 0x00, 0xFF, 0xFF);
     SDL_RenderFillRect(renderer, &outlineRect);
     //Draw blue horizontal line
@@ -69,7 +69,7 @@ bool draw_pendulum(double theta)
 
 bool draw_goal(double x, double y)
 {
-    SDL_Rect outlineRect = {SCREEN_WIDTH / 2 - 0.05 * SCREEN_HEIGHT / 4, SCREEN_HEIGHT / 4 - 0.05 * SCREEN_HEIGHT / 4, 0.1 * SCREEN_HEIGHT / 4, 0.1 * SCREEN_HEIGHT / 4};
+    SDL_Rect outlineRect = {static_cast<int>(SCREEN_WIDTH / 2 - 0.05 * SCREEN_HEIGHT / 4), static_cast<int>(SCREEN_HEIGHT / 4 - 0.05 * SCREEN_HEIGHT / 4), static_cast<int>(0.1 * SCREEN_HEIGHT / 4, 0.1 * SCREEN_HEIGHT / 4)};
     SDL_SetRenderDrawColor(renderer, 0xFF, 0x00, 0x00, 0xFF);
     SDL_RenderFillRect(renderer, &outlineRect);
 

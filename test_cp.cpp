@@ -39,7 +39,7 @@ bool sdl_init()
     }
 
     //Create renderer for window
-    renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
+    renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_SOFTWARE);
     if (renderer == NULL) {
         std::cout << "Renderer could not be created! SDL Error: " << SDL_GetError() << std::endl;
         return false;
@@ -59,7 +59,7 @@ bool draw_cartpole(double x, double theta, bool red = false)
 {
     double th_x = std::cos(theta), th_y = std::sin(theta);
 
-    SDL_Rect outlineRect = {SCREEN_WIDTH / 2 - x * SCREEN_HEIGHT / 4 - 0.1 * SCREEN_HEIGHT / 4, SCREEN_HEIGHT / 2 - 0.05 * SCREEN_HEIGHT / 4, 0.2 * SCREEN_HEIGHT / 4, 0.1 * SCREEN_HEIGHT / 4};
+    SDL_Rect outlineRect = {static_cast<int>(SCREEN_WIDTH / 2 - x * SCREEN_HEIGHT / 4 - 0.1 * SCREEN_HEIGHT / 4), static_cast<int>(SCREEN_HEIGHT / 2 - 0.05 * SCREEN_HEIGHT / 4), static_cast<int>(0.2 * SCREEN_HEIGHT / 4), static_cast<int>(0.1 * SCREEN_HEIGHT / 4)};
     SDL_SetRenderDrawColor(renderer, 0x00, 0x00, 0xFF, 0xFF);
     if (red)
         SDL_SetRenderDrawColor(renderer, 0xFF, 0x00, 0x00, 0xFF);
@@ -72,7 +72,7 @@ bool draw_cartpole(double x, double theta, bool red = false)
 
 bool draw_goal(double x, double y)
 {
-    SDL_Rect outlineRect = {SCREEN_WIDTH / 2 - 0.05 * SCREEN_HEIGHT / 4 + x * SCREEN_HEIGHT / 4, (1 - y) * SCREEN_HEIGHT / 4 - 0.05 * SCREEN_HEIGHT / 4, 0.1 * SCREEN_HEIGHT / 4, 0.1 * SCREEN_HEIGHT / 4};
+    SDL_Rect outlineRect = {static_cast<int>(SCREEN_WIDTH / 2 - 0.05 * SCREEN_HEIGHT / 4 + x * SCREEN_HEIGHT / 4), static_cast<int>((1 - y) * SCREEN_HEIGHT / 4 - 0.05 * SCREEN_HEIGHT / 4), static_cast<int>(0.1 * SCREEN_HEIGHT / 4), static_cast<int>(0.1 * SCREEN_HEIGHT / 4)};
     SDL_SetRenderDrawColor(renderer, 0xFF, 0x00, 0x00, 0xFF);
     SDL_RenderFillRect(renderer, &outlineRect);
 
@@ -119,7 +119,7 @@ struct Params {
     };
 
     struct gp_model {
-        BO_PARAM(double, noise, 0.01);
+        BO_PARAM(double, noise, 1e-20);
     };
 
     struct linear_policy {
@@ -141,9 +141,15 @@ struct Params {
         BO_PARAM(int, iterations, 1000);
     };
 
+    struct kernel_squared_exp_ard : public limbo::defaults::kernel_squared_exp_ard {
+    };
+
     struct opt_cmaes : public limbo::defaults::opt_cmaes {
         BO_DYN_PARAM(double, max_fun_evals);
         BO_PARAM(int, restarts, 5);
+    };
+    struct opt_nloptnograd : public limbo::defaults::opt_nloptnograd {
+        BO_PARAM(int, iterations, 1000000);
     };
 };
 
@@ -166,6 +172,44 @@ namespace global {
     std::vector<Eigen::VectorXd> _tried_policies = std::vector<Eigen::VectorXd>();
     std::vector<Eigen::VectorXd> _tried_rewards = std::vector<Eigen::VectorXd>();
 }
+
+template <typename Params>
+struct MeanIntact {
+    MeanIntact(size_t dim_out = 4) {}
+
+    template <typename GP>
+    Eigen::VectorXd operator()(const Eigen::VectorXd& v, const GP&) const
+    {
+        return eval(v);
+    }
+
+    Eigen::VectorXd eval(const Eigen::VectorXd& v) const {
+        double dt = 0.1, t = 0.0;
+
+        boost::numeric::odeint::runge_kutta4<std::vector<double>> ode_stepper;
+        std::vector<double> pend_state(4);
+        pend_state[0] = v(0);
+        pend_state[1] = v(1);
+        pend_state[2] = v(2);
+        pend_state[3] = std::atan2(v(4), v(3));
+        Eigen::VectorXd old_state = Eigen::VectorXd::Map(pend_state.data(), pend_state.size());
+
+        boost::numeric::odeint::integrate_const(ode_stepper, std::bind(&MeanIntact::dynamics, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, v(5)), pend_state, t, dt, dt / 2.0);
+
+        Eigen::VectorXd new_state = Eigen::VectorXd::Map(pend_state.data(), pend_state.size());
+        return (new_state - old_state);
+    }
+
+    void dynamics(const std::vector<double>& x, std::vector<double>& dx, double t, double u) const
+    {
+        double l = 0.5, m = 0.5, M = 0.5, g = 9.82, b = 0.1;
+
+        dx[0] = x[1];
+        dx[1] = (2 * m * l * std::pow(x[2], 2.0) * std::sin(x[3]) + 3 * m * g * std::sin(x[3]) * std::cos(x[3]) + 4 * u - 4 * b * x[1]) / (4 * (M + m) - 3 * m * std::pow(std::cos(x[3]), 2.0));
+        dx[2] = (-3 * m * l * std::pow(x[2], 2.0) * std::sin(x[3]) * std::cos(x[3]) - 6 * (M + m) * g * std::sin(x[3]) - 6 * (u - b * x[1]) * std::cos(x[3])) / (4 * l * (m + M) - 3 * m * l * std::pow(std::cos(x[3]), 2.0));
+        dx[3] = x[2];
+    }
+};
 
 struct CartPole {
     typedef std::vector<double> ode_state_type;
@@ -201,7 +245,10 @@ struct CartPole {
             //     init_diff(1) -= 2 * M_PI;
 
             _u = policy.next(init)[0];
-            ode_stepper.do_step(std::bind(&CartPole::dynamics, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3), cp_state, t, dt);
+            // ode_stepper.do_step(std::bind(&CartPole::dynamics, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3), cp_state, t, dt);
+            boost::numeric::odeint::integrate_const(ode_stepper, 
+                std::bind(&CartPole::dynamics, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3), 
+                cp_state, t, t+dt, dt / 2.0);
             t += dt;
             // if (cp_state[0] < -2)
             //     cp_state[0] = -2;
@@ -213,6 +260,14 @@ struct CartPole {
             // while (final(1) > M_PI)
             //     final(1) -= 2 * M_PI;
             res.push_back(std::make_tuple(init, limbo::tools::make_vector(_u), final - init_diff));
+
+            // MeanIntact<Params> m;
+            // Eigen::VectorXd q(6);
+            // q.segment(0,5) = init.segment(0,5);
+            // q(5) = _u;
+            // Eigen::VectorXd kk = m.eval(q);
+            // std::cout << "diff " << (final-init_diff).transpose() - kk.transpose() << std::endl;
+
             double r = world(init, limbo::tools::make_vector(_u), final);
             R.push_back(r);
 #ifdef USE_SDL
@@ -224,11 +279,11 @@ struct CartPole {
             draw_goal(0, -0.5);
 
             SDL_SetRenderDrawColor(renderer, 0x00, 0xFF, 0x00, 0xFF);
-            SDL_Rect outlineRect = {SCREEN_WIDTH / 2 + 0.05 * SCREEN_HEIGHT / 4, SCREEN_HEIGHT / 4 + 2.05 * SCREEN_HEIGHT / 4, _u / 10.0 * SCREEN_HEIGHT / 4, 0.1 * SCREEN_HEIGHT / 4};
+            SDL_Rect outlineRect = {static_cast<int>(SCREEN_WIDTH / 2 + 0.05 * SCREEN_HEIGHT / 4), static_cast<int>(SCREEN_HEIGHT / 4 + 2.05 * SCREEN_HEIGHT / 4), static_cast<int>(_u / 10.0 * SCREEN_HEIGHT / 4), static_cast<int>(0.1 * SCREEN_HEIGHT / 4)};
             SDL_RenderFillRect(renderer, &outlineRect);
 
             SDL_SetRenderDrawColor(renderer, 0x00, 0xFF, 0xFF, 0xFF);
-            outlineRect = {SCREEN_WIDTH / 2 + 0.05 * SCREEN_HEIGHT / 4, SCREEN_HEIGHT / 4 + 2.55 * SCREEN_HEIGHT / 4, r * SCREEN_HEIGHT / 4, 0.1 * SCREEN_HEIGHT / 4};
+            outlineRect = {static_cast<int>(SCREEN_WIDTH / 2 + 0.05 * SCREEN_HEIGHT / 4), static_cast<int>(SCREEN_HEIGHT / 4 + 2.55 * SCREEN_HEIGHT / 4), static_cast<int>(r * SCREEN_HEIGHT / 4), static_cast<int>(0.1 * SCREEN_HEIGHT / 4)};
             SDL_RenderFillRect(renderer, &outlineRect);
 
             //Update screen
@@ -264,8 +319,8 @@ struct CartPole {
             query_vec.tail(Params::action_dim()) = u;
 
             Eigen::VectorXd mu;
-            double sigma;
-            std::tie(mu, sigma) = model.predict(query_vec);
+            Eigen::VectorXd sigma;
+            std::tie(mu, sigma) = model.predictm(query_vec);
             // sigma = std::sqrt(sigma);
             // for (int i = 0; i < mu.size(); i++) {
             //     double s = gaussian_rand(mu(i), sigma);
@@ -301,11 +356,11 @@ struct CartPole {
             draw_goal(0, -0.5);
 
             SDL_SetRenderDrawColor(renderer, 0x00, 0xFF, 0x00, 0xFF);
-            SDL_Rect outlineRect = {SCREEN_WIDTH / 2 + 0.05 * SCREEN_HEIGHT / 4, SCREEN_HEIGHT / 4 + 2.05 * SCREEN_HEIGHT / 4, u[0] / 10.0 * SCREEN_HEIGHT / 4, 0.1 * SCREEN_HEIGHT / 4};
+            SDL_Rect outlineRect = {static_cast<int>(SCREEN_WIDTH / 2 + 0.05 * SCREEN_HEIGHT / 4), static_cast<int>(SCREEN_HEIGHT / 4 + 2.05 * SCREEN_HEIGHT / 4), static_cast<int>(u[0] / 10.0 * SCREEN_HEIGHT / 4), static_cast<int>(0.1 * SCREEN_HEIGHT / 4)};
             SDL_RenderFillRect(renderer, &outlineRect);
 
             SDL_SetRenderDrawColor(renderer, 0x00, 0xFF, 0xFF, 0xFF);
-            outlineRect = {SCREEN_WIDTH / 2 + 0.05 * SCREEN_HEIGHT / 4, SCREEN_HEIGHT / 4 + 2.55 * SCREEN_HEIGHT / 4, r * SCREEN_HEIGHT / 4, 0.1 * SCREEN_HEIGHT / 4};
+            outlineRect = {static_cast<int>(SCREEN_WIDTH / 2 + 0.05 * SCREEN_HEIGHT / 4), static_cast<int>(SCREEN_HEIGHT / 4 + 2.55 * SCREEN_HEIGHT / 4), static_cast<int>(r * SCREEN_HEIGHT / 4), static_cast<int>(0.1 * SCREEN_HEIGHT / 4)};
             SDL_RenderFillRect(renderer, &outlineRect);
 
             //Update screen
@@ -337,13 +392,13 @@ struct CartPole {
               query_vec.tail(Params::action_dim()) = u;
 
               Eigen::VectorXd mu;
-              double sigma;
-              std::tie(mu, sigma) = model.predict(query_vec);
-              sigma = std::sqrt(sigma);
-              for (int i = 0; i < mu.size(); i++) {
-                  double s = gaussian_rand(mu(i), sigma);
-                  mu(i) = std::max(mu(i) - sigma, std::min(s, mu(i) + sigma));
-              }
+              Eigen::VectorXd sigma;
+              std::tie(mu, sigma) = model.predictm(query_vec);
+              // sigma = std::sqrt(sigma);
+              // for (int i = 0; i < mu.size(); i++) {
+              //     double s = gaussian_rand(mu(i), sigma);
+              //     mu(i) = std::max(mu(i) - sigma, std::min(s, mu(i) + sigma));
+              // }
 
               Eigen::VectorXd final = init_diff + mu;
               // if(final(0) < -2)
@@ -408,9 +463,11 @@ struct RewardFunction {
 };
 
 using kernel_t = medrops::SquaredExpARD<Params>;
+// using kernel_t = limbo::kernel::SquaredExpARD<Params>;
 // using kernel_t = limbo::kernel::Exp<Params>;
 using mean_t = limbo::mean::Constant<Params>;
-using GP_t = limbo::model::GP<Params, kernel_t, mean_t, limbo::model::gp::KernelLFOpt<Params, limbo::opt::Cmaes<GPParams>>>;
+// using mean_t = MeanIntact<Params>;
+using GP_t = limbo::model::GP<Params, kernel_t, mean_t, limbo::model::gp::KernelLFOpt<Params, limbo::opt::NLOptGrad<Params, nlopt::LD_LBFGS>>>;
 
 BO_DECLARE_DYN_PARAM(size_t, Params, parallel_evaluations);
 BO_DECLARE_DYN_PARAM(int, Params::nn_policy, hidden_neurons);
@@ -470,8 +527,11 @@ int main(int argc, char** argv)
 #endif
 
     medrops::Medrops<Params, medrops::GPModel<Params, GP_t>, CartPole, medrops::NNPolicy<Params>, limbo::opt::Cmaes<Params>, RewardFunction> cp_system;
+    // limbo::opt::NLOptNoGrad<Params, nlopt::LN_SBPLX
+    // limbo::opt::NLOptNoGrad<Params, nlopt::LN_COBYLA
+    // limbo::opt::Cmaes<Params>
 
-    cp_system.learn(1, 10);
+    cp_system.learn(1, 20);
 
 #ifdef USE_SDL
     sdl_clean();
