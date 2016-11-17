@@ -8,6 +8,7 @@
 #include <medrops/nn_policy.hpp>
 #include <medrops/gp_model.hpp>
 #include <medrops/exp_sq_ard.hpp>
+#include <medrops/kernel_lf_opt.hpp>
 #include <nn/nn.hpp>
 
 #ifdef USE_SDL
@@ -467,7 +468,8 @@ using kernel_t = medrops::SquaredExpARD<Params>;
 // using kernel_t = limbo::kernel::Exp<Params>;
 using mean_t = limbo::mean::Constant<Params>;
 // using mean_t = MeanIntact<Params>;
-using GP_t = limbo::model::GP<Params, kernel_t, mean_t, limbo::model::gp::KernelLFOpt<Params, limbo::opt::NLOptGrad<Params, nlopt::LD_LBFGS>>>;
+// using GP_t = limbo::model::GP<Params, kernel_t, mean_t, limbo::model::gp::KernelLFOpt<Params, limbo::opt::NLOptGrad<Params, nlopt::LD_LBFGS>>>;
+using GP_t = limbo::model::GP<Params, kernel_t, mean_t, medrops::KernelLFOpt<Params, limbo::opt::Cmaes<Params>>>;
 
 BO_DECLARE_DYN_PARAM(size_t, Params, parallel_evaluations);
 BO_DECLARE_DYN_PARAM(int, Params::nn_policy, hidden_neurons);
