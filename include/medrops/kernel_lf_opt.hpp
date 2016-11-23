@@ -60,33 +60,34 @@ namespace medrops {
                 // std::cout<<" a: "<<a <<" det: "<< det<<std::endl;
                 double lik = -0.5 * a - 0.5 * det - 0.5 * n * log(2 * M_PI);
 
+                #ifdef LLP
+                  // TODO: Revisit this, it's not working yet
+                  // sum(((ll - log(curb.std'))./log(curb.ls)).^p);
+                  Eigen::VectorXd p = gp.kernel_function().h_params();
+                  Eigen::VectorXd ll = p.segment(0, p.size()-1);  // length scales
 
-                // TODO: Revisit this, it's not working yet
-                // // sum(((ll - log(curb.std'))./log(curb.ls)).^p);
-                // Eigen::VectorXd p = gp.kernel_function().h_params();
-                // Eigen::VectorXd ll = p.segment(0, p.size()-1);  // length scales
+                  // Std calculation of samples in logspace
+                  Eigen::MatrixXd samples = _to_matrix(gp.samples());
+                  Eigen::VectorXd samples_mean = samples.colwise().mean();
 
-                // // Std calculation of samples in logspace
-                // Eigen::MatrixXd samples = _to_matrix(gp.samples());
-                // Eigen::VectorXd samples_mean = samples.colwise().mean();
+                  Eigen::MatrixXd samples_std = (samples - samples_mean.transpose().replicate(samples.rows(),1));
+                  samples_std = samples_std.array().pow(2);
+                  samples_std = samples_std.colwise().sum();
+                  samples_std *= (1.0/(samples.rows()-1));
 
-                // Eigen::MatrixXd samples_std = (samples - samples_mean.transpose().replicate(samples.rows(),1));
-                // samples_std = samples_std.array().pow(2);
-                // samples_std = samples_std.colwise().sum();
-                // samples_std *= (1.0/(samples.rows()-1));
+                  samples_std = samples_std.array().sqrt().log();
 
-                // samples_std = samples_std.array().sqrt().log();
+                  double snr = std::log(500);         // signal to noise threshold
+                  double ls = std::log(100);          // length scales threshold
+                  size_t pp = 30;                     // penalty power
 
-                // double snr = std::log(500);         // signal to noise threshold
-                // double ls = std::log(100);          // length scales threshold
-                // size_t pp = 30;                     // penalty power
+                  lik += ((ll - samples_std.transpose()) / ls).array().pow(pp).sum();
 
-                // lik += ((ll - samples_std.transpose()) / ls).array().pow(pp).sum();
-
-                // // f = f + sum(((lsf - lsn)/log(curb.snr)).^p); % signal to noise ratio
-                // double lsf = p(p.size()-1);
-                // double lsn = std::log(0.01);
-                // lik += std::pow((lsf - lsn) / snr, pp);
+                  // f = f + sum(((lsf - lsn)/log(curb.snr)).^p); % signal to noise ratio
+                  double lsf = p(p.size()-1);
+                  double lsn = std::log(0.01);
+                  lik += std::pow((lsf - lsn) / snr, pp);
+                #endif
 
                 if (!compute_grad)
                     return limbo::opt::no_grad(lik);
@@ -112,15 +113,20 @@ namespace medrops {
                     }
                 }
 
+                #ifdef LLP
                 // Gradient update with penalties
                 /// df(li) += (p * ((ll - log(curb.std')).^(p-1))) / (log(curb.ls)^p);
-                // grad.segment(0, grad.size()-1) += pp * (ll - samples_std.transpose()).array().pow(pp-1) / std::pow(ls, 2);
+                Eigen::VectorXd grad_ll = pp * (ll - samples_std.transpose()).array().pow(pp-1) / std::pow(ls, 2);
+                grad.segment(0, grad.size()-1) = grad.segment(0, grad.size()-1) + grad_ll;
 
                 /// df(sfi) = df(sfi) + p*(lsf - lsn).^(p-1)/log(curb.snr)^p;
-                // grad(grad.size()-1) += pp * std::pow((lsf - lsn), pp-1)/std::pow(snr, pp);
+                double mgrad_v = pp * std::pow((lsf - lsn), pp-1)/std::pow(snr, pp);
+                grad(grad.size()-1) = grad(grad.size()-1) + mgrad_v;
 
+                // NOTE: This is for the noise calculation
                 // df(end) = df(end) - p*sum((lsf - lsn).^(p-1)/log(curb.snr)^p);
                 // grad(grad.size()-1) -= pp * std::pow((lsf - lsn), pp-1)/std::pow(snr, p);
+                #endif
 
                 return {lik, grad};
             }

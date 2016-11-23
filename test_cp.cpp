@@ -247,8 +247,8 @@ struct CartPole {
 
             _u = policy.next(init)[0];
             // ode_stepper.do_step(std::bind(&CartPole::dynamics, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3), cp_state, t, dt);
-            boost::numeric::odeint::integrate_const(ode_stepper, 
-                std::bind(&CartPole::dynamics, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3), 
+            boost::numeric::odeint::integrate_const(ode_stepper,
+                std::bind(&CartPole::dynamics, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3),
                 cp_state, t, t+dt, dt / 2.0);
             t += dt;
             // if (cp_state[0] < -2)
@@ -395,11 +395,12 @@ struct CartPole {
               Eigen::VectorXd mu;
               Eigen::VectorXd sigma;
               std::tie(mu, sigma) = model.predictm(query_vec);
-              // sigma = std::sqrt(sigma);
-              // for (int i = 0; i < mu.size(); i++) {
-              //     double s = gaussian_rand(mu(i), sigma);
-              //     mu(i) = std::max(mu(i) - sigma, std::min(s, mu(i) + sigma));
-              // }
+              sigma = sigma.array().sqrt();
+              for (int i = 0; i < mu.size(); i++) {
+                  double s = gaussian_rand(mu(i), sigma(i));
+                  mu(i) = std::max(mu(i) - sigma(i),
+                    std::min(s, mu(i) + sigma(i)));
+              }
 
               Eigen::VectorXd final = init_diff + mu;
               // if(final(0) < -2)
