@@ -95,8 +95,6 @@ namespace medrops {
             Eigen::write_binary("medrops_data.bin", data);
 
             std::cout << "GP Samples: " << samples.size() << std::endl;
-
-            std::cout << Params::gp_model::noise() << std::endl;
             Eigen::VectorXd noises = Eigen::VectorXd::Constant(samples.size(), Params::gp_model::noise());
             tbb::parallel_for(size_t(0), (size_t)obs.cols(), size_t(1), [&](size_t i) {
                 _gp_models[i].compute(samples, obs.col(i), noises);
