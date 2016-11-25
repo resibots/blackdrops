@@ -9,6 +9,8 @@ namespace medrops {
     template <typename Params, typename Model, typename Robot, typename Policy, typename PolicyOptimizer, typename RewardFunction>
     class Medrops {
     public:
+        int opt_iters;
+
         Medrops() {}
         ~Medrops() {}
 
@@ -37,7 +39,9 @@ namespace medrops {
             PolicyOptimizer policy_optimizer;
 
             // For now optimize policy without gradients
+            opt_iters = 0;
             Eigen::VectorXd params_star = policy_optimizer(std::bind(&Medrops::_optimize_policy, this, std::placeholders::_1, std::placeholders::_2), _policy.params(), false);
+            std::cout << "Optimization iterations: " << opt_iters << std::endl;
 
             // std::cout << "BEST: " << limbo::opt::fun(_optimize_policy(params_star)) << std::endl;
 
@@ -65,18 +69,31 @@ namespace medrops {
 
             std::cout << "Starting learning..." << std::endl;
             for (size_t i = 0; i < iterations; i++) {
-                std::cout << "Learning iteration #" << (i + 1) << std::endl;
+                std::cout << std::endl << "Learning iteration #" << (i + 1) << std::endl;
+
                 learn_model();
                 std::cout << "Learned model..." << std::endl;
-                std::cout << "Average on errors: " << get_accuracy().transpose() << std::endl;
+
+                // _model.save_data();
+                Eigen::VectorXd errors = get_accuracy();
+                std::cout << "Average on errors: " << errors.transpose() << std::endl;
+
+                for (size_t j = 0; j < errors.size(); j++) {
+                    if (errors(j) > 1000) {
+                        std::cout << "Detected big difference between the approximation and the model, terminating..." << std::endl;
+                        exit(-1);
+                    }
+                }
+
                 optimize_policy();
                 std::cout << "Optimized policy..." << std::endl;
+
                 execute_and_record_data();
                 std::cout << "Executed action..." << std::endl;
             }
             _ofs.close();
 
-            std::cout << "Summation of errors on 1000 points: " << get_accuracy() << std::endl;
+            std::cout << "Averaged errors of the model: " << get_accuracy().transpose() << std::endl;
         }
 
     protected:
@@ -88,7 +105,7 @@ namespace medrops {
         // state, action, prediction
         std::vector<std::tuple<Eigen::VectorXd, Eigen::VectorXd, Eigen::VectorXd>> _observations;
 
-        limbo::opt::eval_t _optimize_policy(const Eigen::VectorXd& params, bool eval_grad = false) const
+        limbo::opt::eval_t _optimize_policy(const Eigen::VectorXd& params, bool eval_grad = false)
         {
             RewardFunction world;
             Policy policy;
@@ -96,6 +113,7 @@ namespace medrops {
 
             double r = _robot.predict_policy(policy, _model, world, Params::medrops::rollout_steps());
 
+            opt_iters++;
             return limbo::opt::no_grad(r);
         }
 
@@ -115,7 +133,7 @@ namespace medrops {
             return result;
         }
 
-        Eigen::VectorXd get_accuracy(int evaluations = 10000) const 
+        Eigen::VectorXd get_accuracy(int evaluations = 100000) const 
         {
 
             std::vector<Eigen::VectorXd> rvs = random_vectors(5, evaluations);
