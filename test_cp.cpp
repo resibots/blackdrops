@@ -120,7 +120,8 @@ struct Params {
     };
 
     struct gp_model {
-        BO_PARAM(double, noise, 1e-20);
+        // BO_PARAM(double, noise, 1e-20);
+        BO_PARAM(double, noise, 1e-5);
     };
 
     struct linear_policy {
@@ -147,7 +148,7 @@ struct Params {
 
     struct opt_cmaes : public limbo::defaults::opt_cmaes {
         BO_DYN_PARAM(double, max_fun_evals);
-        BO_PARAM(int, restarts, 5);
+        BO_PARAM(int, restarts, 1);
     };
     struct opt_nloptnograd : public limbo::defaults::opt_nloptnograd {
         BO_PARAM(int, iterations, 1000000);
@@ -255,6 +256,8 @@ struct CartPole {
             //     cp_state[0] = -2;
             // if (cp_state[0] > 2)
             //     cp_state[0] = 2;
+
+            // TODO: Revisar como el cos y el sin estan siendo usando
             Eigen::VectorXd final = Eigen::VectorXd::Map(cp_state.data(), cp_state.size());
             // while (final(1) < -M_PI)
             //     final(1) += 2 * M_PI;
@@ -380,46 +383,51 @@ struct CartPole {
         double* rews = new double[N];
 
         tbb::parallel_for(size_t(0), N, size_t(1), [&](size_t i) {
-          double reward = 0.0;
-          // init state
-          Eigen::VectorXd init_diff = Eigen::VectorXd::Zero(Params::model_pred_dim());
-          Eigen::VectorXd init = Eigen::VectorXd::Zero(Params::model_input_dim());
-          init(3) = std::cos(0.0);
-          init(4) = std::sin(0.0);
-          for (size_t j = 0; j < steps; j++) {
-              Eigen::VectorXd query_vec(Params::model_input_dim() + Params::action_dim());
-              Eigen::VectorXd u = policy.next(init);
-              query_vec.head(Params::model_input_dim()) = init;
-              query_vec.tail(Params::action_dim()) = u;
+            // std::chrono::steady_clock::time_point time_start = std::chrono::steady_clock::now();
 
-              Eigen::VectorXd mu;
-              Eigen::VectorXd sigma;
-              std::tie(mu, sigma) = model.predictm(query_vec);
-              sigma = sigma.array().sqrt();
-              for (int i = 0; i < mu.size(); i++) {
-                  double s = gaussian_rand(mu(i), sigma(i));
-                  mu(i) = std::max(mu(i) - sigma(i),
-                    std::min(s, mu(i) + sigma(i)));
-              }
+            double reward = 0.0;
+            // init state
+            Eigen::VectorXd init_diff = Eigen::VectorXd::Zero(Params::model_pred_dim());
+            Eigen::VectorXd init = Eigen::VectorXd::Zero(Params::model_input_dim());
+            init(3) = std::cos(0.0);
+            init(4) = std::sin(0.0);
+            for (size_t j = 0; j < steps; j++) {
+                Eigen::VectorXd query_vec(Params::model_input_dim() + Params::action_dim());
+                Eigen::VectorXd u = policy.next(init);
+                query_vec.head(Params::model_input_dim()) = init;
+                query_vec.tail(Params::action_dim()) = u;
 
-              Eigen::VectorXd final = init_diff + mu;
-              // if(final(0) < -2)
-              //     final(0) = -2;
-              // if(final(0) > 2)
-              //     final(0) = 2;
-              // while (final(1) < -M_PI)
-              //     final(1) += 2 * M_PI;
-              // while (final(1) > M_PI)
-              //     final(1) -= 2 * M_PI;
-              reward += world(init_diff, u, final);
-              init_diff = final;
-              init(0) = final(0);
-              init(1) = final(1);
-              init(2) = final(2);
-              init(3) = std::cos(final(3));
-              init(4) = std::sin(final(3));
-          }
-          rews[i] = reward;
+                Eigen::VectorXd mu;
+                Eigen::VectorXd sigma;
+                std::tie(mu, sigma) = model.predictm(query_vec);
+                // sigma = sigma.array().sqrt();
+                // for (int i = 0; i < mu.size(); i++) {
+                //   double s = gaussian_rand(mu(i), sigma(i));
+                //   mu(i) = std::max(mu(i) - sigma(i),
+                //     std::min(s, mu(i) + sigma(i)));
+                // }
+
+                Eigen::VectorXd final = init_diff + mu;
+                // if(final(0) < -2)
+                //     final(0) = -2;
+                // if(final(0) > 2)
+                //     final(0) = 2;
+                // while (final(1) < -M_PI)
+                //     final(1) += 2 * M_PI;
+                // while (final(1) > M_PI)
+                //     final(1) -= 2 * M_PI;
+                reward += world(init_diff, u, final);
+                init_diff = final;
+                init(0) = final(0);
+                init(1) = final(1);
+                init(2) = final(2);
+                init(3) = std::cos(final(3));
+                init(4) = std::sin(final(3));
+            }
+            rews[i] = reward;
+
+            // double rollout_ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - time_start).count();
+            //std::cout << "Rollout finished, took " << rollout_ms << "ms" << std::endl;
         });
 
         double r = 0.0;
@@ -469,8 +477,8 @@ using kernel_t = medrops::SquaredExpARD<Params>;
 // using kernel_t = limbo::kernel::Exp<Params>;
 using mean_t = limbo::mean::Constant<Params>;
 // using mean_t = MeanIntact<Params>;
-// using GP_t = limbo::model::GP<Params, kernel_t, mean_t, limbo::model::gp::KernelLFOpt<Params, limbo::opt::NLOptGrad<Params, nlopt::LD_LBFGS>>>;
-using GP_t = limbo::model::GP<Params, kernel_t, mean_t, medrops::KernelLFOpt<Params, limbo::opt::Cmaes<Params>>>;
+using GP_t = limbo::model::GP<Params, kernel_t, mean_t, limbo::model::gp::KernelLFOpt<Params, limbo::opt::NLOptGrad<Params, nlopt::LD_SLSQP>>>;
+// using GP_t = limbo::model::GP<Params, kernel_t, mean_t, medrops::KernelLFOpt<Params, limbo::opt::Cmaes<Params>>>;
 
 BO_DECLARE_DYN_PARAM(size_t, Params, parallel_evaluations);
 BO_DECLARE_DYN_PARAM(int, Params::nn_policy, hidden_neurons);
