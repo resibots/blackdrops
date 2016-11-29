@@ -3,6 +3,7 @@
 
 #include <limbo/opt/optimizer.hpp>
 #include <fstream>
+#include "binary_matrix.hpp"
 
 namespace medrops {
 
@@ -10,6 +11,7 @@ namespace medrops {
     class Medrops {
     public:
         int opt_iters;
+        double max_reward;
 
         Medrops() {}
         ~Medrops() {}
@@ -40,12 +42,17 @@ namespace medrops {
 
             // For now optimize policy without gradients
             opt_iters = 0;
+            max_reward = 0;
+            std::cout << "Optimizing policy... " << std::flush;
             Eigen::VectorXd params_star = policy_optimizer(std::bind(&Medrops::_optimize_policy, this, std::placeholders::_1, std::placeholders::_2), _policy.params(), false);
-            std::cout << "Optimization iterations: " << opt_iters << std::endl;
+            std::cout << std::endl << "Optimization iterations: " << opt_iters << std::endl;
 
             // std::cout << "BEST: " << limbo::opt::fun(_optimize_policy(params_star)) << std::endl;
 
             _policy.set_params(params_star);
+
+            std::cout << "Best parameters: " << params_star.transpose() << std::endl;
+            Eigen::write_binary("policy_params.bin", params_star);
 
             std::vector<double> R;
             RewardFunction world;
@@ -114,6 +121,11 @@ namespace medrops {
             double r = _robot.predict_policy(policy, _model, world, Params::medrops::rollout_steps());
 
             opt_iters++;
+            if (max_reward < r) max_reward = r;
+            if (opt_iters % 10000 == 0) {
+              std::cout << opt_iters << "(" << max_reward << ") " << std::flush;
+            }
+
             return limbo::opt::no_grad(r);
         }
 
@@ -133,7 +145,7 @@ namespace medrops {
             return result;
         }
 
-        Eigen::VectorXd get_accuracy(int evaluations = 100000) const 
+        Eigen::VectorXd get_accuracy(int evaluations = 100000) const
         {
 
             std::vector<Eigen::VectorXd> rvs = random_vectors(5, evaluations);
@@ -141,7 +153,7 @@ namespace medrops {
             Eigen::VectorXd errors(4);
             for (int i = 0; i < rvs.size(); i++) {
                 Eigen::VectorXd s;
-                Eigen::VectorXd m; 
+                Eigen::VectorXd m;
                 Eigen::VectorXd cm = comp_predict(rvs[i]);
                 Eigen::VectorXd gp_query(6);
                 gp_query.segment(0,3) = rvs[i].segment(0,3);
