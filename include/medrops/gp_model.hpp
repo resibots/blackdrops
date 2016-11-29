@@ -36,12 +36,12 @@ namespace medrops {
             #endif
 
             _gp_models = std::vector<GP>(4);
-            for (size_t i = 0; i < _gp_models.size(); i++) {
-                _gp_models[i].init(5, 1);
-                #ifdef INTACT
+            #ifdef INTACT
+              for (size_t i = 0; i < _gp_models.size(); i++) {
+                  _gp_models[i].init(5, 1);
                   _gp_models[i].mean_function().set_id(i);
-                #endif
-            }
+              }
+            #endif
 
             #ifndef DATA
 
