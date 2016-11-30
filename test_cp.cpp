@@ -5,6 +5,7 @@
 
 #include <medrops/medrops.hpp>
 #include <medrops/linear_policy.hpp>
+#include <medrops/gp_policy.hpp>
 #include <medrops/nn_policy.hpp>
 #include <medrops/gp_model.hpp>
 #include <medrops/exp_sq_ard.hpp>
@@ -131,8 +132,14 @@ struct Params {
 
     struct nn_policy {
         BO_PARAM(int, state_dim, 5);
-        BO_PARAM(double, max_u, 10.0);
+        BO_PARAM(double, max_u, 10.0); //max action
         BO_DYN_PARAM(int, hidden_neurons);
+    };
+
+    struct gp_policy {
+        BO_PARAM(int,l, 0.1);
+        BO_PARAM(double, virtual_observations, 20); //max action
+        //BO_DYN_PARAM(int, hidden_neurons);
     };
 
     struct mean_constant {
