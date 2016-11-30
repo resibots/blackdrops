@@ -155,7 +155,7 @@ struct Params {
 
     struct opt_cmaes : public limbo::defaults::opt_cmaes {
         BO_DYN_PARAM(double, max_fun_evals);
-        BO_PARAM(int, restarts, 1);
+        BO_PARAM(int, restarts, 5);
     };
     struct opt_nloptnograd : public limbo::defaults::opt_nloptnograd {
         BO_PARAM(int, iterations, 1000000);
@@ -184,7 +184,13 @@ namespace global {
 
 template <typename Params>
 struct MeanIntact {
-    MeanIntact(size_t dim_out = 4) {}
+    size_t id = -1;
+
+    MeanIntact(size_t dim_out = 1) {}
+
+    void set_id(size_t id) {
+        this->id = id;
+    }
 
     template <typename GP>
     Eigen::VectorXd operator()(const Eigen::VectorXd& v, const GP&) const
@@ -206,7 +212,10 @@ struct MeanIntact {
         boost::numeric::odeint::integrate_const(ode_stepper, std::bind(&MeanIntact::dynamics, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, v(5)), pend_state, t, dt, dt / 2.0);
 
         Eigen::VectorXd new_state = Eigen::VectorXd::Map(pend_state.data(), pend_state.size());
-        return (new_state - old_state);
+
+        Eigen::VectorXd result(1);
+        result << (new_state - old_state)(this->id);
+        return result;
     }
 
     void dynamics(const std::vector<double>& x, std::vector<double>& dx, double t, double u) const
@@ -407,12 +416,15 @@ struct CartPole {
                 Eigen::VectorXd mu;
                 Eigen::VectorXd sigma;
                 std::tie(mu, sigma) = model.predictm(query_vec);
-                // sigma = sigma.array().sqrt();
-                // for (int i = 0; i < mu.size(); i++) {
-                //   double s = gaussian_rand(mu(i), sigma(i));
-                //   mu(i) = std::max(mu(i) - sigma(i),
-                //     std::min(s, mu(i) + sigma(i)));
-                // }
+                
+                #ifndef INTACT
+                  sigma = sigma.array().sqrt();
+                  for (int i = 0; i < mu.size(); i++) {
+                    double s = gaussian_rand(mu(i), sigma(i));
+                    mu(i) = std::max(mu(i) - sigma(i),
+                      std::min(s, mu(i) + sigma(i)));
+                  }
+                #endif
 
                 Eigen::VectorXd final = init_diff + mu;
                 // if(final(0) < -2)
@@ -480,12 +492,12 @@ struct RewardFunction {
 };
 
 using kernel_t = medrops::SquaredExpARD<Params>;
-// using kernel_t = limbo::kernel::SquaredExpARD<Params>;
-// using kernel_t = limbo::kernel::Exp<Params>;
-using mean_t = limbo::mean::Constant<Params>;
-// using mean_t = MeanIntact<Params>;
+#ifdef INTACT
+  using mean_t = MeanIntact<Params>;
+#else
+  using mean_t = limbo::mean::Constant<Params>;
+#endif
 using GP_t = limbo::model::GP<Params, kernel_t, mean_t, limbo::model::gp::KernelLFOpt<Params, limbo::opt::NLOptGrad<Params, nlopt::LD_SLSQP>>>;
-// using GP_t = limbo::model::GP<Params, kernel_t, mean_t, medrops::KernelLFOpt<Params, limbo::opt::Cmaes<Params>>>;
 
 BO_DECLARE_DYN_PARAM(size_t, Params, parallel_evaluations);
 BO_DECLARE_DYN_PARAM(int, Params::nn_policy, hidden_neurons);
@@ -544,12 +556,19 @@ int main(int argc, char** argv)
     }
 #endif
 
-    medrops::Medrops<Params, medrops::GPModel<Params, GP_t>, CartPole, medrops::NNPolicy<Params>, limbo::opt::Cmaes<Params>, RewardFunction> cp_system;
-    // limbo::opt::NLOptNoGrad<Params, nlopt::LN_SBPLX
-    // limbo::opt::NLOptNoGrad<Params, nlopt::LN_COBYLA
-    // limbo::opt::Cmaes<Params>
+    using policy_opt_t = limbo::opt::Cmaes<Params>;
+    // using policy_opt_t = limbo::opt::NLOptNoGrad<Params, nlopt::LN_COBYLA>;
+    // using policy_opt_t = limbo::opt::NLOptNoGrad<Params, nlopt::GN_DIRECT_L>;
+    // using policy_opt_t = limbo::opt::NLOptNoGrad<Params, nlopt::LN_SBPLX>;
+    // using policy_opt_t = limbo::opt::NLOptNoGrad<Params, nlopt::LN_BOBYQA>;
+    // using policy_opt_t = limbo::opt::Chained<Params, limbo::opt::NLOptNoGrad<Params, nlopt::GN_DIRECT_L>, limbo::opt::NLOptNoGrad<Params, nlopt::LN_SBPLX>>;
+    medrops::Medrops<Params, medrops::GPModel<Params, GP_t>, CartPole, medrops::NNPolicy<Params>, policy_opt_t, RewardFunction> cp_system;
 
-    cp_system.learn(1, 20);
+    #ifndef DATA
+      cp_system.learn(1, 20);
+    #else
+      cp_system.learn(0, 1);
+    #endif
 
 #ifdef USE_SDL
     sdl_clean();
