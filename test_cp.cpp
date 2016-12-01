@@ -12,7 +12,9 @@
 #include <medrops/kernel_lf_opt.hpp>
 #include <nn/nn.hpp>
 
-#ifdef USE_SDL
+#include <medrops/sf_nn_policy.hpp>
+
+#if defined(USE_SDL) && !defined(NODSP)
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_image.h>
 
@@ -158,7 +160,7 @@ struct Params {
         BO_PARAM(int, restarts, 5);
     };
     struct opt_nloptnograd : public limbo::defaults::opt_nloptnograd {
-        BO_PARAM(int, iterations, 1000000);
+        BO_PARAM(int, iterations, 20000);
     };
 };
 
@@ -290,7 +292,7 @@ struct CartPole {
 
             double r = world(init, limbo::tools::make_vector(_u), final);
             R.push_back(r);
-#ifdef USE_SDL
+#if defined(USE_SDL) && !defined(NODSP)
             //Clear screen
             SDL_SetRenderDrawColor(renderer, 0xFF, 0xFF, 0xFF, 0xFF);
             SDL_RenderClear(renderer);
@@ -366,7 +368,7 @@ struct CartPole {
             init(3) = std::cos(final(3));
             init(4) = std::sin(final(3));
 
-#ifdef USE_SDL
+#if defined(USE_SDL) && !defined(NODSP)
             double dt = 0.1;
             //Clear screen
             SDL_SetRenderDrawColor(renderer, 0xFF, 0xFF, 0xFF, 0xFF);
@@ -416,7 +418,7 @@ struct CartPole {
                 Eigen::VectorXd mu;
                 Eigen::VectorXd sigma;
                 std::tie(mu, sigma) = model.predictm(query_vec);
-                
+
                 #ifndef INTACT
                   sigma = sigma.array().sqrt();
                   for (int i = 0; i < mu.size(); i++) {
@@ -478,15 +480,38 @@ protected:
     double _u;
 };
 
+template <typename Params>
+struct RandomOpt {
+    template <typename F>
+    Eigen::VectorXd operator()(const F& f, const Eigen::VectorXd& init, bool bounded) const
+    {
+        // Random point does not support unbounded search
+        assert(bounded);
+        double best = -1000;
+        Eigen::VectorXd p = limbo::tools::random_vector(init.size());
+
+        for (size_t i=0; i < Params::opt_cmaes::max_fun_evals(); i++) {
+          Eigen::VectorXd pp = limbo::tools::random_vector(init.size());
+          double v = limbo::opt::eval(f, pp);
+          if (v>best) {
+            best = v;
+            p = pp;
+          }
+        }
+        return p;
+    }
+};
+
 struct RewardFunction {
     double operator()(const Eigen::VectorXd& from_state, const Eigen::VectorXd& action, const Eigen::VectorXd& to_state) const
     {
         double s_c_sq = 0.25 * 0.25;
         double dx = angle_dist(to_state(3), Params::goal_pos());
-        // double dy = to_state(2) - Params::goal_vel();
-        // double dz = to_state(1) - Params::goal_vel_x();
+        double dy = to_state(2) - Params::goal_vel();
+        double dz = to_state(1) - Params::goal_vel_x();
         double dw = to_state(0) - Params::goal_pos_x();
 
+        // return std::exp(-0.5 / s_c_sq * (dx * dx + dy * dy + dz * dz + dw * dw));
         return std::exp(-0.5 / s_c_sq * (dx * dx /*+ dy * dy + dz * dz*/ + dw * dw));
     }
 };
@@ -497,7 +522,7 @@ using kernel_t = medrops::SquaredExpARD<Params>;
 #else
   using mean_t = limbo::mean::Constant<Params>;
 #endif
-using GP_t = limbo::model::GP<Params, kernel_t, mean_t, limbo::model::gp::KernelLFOpt<Params, limbo::opt::NLOptGrad<Params, nlopt::LD_SLSQP>>>;
+using GP_t = limbo::model::GP<Params, kernel_t, mean_t, medrops::KernelLFOpt<Params, limbo::opt::NLOptGrad<Params, nlopt::LD_SLSQP>>>;
 
 BO_DECLARE_DYN_PARAM(size_t, Params, parallel_evaluations);
 BO_DECLARE_DYN_PARAM(int, Params::nn_policy, hidden_neurons);
@@ -507,7 +532,10 @@ int main(int argc, char** argv)
 {
     namespace po = boost::program_options;
     po::options_description desc("Command line arguments");
-    desc.add_options()("help,h", "Prints this help message")("parallel_evaluations,p", po::value<int>(), "Number of parallel monte carlo evaluations for policy reward estimation.")("hidden_neurons,n", po::value<int>(), "Number of hidden neurons in NN policy.")("max_evals,m", po::value<int>(), "Max function evaluations to optimize the policy.");
+    desc.add_options()("help,h", "Prints this help message")("parallel_evaluations,p", po::value<int>(),
+    "Number of parallel monte carlo evaluations for policy reward estimation.")("hidden_neurons,n", po::value<int>(),
+    "Number of hidden neurons in NN policy.")("max_evals,m", po::value<int>(),
+    "Max function evaluations to optimize the policy.");
 
     try {
         po::variables_map vm;
@@ -549,7 +577,7 @@ int main(int argc, char** argv)
         std::cerr << "[Exception caught while parsing command line arguments]: " << e.what() << std::endl;
         return 1;
     }
-#ifdef USE_SDL
+#if defined(USE_SDL) && !defined(NODSP)
     //Initialize
     if (!sdl_init()) {
         return 1;
@@ -557,20 +585,23 @@ int main(int argc, char** argv)
 #endif
 
     using policy_opt_t = limbo::opt::Cmaes<Params>;
+    // using policy_opt_t = RandomOpt<Params>;
     // using policy_opt_t = limbo::opt::NLOptNoGrad<Params, nlopt::LN_COBYLA>;
     // using policy_opt_t = limbo::opt::NLOptNoGrad<Params, nlopt::GN_DIRECT_L>;
     // using policy_opt_t = limbo::opt::NLOptNoGrad<Params, nlopt::LN_SBPLX>;
     // using policy_opt_t = limbo::opt::NLOptNoGrad<Params, nlopt::LN_BOBYQA>;
     // using policy_opt_t = limbo::opt::Chained<Params, limbo::opt::NLOptNoGrad<Params, nlopt::GN_DIRECT_L>, limbo::opt::NLOptNoGrad<Params, nlopt::LN_SBPLX>>;
-    medrops::Medrops<Params, medrops::GPModel<Params, GP_t>, CartPole, medrops::NNPolicy<Params>, policy_opt_t, RewardFunction> cp_system;
+
+    // medrops::Medrops<Params, medrops::GPModel<Params, GP_t>, CartPole, medrops::NNPolicy<Params>, policy_opt_t, RewardFunction> cp_system;
+    medrops::Medrops<Params, medrops::GPModel<Params, GP_t>, CartPole, medrops::SFNNPolicy<Params>, policy_opt_t, RewardFunction> cp_system;
 
     #ifndef DATA
-      cp_system.learn(1, 20);
+      cp_system.learn(1, 100);
     #else
       cp_system.learn(0, 1);
     #endif
 
-#ifdef USE_SDL
+#if defined(USE_SDL) && !defined(NODSP)
     sdl_clean();
 #endif
 

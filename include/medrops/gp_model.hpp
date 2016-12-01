@@ -9,6 +9,16 @@ namespace medrops {
     class GPModel {
     public:
 
+        GPModel() {
+          _gp_models = std::vector<std::shared_ptr<GP>>(4);
+          for (size_t i = 0; i < _gp_models.size(); i++) {
+            _gp_models[i] = std::make_shared<GP>(5, 1);
+            #ifdef INTACT
+              _gp_models[i]->mean_function().set_id(i);
+            #endif
+          }
+        }
+
         inline double angle_dist(double a, double b)
         {
             double theta = b - a;
@@ -32,15 +42,7 @@ namespace medrops {
         void learn(const std::vector<std::tuple<Eigen::VectorXd, Eigen::VectorXd, Eigen::VectorXd>>& observations)
         {
             #ifdef INTACT
-              if (_gp_models.size() > 0) return;
-            #endif
-
-            _gp_models = std::vector<GP>(4);
-            #ifdef INTACT
-              for (size_t i = 0; i < _gp_models.size(); i++) {
-                  _gp_models[i].init(5, 1);
-                  _gp_models[i].mean_function().set_id(i);
-              }
+              if (_initialized) return;
             #endif
 
             #ifndef DATA
@@ -84,13 +86,13 @@ namespace medrops {
               std::cout << "GP Samples: " << samples.size() << std::endl;
               Eigen::VectorXd noises = Eigen::VectorXd::Constant(samples.size(), Params::gp_model::noise());
               tbb::parallel_for(size_t(0), (size_t)obs.cols(), size_t(1), [&](size_t i) {
-                  _gp_models[i].compute(samples, _to_vector(obs.col(i)), noises);
-                  _gp_models[i].optimize_hyperparams();
+                  _gp_models[i]->compute(samples, _to_vector(obs.col(i)), noises);
+                  _gp_models[i]->optimize_hyperparams();
               });
 
               for (size_t i = 0; i < (size_t) obs.cols(); ++i) {
                   // Print hparams in logspace
-                  Eigen::VectorXd p = _gp_models[i].kernel_function().h_params();
+                  Eigen::VectorXd p = _gp_models[i]->kernel_function().h_params();
                   p.segment(0,p.size()-1) = p.segment(0, p.size()-1).array().exp();
                   p(p.size()-1) = std::exp(2*p(p.size()-1));
                   std::cout << p.array().transpose() << std::endl;
@@ -115,25 +117,26 @@ namespace medrops {
 
               Eigen::VectorXd noises = Eigen::VectorXd::Constant(samples_comp.size(), Params::gp_model::noise());
               tbb::parallel_for(size_t(0), (size_t) observations_comp.cols(), size_t(1), [&](size_t i) {
-                  _gp_models[i].compute(samples_comp, _to_vector(observations_comp.col(i)), noises);
-                  _gp_models[i].optimize_hyperparams();
+                  _gp_models[i]->compute(samples_comp, _to_vector(observations_comp.col(i)), noises);
+                  _gp_models[i]->optimize_hyperparams();
                   std::cout << "Computation for gp " << i << " ended." << std::endl;
 
                   // Print hparams in logspace
-                  // Eigen::VectorXd p = _gp_models[i].kernel_function().h_params();
+                  // Eigen::VectorXd p = _gp_models[i]->kernel_function().h_params();
                   // p.segment(0,p.size()-1) = p.segment(0, p.size()-1).array().exp();
                   // p(p.size()-1) = std::exp(2*p(p.size()-1));
                   // std::cout << p.array().transpose() << std::endl;
               });
 
             #endif
+            _initialized = true;
         }
 
         void save_data() const {
             const std::vector<Eigen::VectorXd>& samples = _gp_models[0].samples();
             Eigen::MatrixXd observations(samples.size(), _gp_models.size());
             for (size_t i = 0; i < _gp_models.size(); ++i) {
-                observations.col(i) = _gp_models[i].observations().col(0);
+                observations.col(i) = _gp_models[i]->observations().col(0);
             }
 
             std::ofstream ofs_data("medrops_gp_data.dat");
@@ -164,7 +167,7 @@ namespace medrops {
             tbb::parallel_for(size_t(0), _gp_models.size(), size_t(1), [&](size_t i) {
                 double s;
                 Eigen::VectorXd m;
-                std::tie(m, s) = _gp_models[i].query(x);
+                std::tie(m, s) = _gp_models[i]->query(x);
                 ms(i) = m(0);
                 ss(i) = s;
             });
@@ -181,7 +184,8 @@ namespace medrops {
         }
         std::vector<Eigen::VectorXd> _to_vector(Eigen::MatrixXd& m) const { return _to_vector(m); }
 
-        std::vector<GP> _gp_models;
+        std::vector<std::shared_ptr<GP>> _gp_models;
+        bool _initialized = false;
     };
 }
 

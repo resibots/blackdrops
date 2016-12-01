@@ -12,6 +12,7 @@ namespace medrops {
     public:
         int opt_iters;
         double max_reward;
+        double _bound;
 
         Medrops() {}
         ~Medrops() {}
@@ -44,28 +45,34 @@ namespace medrops {
             opt_iters = 0;
             max_reward = 0;
             std::cout << "Optimizing policy... " << std::flush;
-            Eigen::VectorXd params_star = policy_optimizer(std::bind(&Medrops::_optimize_policy, this, std::placeholders::_1, std::placeholders::_2), _policy.params(), false);
+            Eigen::VectorXd params_star = policy_optimizer(
+                        std::bind(&Medrops::_optimize_policy, this, std::placeholders::_1, std::placeholders::_2),
+                        (_policy.params().array()+_bound)/(_bound*2.0),
+                        true);
             std::cout << std::endl << "Optimization iterations: " << opt_iters << std::endl;
 
             // std::cout << "BEST: " << limbo::opt::fun(_optimize_policy(params_star)) << std::endl;
-
+            params_star = params_star.array()*2.0*_bound-_bound;
             _policy.set_params(params_star);
 
             std::cout << "Best parameters: " << params_star.transpose() << std::endl;
             Eigen::write_binary("policy_params.bin", params_star);
 
-            std::vector<double> R;
-            RewardFunction world;
-            _robot.execute_dummy(_policy, _model, world, Params::medrops::rollout_steps(), R);
-            std::cout << "Dummy reward: " << std::accumulate(R.begin(), R.end(),0.0) << std::endl;
-            // _ofs << R << " ";
-            for (auto r : R)
-                _ofs << r << " ";
-            _ofs << std::endl;
+            #ifndef INTACT
+              std::vector<double> R;
+              RewardFunction world;
+              _robot.execute_dummy(_policy, _model, world, Params::medrops::rollout_steps(), R);
+              std::cout << "Dummy reward: " << std::accumulate(R.begin(), R.end(),0.0) << std::endl;
+
+              for (auto r : R)
+                  _ofs << r << " ";
+              _ofs << std::endl;
+            #endif
         }
 
         void learn(size_t init, size_t iterations)
         {
+            _bound = 1;
             _ofs.open("results.dat");
             _policy.set_random_policy();
 
@@ -81,7 +88,6 @@ namespace medrops {
                 learn_model();
                 std::cout << "Learned model..." << std::endl;
 
-                // _model.save_data();
                 Eigen::VectorXd errors = get_accuracy();
                 std::cout << "Average on errors: " << errors.transpose() << std::endl;
 
@@ -116,13 +122,13 @@ namespace medrops {
         {
             RewardFunction world;
             Policy policy;
-            policy.set_params(params);
+            policy.set_params(params.array()*2.0*_bound-_bound);
 
             double r = _robot.predict_policy(policy, _model, world, Params::medrops::rollout_steps());
 
             opt_iters++;
             if (max_reward < r) max_reward = r;
-            if (opt_iters % 10000 == 0) {
+            if (opt_iters % 1000 == 0) {
               std::cout << opt_iters << "(" << max_reward << ") " << std::flush;
             }
 
