@@ -7,18 +7,15 @@ import limbo
 import mcts
 
 def options(opt):
-    opt.load('mcts')
     opt.load('sdl')
 
 def configure(conf):
-    conf.load('mcts')
-    conf.check_mcts()
     conf.load('sdl')
     conf.check_sdl()
 
 
 def build(bld):
-    libs = 'MCTS TBB EIGEN BOOST LIMBO LIBCMAES NLOPT SFERES2 BOOST_CHRONO RT SDL '
+    libs = 'TBB EIGEN BOOST LIMBO LIBCMAES NLOPT SFERES2 BOOST_CHRONO RT SDL '
     cxxflags = bld.get_env()['CXXFLAGS']
 
     limbo.create_variants(bld,
@@ -35,7 +32,7 @@ def build(bld):
                       target='test_cp',
                       uselib=libs,
                       uselib_local='limbo',
-                      variants = ['SIMU', 'SIMU LLP'])
+                      variants = ['SIMU', 'SIMU DATA', 'SIMU INTACT'])
 
     limbo.create_variants(bld,
                       source='ode_test.cpp',

@@ -258,9 +258,6 @@ struct CartPole {
             //     init_diff(1) -= 2 * M_PI;
 
             _u = policy.next(init)[0];
-            // std::cout << _u << std::endl;
-
-
             // ode_stepper.do_step(std::bind(&CartPole::dynamics, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3), cp_state, t, dt);
             boost::numeric::odeint::integrate_const(ode_stepper,
                 std::bind(&CartPole::dynamics, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3),
@@ -509,11 +506,6 @@ struct RewardFunction {
 
         // return std::exp(-0.5 / s_c_sq * (dx * dx + dy * dy + dz * dz + dw * dw));
         return std::exp(-0.5 / s_c_sq * (dx * dx /*+ dy * dy + dz * dz*/ + dw * dw));
-
-        // if((std::abs(dx)<0.296706))
-        //   return 1.0/(std::abs(dw)+1);
-        // return 0.0;
-        // return std::cos(dx)/(std::pow(std::abs(dw)/2.5+1, 2));
     }
 };
 
