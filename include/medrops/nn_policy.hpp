@@ -5,7 +5,7 @@
 
 namespace medrops {
 
-    template <typename Params>
+    template <typename Params, typename Model>
     struct NNPolicy {
 
         using nn_t = medrops::MLP<medrops::NNLayer<medrops::Neuron<medrops::AfTanh>, medrops::PfSum>, medrops::NNLayer<medrops::Neuron<medrops::AfTanh>, medrops::PfSum>>;
@@ -21,6 +21,8 @@ namespace medrops {
 
             _params = Eigen::VectorXd::Zero(_mlp->n_weights());
         }
+
+        void normalize(const Model& model) { }
 
         Eigen::VectorXd next(const Eigen::VectorXd& state) const
         {
