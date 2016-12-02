@@ -599,7 +599,11 @@ int main(int argc, char** argv)
     medrops::Medrops<Params, MGP_t, CartPole, medrops::SFNNPolicy<Params, MGP_t>, policy_opt_t, RewardFunction> cp_system;
 
     #ifndef DATA
-      cp_system.learn(1, 100);
+      #ifdef INTACT
+        cp_system.learn(1, 100);
+      #else
+        cp_system.learn(1, 15);
+      #endif
     #else
       cp_system.learn(0, 1);
     #endif
