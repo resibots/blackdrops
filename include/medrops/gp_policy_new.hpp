@@ -77,7 +77,7 @@ namespace medrops {
             gp_policy_obj.kernel_function().set_h_params(ells);
 
             //--- Compute the gp
-            Eigen::VectorXd noises = Eigen::VectorXd::Constant(ps, Params::gp_policy_new::noise());
+            Eigen::VectorXd noises = Eigen::VectorXd::Constant(ps, Params::gp_policy::noise());
             gp_policy_obj.compute(pseudo_samples, pseudo_observations, noises); //TODO: Have to check the noises with actual PILCO
 
             //--- Query the GP with state

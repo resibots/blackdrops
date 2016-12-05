@@ -6,6 +6,7 @@
 #include <medrops/medrops.hpp>
 #include <medrops/linear_policy.hpp>
 #include <medrops/gp_policy.hpp>
+#include <medrops/gp_policy_new.hpp>
 #include <medrops/nn_policy.hpp>
 #include <medrops/gp_model.hpp>
 #include <medrops/exp_sq_ard.hpp>
@@ -118,6 +119,21 @@ struct Params {
     BO_PARAM(double, goal_pos_x, 0.0);
     BO_PARAM(double, goal_vel_x, 0.0);
 
+
+    struct options {
+        BO_PARAM(bool, bounded, true);
+    };
+
+    struct gp_policy {
+        BO_PARAM(double, l, 1);
+        BO_PARAM(double, max_u, 10.0); //max action
+        BO_PARAM(double, pseudo_samples, 20); //max action
+        BO_PARAM(double, noise, 1e-5);
+        BO_PARAM(double, max_sample, 6.0);
+        //BO_PARAM(double, max_obs, 10.0);
+        //BO_DYN_PARAM(int, hidden_neurons);
+    };
+
     struct medrops {
         BO_PARAM(size_t, rollout_steps, 40);
     };
@@ -136,13 +152,6 @@ struct Params {
         BO_PARAM(int, state_dim, 5);
         BO_PARAM(double, max_u, 10.0); //max action
         BO_DYN_PARAM(int, hidden_neurons);
-    };
-
-    struct gp_policy {
-        BO_PARAM(double, l, 1);
-        BO_PARAM(double, max_u, 5.0); //max action
-        BO_PARAM(double, pseudo_samples, 20); //max action
-        //BO_DYN_PARAM(int, hidden_neurons);
     };
 
     struct mean_constant {
@@ -513,7 +522,8 @@ struct RewardFunction {
         double dw = to_state(0) - Params::goal_pos_x();
 
         // return std::exp(-0.5 / s_c_sq * (dx * dx + dy * dy + dz * dz + dw * dw));
-        return std::exp(-0.5 / s_c_sq * (dx * dx /*+ dy * dy + dz * dz*/ + dw * dw));
+        //return std::exp(-0.5 / s_c_sq * (dx * dx /*+ dy * dy + dz * dz*/ + dw * dw));
+        return std::cos(std::abs(dx))+1;
     }
 };
 
@@ -594,7 +604,9 @@ int main(int argc, char** argv)
     // using policy_opt_t = limbo::opt::Chained<Params, limbo::opt::NLOptNoGrad<Params, nlopt::GN_DIRECT_L>, limbo::opt::NLOptNoGrad<Params, nlopt::LN_SBPLX>>;
 
     // medrops::Medrops<Params, medrops::GPModel<Params, GP_t>, CartPole, medrops::NNPolicy<Params>, policy_opt_t, RewardFunction> cp_system;
-    medrops::Medrops<Params, medrops::GPModel<Params, GP_t>, CartPole, medrops::SFNNPolicy<Params>, policy_opt_t, RewardFunction> cp_system;
+    //medrops::Medrops<Params, medrops::GPModel<Params, GP_t>, CartPole, medrops::SFNNPolicy<Params>, policy_opt_t, RewardFunction> cp_system;
+
+    medrops::Medrops<Params, medrops::GPModel<Params, GP_t>, CartPole, medrops::GPPolicyNew<Params>, policy_opt_t, RewardFunction> cp_system;
 
     #ifndef DATA
       cp_system.learn(1, 100);
