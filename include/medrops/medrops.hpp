@@ -12,7 +12,7 @@ namespace medrops {
     public:
         int opt_iters;
         double max_reward;
-        double _bound;
+        double _boundary;
 
         Medrops() {}
         ~Medrops() {}
@@ -44,15 +44,25 @@ namespace medrops {
             // For now optimize policy without gradients
             opt_iters = 0;
             max_reward = 0;
+            Eigen::VectorXd params_star;
             std::cout << "Optimizing policy... " << std::flush;
-            Eigen::VectorXd params_star = policy_optimizer(
-                        std::bind(&Medrops::_optimize_policy, this, std::placeholders::_1, std::placeholders::_2),
-                        (_policy.params().array()+_bound)/(_bound*2.0),
-                        true);
+            if (_boundary == 0) {
+              params_star = policy_optimizer(
+                          std::bind(&Medrops::_optimize_policy, this, std::placeholders::_1, std::placeholders::_2),
+                          _policy.params(),
+                          false);
+            } else {
+              params_star = policy_optimizer(
+                          std::bind(&Medrops::_optimize_policy, this, std::placeholders::_1, std::placeholders::_2),
+                          (_policy.params().array()+_boundary)/(_boundary*2.0),
+                          true);
+              params_star = params_star.array()*2.0*_boundary-_boundary;
+            }
             std::cout << std::endl << "Optimization iterations: " << opt_iters << std::endl;
 
             // std::cout << "BEST: " << limbo::opt::fun(_optimize_policy(params_star)) << std::endl;
-            params_star = params_star.array()*2.0*_bound-_bound;
+            // params_star = params_star.array()*2.0*_boundary-_boundary;
+            _policy.normalize(_model);
             _policy.set_params(params_star);
 
             std::cout << "Best parameters: " << params_star.transpose() << std::endl;
@@ -72,7 +82,8 @@ namespace medrops {
 
         void learn(size_t init, size_t iterations)
         {
-            _bound = 1;
+            // _boundary = Params::medrops::boundary();
+            _boundary = 5;
             _ofs.open("results.dat");
             _policy.set_random_policy();
 
@@ -86,10 +97,15 @@ namespace medrops {
                 std::cout << std::endl << "Learning iteration #" << (i + 1) << std::endl;
 
                 learn_model();
+                _policy.normalize(_model);
+                std::cout << _policy._limits.transpose() << std::endl;
                 std::cout << "Learned model..." << std::endl;
 
-                Eigen::VectorXd errors = get_accuracy();
+                Eigen::VectorXd errors;
+                Eigen::VectorXd errors_sigma;
+                std::tie(errors, errors_sigma) = get_accuracy();
                 std::cout << "Average on errors: " << errors.transpose() << std::endl;
+                std::cout << "Average on sigmas: " << errors_sigma.transpose() << std::endl;
 
                 for (size_t j = 0; j < errors.size(); j++) {
                     if (errors(j) > 1000) {
@@ -105,8 +121,6 @@ namespace medrops {
                 std::cout << "Executed action..." << std::endl;
             }
             _ofs.close();
-
-            std::cout << "Averaged errors of the model: " << get_accuracy().transpose() << std::endl;
         }
 
     protected:
@@ -122,7 +136,13 @@ namespace medrops {
         {
             RewardFunction world;
             Policy policy;
-            policy.set_params(params.array()*2.0*_bound-_bound);
+
+            if (_boundary == 0) {
+              policy.set_params(params.array());
+            } else {
+              policy.set_params(params.array()*2.0*_boundary-_boundary);
+            }
+            policy.normalize(_model);
 
             double r = _robot.predict_policy(policy, _model, world, Params::medrops::rollout_steps());
 
@@ -151,12 +171,13 @@ namespace medrops {
             return result;
         }
 
-        Eigen::VectorXd get_accuracy(int evaluations = 100000) const
+        std::tuple<Eigen::VectorXd, Eigen::VectorXd> get_accuracy(int evaluations = 100000) const
         {
 
             std::vector<Eigen::VectorXd> rvs = random_vectors(5, evaluations);
 
             Eigen::VectorXd errors(4);
+            Eigen::VectorXd sigmas(4);
             for (int i = 0; i < rvs.size(); i++) {
                 Eigen::VectorXd s;
                 Eigen::VectorXd m;
@@ -169,9 +190,13 @@ namespace medrops {
                 std::tie(m, s) = _model.predictm(gp_query);
 
                 errors.array() += (m-cm).array().abs();
+                sigmas.array() += s.array();
             }
 
-            return errors.array()/evaluations*1.0;
+            return std::make_tuple(
+                errors.array()/evaluations*1.0,
+                sigmas.array()/evaluations*1.0
+            );
         }
 
         Eigen::VectorXd comp_predict(const Eigen::VectorXd& v) const
@@ -179,15 +204,17 @@ namespace medrops {
             double dt = 0.1, t = 0.0;
 
             boost::numeric::odeint::runge_kutta4<std::vector<double>> ode_stepper;
-            std::vector<double> pend_state(4);
-            pend_state[0] = v(0);
-            pend_state[1] = v(1);
-            pend_state[2] = v(2);
-            pend_state[3] = v(3);
+            std::vector<double> state(4);
+            state[0] = v(0);
+            state[1] = v(1);
+            state[2] = v(2);
+            state[3] = v(3);
 
-            boost::numeric::odeint::integrate_const(ode_stepper, std::bind(&Medrops::dynamics, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, v(4)), pend_state, t, dt, dt / 2.0);
+            boost::numeric::odeint::integrate_const(ode_stepper,
+              std::bind(&Medrops::dynamics, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, v(4)),
+              state, t, dt, dt / 2.0);
 
-            Eigen::VectorXd new_state = Eigen::VectorXd::Map(pend_state.data(), pend_state.size());
+            Eigen::VectorXd new_state = Eigen::VectorXd::Map(state.data(), state.size());
             return (new_state.array() - v.segment(0, 4).array());
         }
 

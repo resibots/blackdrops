@@ -103,9 +103,9 @@ namespace medrops {
               // Loading test
               std::cout << std::endl;
               Eigen::MatrixXd data_comp;
-              Eigen::read_binary("medrops_data_28_11_2016.bin", data_comp);
+              Eigen::read_binary("medrops_data_01_12_2016.bin", data_comp);
 
-              size_t limit = 200;
+              size_t limit = 120;
               std::cout << "Loading " << limit << "/" << data_comp.rows() << " rows from file." << std::endl;
 
               std::vector<Eigen::VectorXd> samples_comp(limit);
@@ -174,6 +174,10 @@ namespace medrops {
             return std::make_tuple(ms, ss);
         }
 
+        Eigen::MatrixXd samples() const {
+          return _to_matrix(_gp_models[0]->samples());
+        }
+
         std::vector<Eigen::VectorXd> _to_vector(const Eigen::MatrixXd& m) const
         {
             std::vector<Eigen::VectorXd> result(m.rows());
@@ -183,6 +187,16 @@ namespace medrops {
             return result;
         }
         std::vector<Eigen::VectorXd> _to_vector(Eigen::MatrixXd& m) const { return _to_vector(m); }
+
+        Eigen::MatrixXd _to_matrix(const std::vector<Eigen::VectorXd>& xs) const
+        {
+            Eigen::MatrixXd result(xs.size(), xs[0].size());
+            for (size_t i = 0; i < (size_t)result.rows(); ++i) {
+                result.row(i) = xs[i];
+            }
+            return result;
+        }
+        Eigen::MatrixXd _to_matrix(std::vector<Eigen::VectorXd>& xs) const { return _to_matrix(xs); }
 
         std::vector<std::shared_ptr<GP>> _gp_models;
         bool _initialized = false;

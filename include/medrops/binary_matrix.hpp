@@ -2,6 +2,7 @@
 #define EIGEN_BINARY_MATRIX
 
 #include <fstream>
+#include <cmath>
 
 namespace Eigen {
     template<class Matrix>
@@ -23,6 +24,30 @@ namespace Eigen {
         matrix.resize(rows, cols);
         in.read( (char *) matrix.data() , rows*cols*sizeof(typename Matrix::Scalar) );
         in.close();
+    }
+
+    MatrixXd colwise_sig(const MatrixXd& matrix){
+      VectorXd matrix_mean = matrix.colwise().mean();
+      MatrixXd matrix_std = (matrix - matrix_mean.transpose().replicate(matrix.rows(), 1));
+      matrix_std = matrix_std.array().pow(2);
+      MatrixXd matrix_sum = matrix_std.colwise().sum();
+      matrix_sum *= (1.0/(matrix.rows()-1));
+      return matrix_sum.array().sqrt();
+    }
+
+    double percentile_v(VectorXd vector, int p) {
+      p = p-1;
+      if (p < 0) p = 0;
+      std::sort(vector.data(),vector.data()+vector.size());
+      return vector(std::floor((p/100.0)*vector.size()));
+    }
+
+    VectorXd percentile(const MatrixXd& matrix, int p) {
+      VectorXd result(matrix.cols());
+      for (size_t i = 0; i < matrix.cols(); i++) {
+        result(i) = percentile_v(matrix.col(i), p);
+      }
+      return result;
     }
 }
 #endif

@@ -120,6 +120,7 @@ struct Params {
 
     struct medrops {
         BO_PARAM(size_t, rollout_steps, 40);
+        BO_DYN_PARAM(double, boundary);
     };
 
     struct gp_model {
@@ -420,12 +421,12 @@ struct CartPole {
                 std::tie(mu, sigma) = model.predictm(query_vec);
 
                 #ifndef INTACT
-                  sigma = sigma.array().sqrt();
-                  for (int i = 0; i < mu.size(); i++) {
-                    double s = gaussian_rand(mu(i), sigma(i));
-                    mu(i) = std::max(mu(i) - sigma(i),
-                      std::min(s, mu(i) + sigma(i)));
-                  }
+                  // sigma = sigma.array().sqrt();
+                  // for (int i = 0; i < mu.size(); i++) {
+                  //   double s = gaussian_rand(mu(i), sigma(i));
+                  //   mu(i) = std::max(mu(i) - sigma(i),
+                  //     std::min(s, mu(i) + sigma(i)));
+                  // }
                 #endif
 
                 Eigen::VectorXd final = init_diff + mu;
@@ -526,6 +527,7 @@ using GP_t = limbo::model::GP<Params, kernel_t, mean_t, medrops::KernelLFOpt<Par
 
 BO_DECLARE_DYN_PARAM(size_t, Params, parallel_evaluations);
 BO_DECLARE_DYN_PARAM(int, Params::nn_policy, hidden_neurons);
+BO_DECLARE_DYN_PARAM(double, Params::medrops, boundary);
 BO_DECLARE_DYN_PARAM(double, Params::opt_cmaes, max_fun_evals);
 
 int main(int argc, char** argv)
@@ -535,6 +537,7 @@ int main(int argc, char** argv)
     desc.add_options()("help,h", "Prints this help message")("parallel_evaluations,p", po::value<int>(),
     "Number of parallel monte carlo evaluations for policy reward estimation.")("hidden_neurons,n", po::value<int>(),
     "Number of hidden neurons in NN policy.")("max_evals,m", po::value<int>(),
+    "Boundary of the values during the optimization.")("boundary,b", po::value<double>(),
     "Max function evaluations to optimize the policy.");
 
     try {
@@ -549,8 +552,7 @@ int main(int argc, char** argv)
 
         if (vm.count("parallel_evaluations")) {
             int c = vm["parallel_evaluations"].as<int>();
-            if (c < 0)
-                c = 0;
+            if (c < 0) c = 0;
             Params::set_parallel_evaluations(c);
         }
         else {
@@ -558,12 +560,19 @@ int main(int argc, char** argv)
         }
         if (vm.count("hidden_neurons")) {
             int c = vm["hidden_neurons"].as<int>();
-            if (c < 1)
-                c = 1;
+            if (c < 1) c = 1;
             Params::nn_policy::set_hidden_neurons(c);
         }
         else {
             Params::nn_policy::set_hidden_neurons(5);
+        }
+        if (vm.count("boundary")) {
+            double c = vm["boundary"].as<double>();
+            if (c < 0) c = 0;
+            Params::medrops::set_boundary(c);
+        }
+        else {
+            Params::medrops::set_boundary(5);
         }
         if (vm.count("max_evals")) {
             int c = vm["max_evals"].as<int>();
@@ -585,6 +594,7 @@ int main(int argc, char** argv)
 #endif
 
     using policy_opt_t = limbo::opt::Cmaes<Params>;
+    using MGP_t = medrops::GPModel<Params, GP_t>;
     // using policy_opt_t = RandomOpt<Params>;
     // using policy_opt_t = limbo::opt::NLOptNoGrad<Params, nlopt::LN_COBYLA>;
     // using policy_opt_t = limbo::opt::NLOptNoGrad<Params, nlopt::GN_DIRECT_L>;
@@ -593,10 +603,14 @@ int main(int argc, char** argv)
     // using policy_opt_t = limbo::opt::Chained<Params, limbo::opt::NLOptNoGrad<Params, nlopt::GN_DIRECT_L>, limbo::opt::NLOptNoGrad<Params, nlopt::LN_SBPLX>>;
 
     // medrops::Medrops<Params, medrops::GPModel<Params, GP_t>, CartPole, medrops::NNPolicy<Params>, policy_opt_t, RewardFunction> cp_system;
-    medrops::Medrops<Params, medrops::GPModel<Params, GP_t>, CartPole, medrops::SFNNPolicy<Params>, policy_opt_t, RewardFunction> cp_system;
+    medrops::Medrops<Params, MGP_t, CartPole, medrops::SFNNPolicy<Params, MGP_t>, policy_opt_t, RewardFunction> cp_system;
 
     #ifndef DATA
-      cp_system.learn(1, 100);
+      #ifdef INTACT
+        cp_system.learn(1, 100);
+      #else
+        cp_system.learn(1, 15);
+      #endif
     #else
       cp_system.learn(0, 1);
     #endif
