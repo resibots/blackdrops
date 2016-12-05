@@ -8,7 +8,7 @@
 
 namespace medrops {
 
-    template <typename Params>
+    template <typename Params, typename KernelFunction>
     struct GPPolicy {
 
         GPPolicy()
@@ -16,7 +16,9 @@ namespace medrops {
             _random = false;
              size_t sdim = Params::nn_policy::state_dim();
              size_t ps = Params::gp_policy::pseudo_samples();
-             _params = Eigen::VectorXd::Zero(sdim*ps+ps);
+             _params = Eigen::VectorXd::Zero((sdim+2)*ps + 1);
+             _kernel_function = KernelFunction(sdim);
+             _kernel_function.set_h_params(Eigen::VectorXd::Ones(sdim+1));
         }
 
         Eigen::VectorXd next(const Eigen::VectorXd& state) const
@@ -56,19 +58,24 @@ namespace medrops {
             _params = params;
             _thetas = std::vector<Eigen::VectorXd>(M, Eigen::VectorXd(N));
             for (int i=0; i<M; i++)
+            {
                 for (int j=0; j<N; j++)
                 {
-                    _thetas[i](j) =params(i*N + j);
+                    _thetas[i](j) = params(i*N + j); // M*N+N
                 }
+            }
             _alphas = params.tail(M);//Eigen::MatrixXd::Map(_params.data(),N,N).transpose();
             _random = false;
+            _kernel_function.set_h_params(params.segment(M*N+N, N+1).array().log());
         }
 
         Eigen::VectorXd params() const
         {
             if (_random || _params.size() == 0)
                 // return limbo::tools::random_vector((Params::linear_policy::state_dim() + 1) * Params::action_dim());
-                return limbo::tools::random_vector(Params::linear_policy::state_dim()*Params::gp_policy::pseudo_samples()+Params::gp_policy::pseudo_samples());
+                return limbo::tools::random_vector(
+                    (Params::linear_policy::state_dim()+2) *
+                    Params::gp_policy::pseudo_samples() + 1);
             return _params;
         }
 
@@ -89,7 +96,7 @@ namespace medrops {
             Eigen::VectorXd result(N);
             for (int i=0; i<N; i++ )
             {
-                result(i) = exp_kernel(state,_thetas[i]);
+                result(i) = _kernel_function(state,_thetas[i]);
                  //std::cout<<"state = "<<state<<std::endl;
                  //std::cout<<"_thetas = "<<_thetas[i]<<std::endl;
                 // std::cout<<"Result = "<<result(i)<<std::endl;
@@ -100,6 +107,7 @@ namespace medrops {
         Eigen::VectorXd _params;
         std::vector<Eigen::VectorXd> _thetas; //pseudo samples
         Eigen::VectorXd _alphas; //covarience_matrix x pseudo observations
+        KernelFunction _kernel_function;
         bool _random;
     };
 }

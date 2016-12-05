@@ -41,18 +41,24 @@ namespace medrops {
         {
             PolicyOptimizer policy_optimizer;
 
+            // TODO: Set random parameters
+            // _optimize_policy((_policy.params().array()+_bound)/(_bound*2.0));
+            // _optimize_policy((_policy.params().array()+_bound)/(_bound*2.0));
+            // exit(-1);
+
             // For now optimize policy without gradients
             opt_iters = 0;
             max_reward = 0;
             std::cout << "Optimizing policy... " << std::flush;
             Eigen::VectorXd params_star = policy_optimizer(
                         std::bind(&Medrops::_optimize_policy, this, std::placeholders::_1, std::placeholders::_2),
-                        (_policy.params().array()+_bound)/(_bound*2.0),
-                        true);
+                        _policy.params(),
+                        // (_policy.params().array()+_bound)/(_bound*2.0),
+                        Params::options::bounded());
             std::cout << std::endl << "Optimization iterations: " << opt_iters << std::endl;
 
             // std::cout << "BEST: " << limbo::opt::fun(_optimize_policy(params_star)) << std::endl;
-            params_star = params_star.array()*2.0*_bound-_bound;
+            // params_star = params_star.array()*2.0*_bound-_bound;
             _policy.set_params(params_star);
 
             std::cout << "Best parameters: " << params_star.transpose() << std::endl;
@@ -72,7 +78,7 @@ namespace medrops {
 
         void learn(size_t init, size_t iterations)
         {
-            _bound = 1;
+            _bound = 10;
             _ofs.open("results.dat");
             _policy.set_random_policy();
 
@@ -122,7 +128,7 @@ namespace medrops {
         {
             RewardFunction world;
             Policy policy;
-            policy.set_params(params.array()*2.0*_bound-_bound);
+            policy.set_params(params.array());//*2.0*_bound-_bound);
 
             double r = _robot.predict_policy(policy, _model, world, Params::medrops::rollout_steps());
 

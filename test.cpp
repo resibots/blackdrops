@@ -116,6 +116,10 @@ struct Params {
         BO_PARAM(size_t, rollout_steps, 40);
     };
 
+    struct options {
+        BO_PARAM(bool, bounded, false);
+    };
+
     struct gp_model {
         BO_PARAM(double, noise, 0.01);
     };
