@@ -139,8 +139,9 @@ struct Params {
     };
 
     struct gp_policy {
-        BO_PARAM(int,l, 0.1);
-        BO_PARAM(double, virtual_observations, 20); //max action
+        BO_PARAM(double, l, 1);
+        BO_PARAM(double, max_u, 5.0); //max action
+        BO_PARAM(double, pseudo_samples, 20); //max action
         //BO_DYN_PARAM(int, hidden_neurons);
     };
 
@@ -160,7 +161,7 @@ struct Params {
         BO_PARAM(int, restarts, 5);
     };
     struct opt_nloptnograd : public limbo::defaults::opt_nloptnograd {
-        BO_PARAM(int, iterations, 20000);
+        BO_PARAM(int, iterations, 1000000);
     };
 };
 
