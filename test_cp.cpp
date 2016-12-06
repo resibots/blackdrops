@@ -126,8 +126,8 @@ struct Params {
 
     struct gp_policy {
         BO_PARAM(double, l, 1);
-        BO_PARAM(double, max_u, 10.0); //max action
-        BO_PARAM(double, pseudo_samples, 20); //max action
+        BO_PARAM(double, max_u, 20.0); //max action
+        BO_PARAM(double, pseudo_samples, 5);
         BO_PARAM(double, noise, 1e-5);
         BO_PARAM(double, max_sample, 6.0);
         //BO_PARAM(double, max_obs, 10.0);
@@ -167,7 +167,7 @@ struct Params {
 
     struct opt_cmaes : public limbo::defaults::opt_cmaes {
         BO_DYN_PARAM(double, max_fun_evals);
-        BO_PARAM(int, restarts, 5);
+        BO_PARAM(int, restarts, 10);
     };
     struct opt_nloptnograd : public limbo::defaults::opt_nloptnograd {
         BO_PARAM(int, iterations, 1000000);
@@ -522,8 +522,8 @@ struct RewardFunction {
         double dw = to_state(0) - Params::goal_pos_x();
 
         // return std::exp(-0.5 / s_c_sq * (dx * dx + dy * dy + dz * dz + dw * dw));
-        //return std::exp(-0.5 / s_c_sq * (dx * dx /*+ dy * dy + dz * dz*/ + dw * dw));
-        return std::cos(std::abs(dx))+1;
+        return std::exp(-0.5 / s_c_sq * (dx * dx /*+ dy * dy + dz * dz*/ + dw * dw));
+        //return std::cos(std::abs(dx))+1;
     }
 };
 
@@ -532,6 +532,7 @@ using kernel_t = medrops::SquaredExpARD<Params>;
   using mean_t = MeanIntact<Params>;
 #else
   using mean_t = limbo::mean::Constant<Params>;
+  //using mean_t = limbo::mean::Data<Params>;
 #endif
 using GP_t = limbo::model::GP<Params, kernel_t, mean_t, medrops::KernelLFOpt<Params, limbo::opt::NLOptGrad<Params, nlopt::LD_SLSQP>>>;
 
@@ -546,6 +547,7 @@ int main(int argc, char** argv)
     desc.add_options()("help,h", "Prints this help message")("parallel_evaluations,p", po::value<int>(),
     "Number of parallel monte carlo evaluations for policy reward estimation.")("hidden_neurons,n", po::value<int>(),
     "Number of hidden neurons in NN policy.")("max_evals,m", po::value<int>(),
+    "Boundary of the values during the optimization.")("boundary,b", po::value<double>(),
     "Max function evaluations to optimize the policy.");
 
     try {
