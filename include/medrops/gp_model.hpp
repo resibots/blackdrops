@@ -41,7 +41,7 @@ namespace medrops {
 
         void learn(const std::vector<std::tuple<Eigen::VectorXd, Eigen::VectorXd, Eigen::VectorXd>>& observations)
         {
-            #ifdef INTACT
+            #if defined(INTACT) || !defined(DATA)
               if (_initialized) return;
             #endif
 
@@ -103,9 +103,9 @@ namespace medrops {
               // Loading test
               std::cout << std::endl;
               Eigen::MatrixXd data_comp;
-              Eigen::read_binary("medrops_data_01_12_2016.bin", data_comp);
+              Eigen::read_binary("medrops_data_05_12_2016.bin", data_comp);
 
-              size_t limit = 120;
+              size_t limit = 400;
               std::cout << "Loading " << limit << "/" << data_comp.rows() << " rows from file." << std::endl;
 
               std::vector<Eigen::VectorXd> samples_comp(limit);
