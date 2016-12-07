@@ -153,6 +153,7 @@ struct Params {
         BO_DYN_PARAM(double, max_fun_evals);
         BO_PARAM(int, restarts, 3);
         BO_PARAM(double, fun_tolerance, 1);
+        BO_PARAM(double, fun_target, 30);
         BO_PARAM(int, cmaes_variant, aBIPOP_CMAES);
         BO_PARAM(int, verbose, false);
     };

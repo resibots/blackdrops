@@ -10,6 +10,10 @@ namespace medrops {
     public:
 
         GPModel() {
+          init();
+        }
+
+        void init() {
           _gp_models = std::vector<std::shared_ptr<GP>>(4);
           for (size_t i = 0; i < _gp_models.size(); i++) {
             _gp_models[i] = std::make_shared<GP>(5, 1);
@@ -41,7 +45,7 @@ namespace medrops {
 
         void learn(const std::vector<std::tuple<Eigen::VectorXd, Eigen::VectorXd, Eigen::VectorXd>>& observations)
         {
-            #if defined(INTACT) || !defined(DATA)
+            #if defined(INTACT) || defined(DATA)
               if (_initialized) return;
             #endif
 
@@ -85,6 +89,7 @@ namespace medrops {
 
               std::cout << "GP Samples: " << samples.size() << std::endl;
               Eigen::VectorXd noises = Eigen::VectorXd::Constant(samples.size(), Params::gp_model::noise());
+              init(); // TODO: Fix this properly
               tbb::parallel_for(size_t(0), (size_t)obs.cols(), size_t(1), [&](size_t i) {
                   _gp_models[i]->compute(samples, _to_vector(obs.col(i)), noises);
                   _gp_models[i]->optimize_hyperparams();
@@ -103,9 +108,9 @@ namespace medrops {
               // Loading test
               std::cout << std::endl;
               Eigen::MatrixXd data_comp;
-              Eigen::read_binary("medrops_data_05_12_2016.bin", data_comp);
+              Eigen::read_binary("medrops_data.bin", data_comp);
 
-              size_t limit = 400;
+              size_t limit = 120;
               std::cout << "Loading " << limit << "/" << data_comp.rows() << " rows from file." << std::endl;
 
               std::vector<Eigen::VectorXd> samples_comp(limit);
@@ -114,19 +119,22 @@ namespace medrops {
                   samples_comp[i] = data_comp.row(i).segment(0, 6);
                   observations_comp.row(i) = data_comp.row(i).segment(6, 4);
               }
-
+              
+              init(); // TODO: Fix this properly
               Eigen::VectorXd noises = Eigen::VectorXd::Constant(samples_comp.size(), Params::gp_model::noise());
               tbb::parallel_for(size_t(0), (size_t) observations_comp.cols(), size_t(1), [&](size_t i) {
                   _gp_models[i]->compute(samples_comp, _to_vector(observations_comp.col(i)), noises);
                   _gp_models[i]->optimize_hyperparams();
                   std::cout << "Computation for gp " << i << " ended." << std::endl;
-
-                  // Print hparams in logspace
-                  // Eigen::VectorXd p = _gp_models[i]->kernel_function().h_params();
-                  // p.segment(0,p.size()-1) = p.segment(0, p.size()-1).array().exp();
-                  // p(p.size()-1) = std::exp(2*p(p.size()-1));
-                  // std::cout << p.array().transpose() << std::endl;
               });
+
+              for (size_t i = 0; i < (size_t) observations_comp.cols(); ++i) {
+                  // Print hparams in logspace
+                  Eigen::VectorXd p = _gp_models[i]->kernel_function().h_params();
+                  p.segment(0,p.size()-1) = p.segment(0, p.size()-1).array().exp();
+                  p(p.size()-1) = std::exp(2*p(p.size()-1));
+                  std::cout << p.array().transpose() << std::endl;
+              }
 
             #endif
             _initialized = true;
