@@ -13,6 +13,8 @@ namespace medrops {
         int opt_iters;
         double max_reward;
         double _boundary;
+        Eigen::VectorXd old_params;
+        Eigen::VectorXd old_starting;
 
         Medrops() {}
         ~Medrops() {}
@@ -41,30 +43,60 @@ namespace medrops {
         {
             PolicyOptimizer policy_optimizer;
 
-            // For now optimize policy without gradients
-            opt_iters = 0;
-            max_reward = 0;
-            Eigen::VectorXd params_star;
-            std::cout << "Optimizing policy... " << std::flush;
-            if (_boundary == 0) {
-              params_star = policy_optimizer(
-                          std::bind(&Medrops::_optimize_policy, this, std::placeholders::_1, std::placeholders::_2),
-                          _policy.params(),
-                          false);
-            } else {
-              params_star = policy_optimizer(
-                          std::bind(&Medrops::_optimize_policy, this, std::placeholders::_1, std::placeholders::_2),
-                          (_policy.params().array()+_boundary)/(_boundary*2.0),
-                          true);
-              params_star = params_star.array()*2.0*_boundary-_boundary;
+            // TODO: We need to fix this properly
+            double old_reward = 0;
+            if (old_params.size() != 0) {
+              if (_boundary == 0) {
+                old_reward = limbo::opt::fun(_optimize_policy(old_params));
+              } else {
+                old_reward = limbo::opt::fun(_optimize_policy((old_params.array()+_boundary)/(_boundary*2.0)));
+              }
             }
-            std::cout << std::endl << "Optimization iterations: " << opt_iters << std::endl;
+
+            // For now optimize policy without gradients
+            size_t trials = 1;
+            double rep_thres = 0.85;
+            Eigen::VectorXd params_star;
+            Eigen::VectorXd params_starting = _policy.params();
+            for (size_t i = 0; i < trials; i++) {
+              opt_iters = 0;
+              max_reward = 0;
+              std::cout << "Optimizing policy... " << std::flush;
+              if (i == 1) {
+                params_starting = old_params;
+                std::cout << "Setting starting parameters to old ones: " << old_params.transpose() << std::endl;
+              }
+              if (_boundary == 0) {
+                params_star = policy_optimizer(
+                            std::bind(&Medrops::_optimize_policy, this, std::placeholders::_1, std::placeholders::_2),
+                            params_starting,
+                            false);
+              } else {
+                params_star = policy_optimizer(
+                            std::bind(&Medrops::_optimize_policy, this, std::placeholders::_1, std::placeholders::_2),
+                            (params_starting.array()+_boundary)/(_boundary*2.0),
+                            true);
+                params_star = params_star.array()*2.0*_boundary-_boundary;
+              }
+              std::cout << std::endl << "Optimization iterations: " << opt_iters << std::endl;
+
+              if (old_reward*rep_thres < max_reward) {
+                break;
+              }
+            }
+
+            if (max_reward < old_reward*rep_thres) {
+              params_star = old_params;
+            }
 
             // std::cout << "BEST: " << limbo::opt::fun(_optimize_policy(params_star)) << std::endl;
             // params_star = params_star.array()*2.0*_boundary-_boundary;
             _policy.normalize(_model);
             _policy.set_params(params_star);
+            old_params = params_star;
+            old_starting = params_starting;
 
+            std::cout << "Old reward: " << old_reward << std::endl;
             std::cout << "Best parameters: " << params_star.transpose() << std::endl;
             Eigen::write_binary("policy_params.bin", params_star);
 
@@ -98,7 +130,6 @@ namespace medrops {
 
                 learn_model();
                 _policy.normalize(_model);
-                std::cout << _policy._limits.transpose() << std::endl;
                 std::cout << "Learned model..." << std::endl;
 
                 Eigen::VectorXd errors;
@@ -155,26 +186,27 @@ namespace medrops {
             return limbo::opt::no_grad(r);
         }
 
-        Eigen::VectorXd get_random_vector(size_t dim) const
+        Eigen::VectorXd get_random_vector(size_t dim, Eigen::VectorXd bounds) const
         {
             Eigen::VectorXd rv = (limbo::tools::random_vector(dim).array()*2-1);
-            rv(0) *= 3; rv(1) *= 5; rv(2) *= 6; rv(3) *= M_PI; rv(4) *= 10;
-            return rv;
+            // rv(0) *= 3; rv(1) *= 5; rv(2) *= 6; rv(3) *= M_PI; rv(4) *= 10;
+            return rv.cwiseProduct(bounds);
         }
 
-        std::vector<Eigen::VectorXd> random_vectors(size_t dim, size_t q) const
+        std::vector<Eigen::VectorXd> random_vectors(size_t dim, size_t q, Eigen::VectorXd bounds) const
         {
             std::vector<Eigen::VectorXd> result(q);
             for (size_t i = 0; i < q; i++) {
-                result[i] = get_random_vector(dim);
+                result[i] = get_random_vector(dim, bounds);
             }
             return result;
         }
 
         std::tuple<Eigen::VectorXd, Eigen::VectorXd> get_accuracy(int evaluations = 100000) const
         {
-
-            std::vector<Eigen::VectorXd> rvs = random_vectors(5, evaluations);
+            Eigen::VectorXd bounds(5);
+            bounds << 3, 5, 6, M_PI, 10;
+            std::vector<Eigen::VectorXd> rvs = random_vectors(5, evaluations, bounds);
 
             Eigen::VectorXd errors(4);
             Eigen::VectorXd sigmas(4);
