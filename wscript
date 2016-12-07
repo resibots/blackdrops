@@ -17,14 +17,15 @@ def configure(conf):
 def build(bld):
     libs = 'TBB EIGEN BOOST LIMBO LIBCMAES NLOPT SFERES2 BOOST_CHRONO RT SDL '
     cxxflags = bld.get_env()['CXXFLAGS']
+    cxxflags += ['-D NODSP']
 
-    limbo.create_variants(bld,
-                      source='test.cpp',
-                      includes='. ../../src ../ ./include',
-                      target='test',
-                      uselib=libs,
-                      uselib_local='limbo',
-                      variants = ['SIMU'])
+    # limbo.create_variants(bld,
+    #                   source='test.cpp',
+    #                   includes='. ../../src ../ ./include',
+    #                   target='test',
+    #                   uselib=libs,
+    #                   uselib_local='limbo',
+    #                   variants = ['SIMU'])
 
     limbo.create_variants(bld,
                       source='test_cp.cpp',
@@ -34,10 +35,10 @@ def build(bld):
                       uselib_local='limbo',
                       variants = ['SIMU', 'SIMU DATA', 'SIMU INTACT'])
 
-    limbo.create_variants(bld,
-                      source='ode_test.cpp',
-                      includes='. ../../src ../ ./include',
-                      target='ode_test',
-                      uselib=libs,
-                      uselib_local='limbo',
-                      variants = ['SIMU'])
+    # limbo.create_variants(bld,
+    #                   source='ode_test.cpp',
+    #                   includes='. ../../src ../ ./include',
+    #                   target='ode_test',
+    #                   uselib=libs,
+    #                   uselib_local='limbo',
+    #                   variants = ['SIMU'])
