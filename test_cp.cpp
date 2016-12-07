@@ -151,7 +151,10 @@ struct Params {
 
     struct opt_cmaes : public limbo::defaults::opt_cmaes {
         BO_DYN_PARAM(double, max_fun_evals);
-        BO_PARAM(int, restarts, 5);
+        BO_PARAM(int, restarts, 3);
+        BO_PARAM(double, fun_tolerance, 1);
+        BO_PARAM(int, cmaes_variant, aBIPOP_CMAES);
+        BO_PARAM(int, verbose, false);
     };
     struct opt_nloptnograd : public limbo::defaults::opt_nloptnograd {
         BO_PARAM(int, iterations, 20000);
@@ -605,7 +608,7 @@ int main(int argc, char** argv)
         cp_system.learn(1, 15);
       #endif
     #else
-      cp_system.learn(0, 1);
+      cp_system.learn(0, 10);
     #endif
 
 #if defined(USE_SDL) && !defined(NODSP)
