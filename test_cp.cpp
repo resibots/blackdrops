@@ -156,6 +156,8 @@ struct Params {
         BO_PARAM(double, fun_target, 30);
         BO_PARAM(int, cmaes_variant, aBIPOP_CMAES);
         BO_PARAM(int, verbose, false);
+        BO_PARAM(bool, fun_compute_initial, true);
+        BO_PARAM(bool, handle_uncertainty, true);
     };
     struct opt_nloptnograd : public limbo::defaults::opt_nloptnograd {
         BO_PARAM(int, iterations, 20000);
@@ -418,12 +420,15 @@ struct CartPole {
                 std::tie(mu, sigma) = model.predictm(query_vec);
 
                 #ifndef INTACT
-                  // sigma = sigma.array().sqrt();
-                  // for (int i = 0; i < mu.size(); i++) {
-                  //   double s = gaussian_rand(mu(i), sigma(i));
-                  //   mu(i) = std::max(mu(i) - sigma(i),
-                  //     std::min(s, mu(i) + sigma(i)));
-                  // }
+                  if (Params::parallel_evaluations() > 1 ||
+                    Params::opt_cmaes::handle_uncertainty()) {
+                      sigma = sigma.array().sqrt();
+                      for (int i = 0; i < mu.size(); i++) {
+                        double s = gaussian_rand(mu(i), sigma(i));
+                        mu(i) = std::max(mu(i) - sigma(i),
+                          std::min(s, mu(i) + sigma(i)));
+                      }
+                  }
                 #endif
 
                 Eigen::VectorXd final = init_diff + mu;
