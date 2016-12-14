@@ -1,9 +1,9 @@
 #ifndef MEDROPS_MEDROPS_HPP
 #define MEDROPS_MEDROPS_HPP
 
-#include <limbo/opt/optimizer.hpp>
-#include <fstream>
 #include "binary_matrix.hpp"
+#include <fstream>
+#include <limbo/opt/optimizer.hpp>
 
 namespace medrops {
 
@@ -149,6 +149,10 @@ namespace medrops {
                     }
                 }
 
+                if (Params::policy_load() != "") {
+                    execute_loaded_policy();
+                }
+
                 optimize_policy();
                 std::cout << "Optimized policy..." << std::endl;
 
@@ -190,6 +194,30 @@ namespace medrops {
             }
 
             return limbo::opt::no_grad(r);
+        }
+
+        void execute_loaded_policy()
+        {
+            Eigen::MatrixXd params;
+            Eigen::read_binary(Params::policy_load(), params);
+
+            Policy policy;
+            policy.normalize(_model);
+            policy.set_params(params.array());
+
+            RewardFunction world;
+            std::vector<double> R;
+
+            double reward = _robot.predict_policy(policy, _model, world, Params::medrops::rollout_steps());
+
+            _robot.execute_dummy(policy, _model, world, Params::medrops::rollout_steps(), R, false);
+            double simu_reward = std::accumulate(R.begin(), R.end(), 0.0);
+
+            _robot.execute(policy, world, Params::medrops::rollout_steps(), R, false);
+            double real_reward = std::accumulate(R.begin(), R.end(), 0.0);
+
+            std::cout << "Rewards: " << reward << ", " << simu_reward << ", " << real_reward << std::endl;
+            exit(-1);
         }
 
         Eigen::VectorXd get_random_vector(size_t dim, Eigen::VectorXd bounds) const

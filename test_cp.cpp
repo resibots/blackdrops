@@ -3,12 +3,12 @@
 #include <boost/numeric/odeint.hpp>
 #include <boost/program_options.hpp>
 
-#include <medrops/medrops.hpp>
-#include <medrops/linear_policy.hpp>
-#include <medrops/nn_policy.hpp>
-#include <medrops/gp_model.hpp>
 #include <medrops/exp_sq_ard.hpp>
+#include <medrops/gp_model.hpp>
 #include <medrops/kernel_lf_opt.hpp>
+#include <medrops/linear_policy.hpp>
+#include <medrops/medrops.hpp>
+#include <medrops/nn_policy.hpp>
 #include <nn/nn.hpp>
 
 #include <medrops/sf_nn_policy.hpp>
@@ -151,14 +151,14 @@ struct Params {
 
     struct opt_cmaes : public limbo::defaults::opt_cmaes {
         BO_DYN_PARAM(double, max_fun_evals);
-        BO_PARAM(int, restarts, 3);
+        BO_PARAM(int, restarts, 5);
         BO_PARAM(double, fun_tolerance, 1);
-        BO_PARAM(double, fun_target, 30);
+        BO_PARAM(int, elitism, 1);
         BO_PARAM(int, cmaes_variant, aBIPOP_CMAES);
         BO_PARAM(int, verbose, false);
         BO_PARAM(bool, fun_compute_initial, true);
-        BO_PARAM(bool, handle_uncertainty, true);
-        BO_PARAM(int, elitism, 1);
+        BO_PARAM(bool, handle_uncertainty, false);
+        // BO_PARAM(double, fun_target, 30);
     };
     struct opt_nloptnograd : public limbo::defaults::opt_nloptnograd {
         BO_PARAM(int, iterations, 20000);
@@ -422,17 +422,16 @@ struct CartPole {
                 Eigen::VectorXd sigma;
                 std::tie(mu, sigma) = model.predictm(query_vec);
 
-                #ifndef INTACT
-                  if (Params::parallel_evaluations() > 1 ||
-                    Params::opt_cmaes::handle_uncertainty()) {
-                      sigma = sigma.array();//.sqrt()/10.0;
-                      for (int i = 0; i < mu.size(); i++) {
+#ifndef INTACT
+                if (Params::parallel_evaluations() > 1 || Params::opt_cmaes::handle_uncertainty()) {
+                    sigma = sigma.array(); //.sqrt()/10.0;
+                    for (int i = 0; i < mu.size(); i++) {
                         double s = gaussian_rand(mu(i), sigma(i));
                         mu(i) = std::max(mu(i) - sigma(i),
-                          std::min(s, mu(i) + sigma(i)));
-                      }
-                  }
-                #endif
+                            std::min(s, mu(i) + sigma(i)));
+                    }
+                }
+#endif
 
                 Eigen::VectorXd final = init_diff + mu;
                 // if(final(0) < -2)
@@ -531,6 +530,7 @@ using mean_t = limbo::mean::Constant<Params>;
 using GP_t = limbo::model::GP<Params, kernel_t, mean_t, medrops::KernelLFOpt<Params, limbo::opt::NLOptGrad<Params, nlopt::LD_SLSQP>>>;
 
 BO_DECLARE_DYN_PARAM(size_t, Params, parallel_evaluations);
+BO_DECLARE_DYN_PARAM(std::string, Params, policy_load);
 BO_DECLARE_DYN_PARAM(int, Params::nn_policy, hidden_neurons);
 BO_DECLARE_DYN_PARAM(double, Params::medrops, boundary);
 BO_DECLARE_DYN_PARAM(double, Params::opt_cmaes, max_fun_evals);
@@ -539,11 +539,7 @@ int main(int argc, char** argv)
 {
     namespace po = boost::program_options;
     po::options_description desc("Command line arguments");
-    desc.add_options()("help,h", "Prints this help message")("parallel_evaluations,p", po::value<int>(),
-        "Number of parallel monte carlo evaluations for policy reward estimation.")("hidden_neurons,n", po::value<int>(),
-        "Number of hidden neurons in NN policy.")("max_evals,m", po::value<int>(),
-        "Boundary of the values during the optimization.")("boundary,b", po::value<double>(),
-        "Max function evaluations to optimize the policy.");
+    desc.add_options()("help,h", "Prints this help message")("parallel_evaluations,p", po::value<int>(), "Number of parallel monte carlo evaluations for policy reward estimation.")("hidden_neurons,n", po::value<int>(), "Number of hidden neurons in NN policy.")("max_evals,m", po::value<int>(), "Max function evaluations to optimize the policy.")("boundary,b", po::value<double>(), "Boundary of the values during the optimization.")("policy,l", po::value<std::string>(), "Specifies a policy to load.");
 
     try {
         po::variables_map vm;
@@ -589,6 +585,11 @@ int main(int argc, char** argv)
         else {
             Params::opt_cmaes::set_max_fun_evals(10000);
         }
+        std::string policy_load = "";
+        if (vm.count("policy")) {
+            policy_load = vm["policy"].as<std::string>();
+        }
+        Params::set_policy_load(policy_load);
     }
     catch (po::error& e) {
         std::cerr << "[Exception caught while parsing command line arguments]: " << e.what() << std::endl;
@@ -603,14 +604,6 @@ int main(int argc, char** argv)
 
     using policy_opt_t = limbo::opt::Cmaes<Params>;
     using MGP_t = medrops::GPModel<Params, GP_t>;
-    // using policy_opt_t = RandomOpt<Params>;
-    // using policy_opt_t = limbo::opt::NLOptNoGrad<Params, nlopt::LN_COBYLA>;
-    // using policy_opt_t = limbo::opt::NLOptNoGrad<Params, nlopt::GN_DIRECT_L>;
-    // using policy_opt_t = limbo::opt::NLOptNoGrad<Params, nlopt::LN_SBPLX>;
-    // using policy_opt_t = limbo::opt::NLOptNoGrad<Params, nlopt::LN_BOBYQA>;
-    // using policy_opt_t = limbo::opt::Chained<Params, limbo::opt::NLOptNoGrad<Params, nlopt::GN_DIRECT_L>, limbo::opt::NLOptNoGrad<Params, nlopt::LN_SBPLX>>;
-
-    // medrops::Medrops<Params, medrops::GPModel<Params, GP_t>, CartPole, medrops::NNPolicy<Params>, policy_opt_t, RewardFunction> cp_system;
     medrops::Medrops<Params, MGP_t, CartPole, medrops::SFNNPolicy<Params, MGP_t>, policy_opt_t, RewardFunction> cp_system;
 
 #ifndef DATA
