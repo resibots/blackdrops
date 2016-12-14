@@ -5,6 +5,7 @@
 #include <cmath>
 
 namespace Eigen {
+  
     template<class Matrix>
     void write_binary(const std::string filename, const Matrix& matrix) {
       write_binary(filename.c_str(), matrix);

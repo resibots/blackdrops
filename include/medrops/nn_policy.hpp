@@ -22,7 +22,7 @@ namespace medrops {
             _params = Eigen::VectorXd::Zero(_mlp->n_weights());
         }
 
-        void normalize(const Model& model) { }
+        void normalize(const Model& model) {}
 
         Eigen::VectorXd next(const Eigen::VectorXd& state) const
         {

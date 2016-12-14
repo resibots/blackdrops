@@ -38,22 +38,26 @@
 #include "params.hpp"
 
 namespace nn {
-  template<typename W = float, typename IO = float>
-  struct Connection {
-    typedef W weight_t;
-    typedef IO io_t;
-    const weight_t& get_weight() const {
-      return _weight;
-    }
-    weight_t& get_weight() {
-      return _weight;
-    }
-    void set_weight(const weight_t& w) {
-      _weight = w;
-    }
-   protected:
-    weight_t _weight;
-  };
+    template <typename W = float, typename IO = float>
+    struct Connection {
+        typedef W weight_t;
+        typedef IO io_t;
+        const weight_t& get_weight() const
+        {
+            return _weight;
+        }
+        weight_t& get_weight()
+        {
+            return _weight;
+        }
+        void set_weight(const weight_t& w)
+        {
+            _weight = w;
+        }
+
+    protected:
+        weight_t _weight;
+    };
 }
 
 #endif
