@@ -152,14 +152,17 @@ struct Params {
 
     struct opt_cmaes : public limbo::defaults::opt_cmaes {
         BO_DYN_PARAM(double, max_fun_evals);
-        BO_PARAM(int, restarts, 3);
-        BO_PARAM(double, fun_tolerance, 1.20);
-        BO_PARAM(int, elitism, 1);
+        BO_DYN_PARAM(double, fun_tolerance);
+        BO_DYN_PARAM(int, restarts);
+        BO_DYN_PARAM(int, elitism);
+        BO_DYN_PARAM(bool, handle_uncertainty);
+
         BO_PARAM(int, cmaes_variant, aBIPOP_CMAES);
         BO_PARAM(int, verbose, false);
         BO_PARAM(bool, fun_compute_initial, true);
-        BO_PARAM(bool, handle_uncertainty, false);
         // BO_PARAM(double, fun_target, 30);
+        // TODO: Pasar restarts, fun_tolerance, uncertainty y elitism a parametros dinamicos
+        // TODO: Cuando elitism esta en 0, guardar max_params en vez de best
     };
     struct opt_nloptnograd : public limbo::defaults::opt_nloptnograd {
         BO_PARAM(int, iterations, 20000);
@@ -428,7 +431,7 @@ struct CartPole {
 
 #ifndef INTACT
                 if (Params::parallel_evaluations() > 1 || Params::opt_cmaes::handle_uncertainty()) {
-                    sigma = sigma.array(); //.sqrt()/10.0;
+                    sigma = sigma.array(); //.sqrt();
                     for (int i = 0; i < mu.size(); i++) {
                         double s = gaussian_rand(mu(i), sigma(i));
                         mu(i) = std::max(mu(i) - sigma(i),
@@ -537,13 +540,18 @@ BO_DECLARE_DYN_PARAM(size_t, Params, parallel_evaluations);
 BO_DECLARE_DYN_PARAM(std::string, Params, policy_load);
 BO_DECLARE_DYN_PARAM(int, Params::nn_policy, hidden_neurons);
 BO_DECLARE_DYN_PARAM(double, Params::medrops, boundary);
+
 BO_DECLARE_DYN_PARAM(double, Params::opt_cmaes, max_fun_evals);
+BO_DECLARE_DYN_PARAM(double, Params::opt_cmaes, fun_tolerance);
+BO_DECLARE_DYN_PARAM(int, Params::opt_cmaes, restarts);
+BO_DECLARE_DYN_PARAM(int, Params::opt_cmaes, elitism);
+BO_DECLARE_DYN_PARAM(bool, Params::opt_cmaes, handle_uncertainty);
 
 int main(int argc, char** argv)
 {
     namespace po = boost::program_options;
     po::options_description desc("Command line arguments");
-    desc.add_options()("help,h", "Prints this help message")("parallel_evaluations,p", po::value<int>(), "Number of parallel monte carlo evaluations for policy reward estimation.")("hidden_neurons,n", po::value<int>(), "Number of hidden neurons in NN policy.")("max_evals,m", po::value<int>(), "Max function evaluations to optimize the policy.")("boundary,b", po::value<double>(), "Boundary of the values during the optimization.")("policy,l", po::value<std::string>(), "Specifies a policy to load.");
+    desc.add_options()("help,h", "Prints this help message")("parallel_evaluations,p", po::value<int>(), "Number of parallel monte carlo evaluations for policy reward estimation.")("hidden_neurons,n", po::value<int>(), "Number of hidden neurons in NN policy.")("boundary,b", po::value<double>(), "Boundary of the values during the optimization.")("policy,l", po::value<std::string>(), "Specifies a policy to load.")("max_evals,m", po::value<int>(), "Max function evaluations to optimize the policy.")("tolerance,t", po::value<double>(), "Maximum tolerance to continue optimizing the function.")("restarts,r", po::value<int>(), "Max number of restarts to use during optimization.")("elitism,e", po::value<int>(), "Elitism mode to use [0 to 3].")("uncertainty,u", po::bool_switch()->default_value(false), "Enable uncertainty handling.");
 
     try {
         po::variables_map vm;
@@ -582,6 +590,13 @@ int main(int argc, char** argv)
         else {
             Params::medrops::set_boundary(0);
         }
+        std::string policy_load = "";
+        if (vm.count("policy")) {
+            policy_load = vm["policy"].as<std::string>();
+        }
+        Params::set_policy_load(policy_load);
+
+        // Cmaes parameters
         if (vm.count("max_evals")) {
             int c = vm["max_evals"].as<int>();
             Params::opt_cmaes::set_max_fun_evals(c);
@@ -589,11 +604,33 @@ int main(int argc, char** argv)
         else {
             Params::opt_cmaes::set_max_fun_evals(10000);
         }
-        std::string policy_load = "";
-        if (vm.count("policy")) {
-            policy_load = vm["policy"].as<std::string>();
+        if (vm.count("tolerance")) {
+            double c = vm["tolerance"].as<double>();
+            if (c < 0.1)
+                c = 0.1;
+            Params::opt_cmaes::set_fun_tolerance(c);
         }
-        Params::set_policy_load(policy_load);
+        else {
+            Params::opt_cmaes::set_fun_tolerance(1);
+        }
+        if (vm.count("restarts")) {
+            int c = vm["restarts"].as<int>();
+            if (c < 1)
+                c = 1;
+            Params::opt_cmaes::set_restarts(c);
+        }
+        else {
+            Params::opt_cmaes::set_restarts(3);
+        }
+        if (vm.count("elitism")) {
+            int c = vm["elitism"].as<int>();
+            if (c < 0 || c > 3)
+                c = 0;
+            Params::opt_cmaes::set_elitism(c);
+        }
+        else {
+            Params::opt_cmaes::set_elitism(0);
+        }
     }
     catch (po::error& e) {
         std::cerr << "[Exception caught while parsing command line arguments]: " << e.what() << std::endl;
@@ -605,6 +642,16 @@ int main(int argc, char** argv)
         return 1;
     }
 #endif
+
+    std::cout << std::endl;
+    std::cout << "Cmaes parameters:" << std::endl;
+    std::cout << "  max_fun_evals = " << Params::opt_cmaes::max_fun_evals() << std::endl;
+    std::cout << "  fun_tolerance = " << Params::opt_cmaes::fun_tolerance() << std::endl;
+    std::cout << "  restarts = " << Params::opt_cmaes::restarts() << std::endl;
+    std::cout << "  elitism = " << Params::opt_cmaes::elitism() << std::endl;
+    std::cout << "  handle_uncertainty = " << Params::opt_cmaes::handle_uncertainty() << std::endl;
+    std::cout << "  boundary = " << Params::medrops::boundary() << std::endl;
+    std::cout << std::endl;
 
     using policy_opt_t = limbo::opt::Cmaes<Params>;
     using MGP_t = medrops::GPModel<Params, GP_t>;
