@@ -91,8 +91,7 @@ namespace medrops {
 
         void learn(size_t init, size_t iterations)
         {
-            // _boundary = Params::medrops::boundary();
-            _boundary = 5;
+            _boundary = Params::medrops::boundary();
             _ofs.open("results.dat");
             _policy.set_random_policy();
 
