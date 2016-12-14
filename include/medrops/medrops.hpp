@@ -71,6 +71,9 @@ namespace medrops {
             std::cout << opt_iters << "(" << _max_reward << ", " << _max_simu_reward << ", " << _max_real_reward << ") " << std::endl;
             std::cout << "Max parameters: " << _max_params.transpose() << std::endl;
 
+            if (Params::opt_cmaes::elitism() == 0)
+                params_star = _max_params;
+
             _policy.normalize(_model);
             _policy.set_params(params_star);
 
