@@ -158,6 +158,7 @@ struct Params {
         BO_PARAM(int, verbose, false);
         BO_PARAM(bool, fun_compute_initial, true);
         BO_PARAM(bool, handle_uncertainty, true);
+        BO_PARAM(int, elitism, 1);
     };
     struct opt_nloptnograd : public limbo::defaults::opt_nloptnograd {
         BO_PARAM(int, iterations, 20000);
@@ -190,7 +191,8 @@ struct MeanIntact {
 
     MeanIntact(size_t dim_out = 1) {}
 
-    void set_id(size_t id) {
+    void set_id(size_t id)
+    {
         this->id = id;
     }
 
@@ -200,7 +202,8 @@ struct MeanIntact {
         return eval(v);
     }
 
-    Eigen::VectorXd eval(const Eigen::VectorXd& v) const {
+    Eigen::VectorXd eval(const Eigen::VectorXd& v) const
+    {
         double dt = 0.1, t = 0.0;
 
         boost::numeric::odeint::runge_kutta4<std::vector<double>> ode_stepper;
@@ -268,7 +271,7 @@ struct CartPole {
             // ode_stepper.do_step(std::bind(&CartPole::dynamics, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3), cp_state, t, dt);
             boost::numeric::odeint::integrate_const(ode_stepper,
                 std::bind(&CartPole::dynamics, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3),
-                cp_state, t, t+dt, dt / 2.0);
+                cp_state, t, t + dt, dt / 2.0);
             t += dt;
             // if (cp_state[0] < -2)
             //     cp_state[0] = -2;
@@ -422,7 +425,7 @@ struct CartPole {
                 #ifndef INTACT
                   if (Params::parallel_evaluations() > 1 ||
                     Params::opt_cmaes::handle_uncertainty()) {
-                      sigma = sigma.array().sqrt();
+                      sigma = sigma.array();//.sqrt()/10.0;
                       for (int i = 0; i < mu.size(); i++) {
                         double s = gaussian_rand(mu(i), sigma(i));
                         mu(i) = std::max(mu(i) - sigma(i),
@@ -493,13 +496,13 @@ struct RandomOpt {
         double best = -1000;
         Eigen::VectorXd p = limbo::tools::random_vector(init.size());
 
-        for (size_t i=0; i < Params::opt_cmaes::max_fun_evals(); i++) {
-          Eigen::VectorXd pp = limbo::tools::random_vector(init.size());
-          double v = limbo::opt::eval(f, pp);
-          if (v>best) {
-            best = v;
-            p = pp;
-          }
+        for (size_t i = 0; i < Params::opt_cmaes::max_fun_evals(); i++) {
+            Eigen::VectorXd pp = limbo::tools::random_vector(init.size());
+            double v = limbo::opt::eval(f, pp);
+            if (v > best) {
+                best = v;
+                p = pp;
+            }
         }
         return p;
     }
@@ -521,9 +524,9 @@ struct RewardFunction {
 
 using kernel_t = medrops::SquaredExpARD<Params>;
 #ifdef INTACT
-  using mean_t = MeanIntact<Params>;
+using mean_t = MeanIntact<Params>;
 #else
-  using mean_t = limbo::mean::Constant<Params>;
+using mean_t = limbo::mean::Constant<Params>;
 #endif
 using GP_t = limbo::model::GP<Params, kernel_t, mean_t, medrops::KernelLFOpt<Params, limbo::opt::NLOptGrad<Params, nlopt::LD_SLSQP>>>;
 
@@ -537,10 +540,10 @@ int main(int argc, char** argv)
     namespace po = boost::program_options;
     po::options_description desc("Command line arguments");
     desc.add_options()("help,h", "Prints this help message")("parallel_evaluations,p", po::value<int>(),
-    "Number of parallel monte carlo evaluations for policy reward estimation.")("hidden_neurons,n", po::value<int>(),
-    "Number of hidden neurons in NN policy.")("max_evals,m", po::value<int>(),
-    "Boundary of the values during the optimization.")("boundary,b", po::value<double>(),
-    "Max function evaluations to optimize the policy.");
+        "Number of parallel monte carlo evaluations for policy reward estimation.")("hidden_neurons,n", po::value<int>(),
+        "Number of hidden neurons in NN policy.")("max_evals,m", po::value<int>(),
+        "Boundary of the values during the optimization.")("boundary,b", po::value<double>(),
+        "Max function evaluations to optimize the policy.");
 
     try {
         po::variables_map vm;
@@ -554,7 +557,8 @@ int main(int argc, char** argv)
 
         if (vm.count("parallel_evaluations")) {
             int c = vm["parallel_evaluations"].as<int>();
-            if (c < 0) c = 0;
+            if (c < 0)
+                c = 0;
             Params::set_parallel_evaluations(c);
         }
         else {
@@ -562,7 +566,8 @@ int main(int argc, char** argv)
         }
         if (vm.count("hidden_neurons")) {
             int c = vm["hidden_neurons"].as<int>();
-            if (c < 1) c = 1;
+            if (c < 1)
+                c = 1;
             Params::nn_policy::set_hidden_neurons(c);
         }
         else {
@@ -570,11 +575,12 @@ int main(int argc, char** argv)
         }
         if (vm.count("boundary")) {
             double c = vm["boundary"].as<double>();
-            if (c < 0) c = 0;
+            if (c < 0)
+                c = 0;
             Params::medrops::set_boundary(c);
         }
         else {
-            Params::medrops::set_boundary(5);
+            Params::medrops::set_boundary(0);
         }
         if (vm.count("max_evals")) {
             int c = vm["max_evals"].as<int>();
@@ -607,15 +613,15 @@ int main(int argc, char** argv)
     // medrops::Medrops<Params, medrops::GPModel<Params, GP_t>, CartPole, medrops::NNPolicy<Params>, policy_opt_t, RewardFunction> cp_system;
     medrops::Medrops<Params, MGP_t, CartPole, medrops::SFNNPolicy<Params, MGP_t>, policy_opt_t, RewardFunction> cp_system;
 
-    #ifndef DATA
-      #ifdef INTACT
-        cp_system.learn(1, 100);
-      #else
-        cp_system.learn(1, 15);
-      #endif
-    #else
-      cp_system.learn(0, 10);
-    #endif
+#ifndef DATA
+#ifdef INTACT
+    cp_system.learn(1, 100);
+#else
+    cp_system.learn(1, 15);
+#endif
+#else
+    cp_system.learn(0, 10);
+#endif
 
 #if defined(USE_SDL) && !defined(NODSP)
     sdl_clean();
