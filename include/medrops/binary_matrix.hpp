@@ -6,6 +6,10 @@
 
 namespace Eigen {
     template<class Matrix>
+    void write_binary(const std::string filename, const Matrix& matrix) {
+      write_binary(filename.c_str(), matrix);
+    }
+    template<class Matrix>
     void write_binary(const char* filename, const Matrix& matrix) {
         std::ofstream out(filename,std::ios::out | std::ios::binary | std::ios::trunc);
         typename Matrix::Index rows=matrix.rows(), cols=matrix.cols();
@@ -16,7 +20,11 @@ namespace Eigen {
     }
 
     template<class Matrix>
-    void read_binary(const char* filename, Matrix& matrix){
+    void read_binary(const std::string filename, Matrix& matrix) {
+      read_binary(filename.c_str(), matrix);
+    }
+    template<class Matrix>
+    void read_binary(const char* filename, Matrix& matrix) {
         std::ifstream in(filename,std::ios::in | std::ios::binary);
         typename Matrix::Index rows=0, cols=0;
         in.read((char*) (&rows),sizeof(typename Matrix::Index));
