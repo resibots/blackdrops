@@ -406,8 +406,7 @@ struct CartPole {
     {
         size_t N = Params::parallel_evaluations();
 
-        double* rews = new double[N];
-
+        Eigen::VectorXd rews(N);
         tbb::parallel_for(size_t(0), N, size_t(1), [&](size_t i) {
             // std::chrono::steady_clock::time_point time_start = std::chrono::steady_clock::now();
 
@@ -455,18 +454,18 @@ struct CartPole {
                 init(3) = std::cos(final(3));
                 init(4) = std::sin(final(3));
             }
-            rews[i] = reward;
+            rews(i) = reward;
 
             // double rollout_ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - time_start).count();
             //std::cout << "Rollout finished, took " << rollout_ms << "ms" << std::endl;
         });
 
-        double r = 0.0;
-        for (size_t i = 0; i < N; i++)
-            r += rews[i];
-        r /= double(N);
+        // double r = rews.mean();
 
-        delete[] rews;
+        double r = rews(0);
+        if (Params::parallel_evaluations() > 1) {
+            r = Eigen::percentile_v(rews, 25) + Eigen::percentile_v(rews, 50) + Eigen::percentile_v(rews, 75);
+        }
 
         return r;
     }
