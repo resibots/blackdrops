@@ -111,6 +111,7 @@ struct Params {
     BO_PARAM(size_t, model_pred_dim, 4);
 
     BO_DYN_PARAM(size_t, parallel_evaluations);
+    BO_DYN_PARAM(std::string, policy_load);
 
     BO_PARAM(double, goal_pos, M_PI);
     BO_PARAM(double, goal_vel, 0.0);
@@ -151,8 +152,8 @@ struct Params {
 
     struct opt_cmaes : public limbo::defaults::opt_cmaes {
         BO_DYN_PARAM(double, max_fun_evals);
-        BO_PARAM(int, restarts, 5);
-        BO_PARAM(double, fun_tolerance, 1);
+        BO_PARAM(int, restarts, 3);
+        BO_PARAM(double, fun_tolerance, 1.20);
         BO_PARAM(int, elitism, 1);
         BO_PARAM(int, cmaes_variant, aBIPOP_CMAES);
         BO_PARAM(int, verbose, false);
@@ -238,7 +239,7 @@ struct CartPole {
     typedef std::vector<double> ode_state_type;
 
     template <typename Policy, typename Reward>
-    std::vector<std::tuple<Eigen::VectorXd, Eigen::VectorXd, Eigen::VectorXd>> execute(const Policy& policy, const Reward& world, size_t steps, std::vector<double>& R)
+    std::vector<std::tuple<Eigen::VectorXd, Eigen::VectorXd, Eigen::VectorXd>> execute(const Policy& policy, const Reward& world, size_t steps, std::vector<double>& R, bool display = true)
     {
         double dt = 0.1;
         std::vector<std::tuple<Eigen::VectorXd, Eigen::VectorXd, Eigen::VectorXd>> res;
@@ -296,29 +297,31 @@ struct CartPole {
             double r = world(init, limbo::tools::make_vector(_u), final);
             R.push_back(r);
 #if defined(USE_SDL) && !defined(NODSP)
-            //Clear screen
-            SDL_SetRenderDrawColor(renderer, 0xFF, 0xFF, 0xFF, 0xFF);
-            SDL_RenderClear(renderer);
+            if (display) {
+                //Clear screen
+                SDL_SetRenderDrawColor(renderer, 0xFF, 0xFF, 0xFF, 0xFF);
+                SDL_RenderClear(renderer);
 
-            draw_cartpole(cp_state[0], cp_state[3]);
-            draw_goal(0, -0.5);
+                draw_cartpole(cp_state[0], cp_state[3]);
+                draw_goal(0, -0.5);
 
-            SDL_SetRenderDrawColor(renderer, 0x00, 0xFF, 0x00, 0xFF);
-            SDL_Rect outlineRect = {static_cast<int>(SCREEN_WIDTH / 2 + 0.05 * SCREEN_HEIGHT / 4), static_cast<int>(SCREEN_HEIGHT / 4 + 2.05 * SCREEN_HEIGHT / 4), static_cast<int>(_u / 10.0 * SCREEN_HEIGHT / 4), static_cast<int>(0.1 * SCREEN_HEIGHT / 4)};
-            SDL_RenderFillRect(renderer, &outlineRect);
+                SDL_SetRenderDrawColor(renderer, 0x00, 0xFF, 0x00, 0xFF);
+                SDL_Rect outlineRect = {static_cast<int>(SCREEN_WIDTH / 2 + 0.05 * SCREEN_HEIGHT / 4), static_cast<int>(SCREEN_HEIGHT / 4 + 2.05 * SCREEN_HEIGHT / 4), static_cast<int>(_u / 10.0 * SCREEN_HEIGHT / 4), static_cast<int>(0.1 * SCREEN_HEIGHT / 4)};
+                SDL_RenderFillRect(renderer, &outlineRect);
 
-            SDL_SetRenderDrawColor(renderer, 0x00, 0xFF, 0xFF, 0xFF);
-            outlineRect = {static_cast<int>(SCREEN_WIDTH / 2 + 0.05 * SCREEN_HEIGHT / 4), static_cast<int>(SCREEN_HEIGHT / 4 + 2.55 * SCREEN_HEIGHT / 4), static_cast<int>(r * SCREEN_HEIGHT / 4), static_cast<int>(0.1 * SCREEN_HEIGHT / 4)};
-            SDL_RenderFillRect(renderer, &outlineRect);
+                SDL_SetRenderDrawColor(renderer, 0x00, 0xFF, 0xFF, 0xFF);
+                outlineRect = {static_cast<int>(SCREEN_WIDTH / 2 + 0.05 * SCREEN_HEIGHT / 4), static_cast<int>(SCREEN_HEIGHT / 4 + 2.55 * SCREEN_HEIGHT / 4), static_cast<int>(r * SCREEN_HEIGHT / 4), static_cast<int>(0.1 * SCREEN_HEIGHT / 4)};
+                SDL_RenderFillRect(renderer, &outlineRect);
 
-            //Update screen
-            SDL_RenderPresent(renderer);
+                //Update screen
+                SDL_RenderPresent(renderer);
 
-            SDL_Delay(dt * 1000);
+                SDL_Delay(dt * 1000);
+            }
 #endif
         }
 
-        if (!policy.random()) {
+        if (!policy.random() && display) {
             global::_tried_policies.push_back(policy.params());
             double rr = std::accumulate(R.begin(), R.end(), 0.0);
             std::cout << "Reward: " << rr << std::endl;
@@ -329,7 +332,7 @@ struct CartPole {
     }
 
     template <typename Policy, typename Model, typename Reward>
-    void execute_dummy(const Policy& policy, const Model& model, const Reward& world, size_t steps, std::vector<double>& R) const
+    void execute_dummy(const Policy& policy, const Model& model, const Reward& world, size_t steps, std::vector<double>& R, bool display = true) const
     {
         R = std::vector<double>();
         // init state
@@ -372,26 +375,28 @@ struct CartPole {
             init(4) = std::sin(final(3));
 
 #if defined(USE_SDL) && !defined(NODSP)
-            double dt = 0.1;
-            //Clear screen
-            SDL_SetRenderDrawColor(renderer, 0xFF, 0xFF, 0xFF, 0xFF);
-            SDL_RenderClear(renderer);
+            if (display) {
+                double dt = 0.1;
+                //Clear screen
+                SDL_SetRenderDrawColor(renderer, 0xFF, 0xFF, 0xFF, 0xFF);
+                SDL_RenderClear(renderer);
 
-            draw_cartpole(init_diff[0], init_diff[3], true);
-            draw_goal(0, -0.5);
+                draw_cartpole(init_diff[0], init_diff[3], true);
+                draw_goal(0, -0.5);
 
-            SDL_SetRenderDrawColor(renderer, 0x00, 0xFF, 0x00, 0xFF);
-            SDL_Rect outlineRect = {static_cast<int>(SCREEN_WIDTH / 2 + 0.05 * SCREEN_HEIGHT / 4), static_cast<int>(SCREEN_HEIGHT / 4 + 2.05 * SCREEN_HEIGHT / 4), static_cast<int>(u[0] / 10.0 * SCREEN_HEIGHT / 4), static_cast<int>(0.1 * SCREEN_HEIGHT / 4)};
-            SDL_RenderFillRect(renderer, &outlineRect);
+                SDL_SetRenderDrawColor(renderer, 0x00, 0xFF, 0x00, 0xFF);
+                SDL_Rect outlineRect = {static_cast<int>(SCREEN_WIDTH / 2 + 0.05 * SCREEN_HEIGHT / 4), static_cast<int>(SCREEN_HEIGHT / 4 + 2.05 * SCREEN_HEIGHT / 4), static_cast<int>(u[0] / 10.0 * SCREEN_HEIGHT / 4), static_cast<int>(0.1 * SCREEN_HEIGHT / 4)};
+                SDL_RenderFillRect(renderer, &outlineRect);
 
-            SDL_SetRenderDrawColor(renderer, 0x00, 0xFF, 0xFF, 0xFF);
-            outlineRect = {static_cast<int>(SCREEN_WIDTH / 2 + 0.05 * SCREEN_HEIGHT / 4), static_cast<int>(SCREEN_HEIGHT / 4 + 2.55 * SCREEN_HEIGHT / 4), static_cast<int>(r * SCREEN_HEIGHT / 4), static_cast<int>(0.1 * SCREEN_HEIGHT / 4)};
-            SDL_RenderFillRect(renderer, &outlineRect);
+                SDL_SetRenderDrawColor(renderer, 0x00, 0xFF, 0xFF, 0xFF);
+                outlineRect = {static_cast<int>(SCREEN_WIDTH / 2 + 0.05 * SCREEN_HEIGHT / 4), static_cast<int>(SCREEN_HEIGHT / 4 + 2.55 * SCREEN_HEIGHT / 4), static_cast<int>(r * SCREEN_HEIGHT / 4), static_cast<int>(0.1 * SCREEN_HEIGHT / 4)};
+                SDL_RenderFillRect(renderer, &outlineRect);
 
-            //Update screen
-            SDL_RenderPresent(renderer);
+                //Update screen
+                SDL_RenderPresent(renderer);
 
-            SDL_Delay(dt * 1000);
+                SDL_Delay(dt * 1000);
+            }
 #endif
         }
     }

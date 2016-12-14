@@ -11,7 +11,10 @@ namespace medrops {
     class Medrops {
     public:
         int opt_iters;
-        double max_reward;
+        double _max_reward;
+        double _max_simu_reward;
+        double _max_real_reward;
+        Eigen::VectorXd _max_params;
         double _boundary;
         Eigen::VectorXd old_params;
         Eigen::VectorXd old_starting;
@@ -43,63 +46,34 @@ namespace medrops {
         {
             PolicyOptimizer policy_optimizer;
 
-            // TODO: We need to fix this properly
-            double old_reward = 0;
-            if (old_params.size() != 0) {
-                if (_boundary == 0) {
-                    old_reward = limbo::opt::fun(_optimize_policy(old_params));
-                }
-                else {
-                    old_reward = limbo::opt::fun(_optimize_policy((old_params.array() + _boundary) / (_boundary * 2.0)));
-                }
-            }
-
             // For now optimize policy without gradients
-            size_t trials = 1;
-            double rep_thres = 0.85;
             Eigen::VectorXd params_star;
             Eigen::VectorXd params_starting = _policy.params();
-            for (size_t i = 0; i < trials; i++) {
-                opt_iters = 0;
-                max_reward = 0;
+            opt_iters = 0;
+            _max_reward = 0;
+            _max_simu_reward = 0;
+            _max_real_reward = 0;
+            if (_boundary == 0) {
                 std::cout << "Optimizing policy... " << std::flush;
-                if (i == 1) {
-                    params_starting = old_params;
-                    std::cout << "Setting starting parameters to old ones: " << old_params.transpose() << std::endl;
-                }
-                if (_boundary == 0) {
-                    params_star = policy_optimizer(
-                        std::bind(&Medrops::_optimize_policy, this, std::placeholders::_1, std::placeholders::_2),
-                        params_starting,
-                        false);
-                }
-                else {
-                    params_star = policy_optimizer(
-                        std::bind(&Medrops::_optimize_policy, this, std::placeholders::_1, std::placeholders::_2),
-                        (params_starting.array() + _boundary) / (_boundary * 2.0),
-                        true);
-                    params_star = params_star.array() * 2.0 * _boundary - _boundary;
-                }
-                std::cout << std::endl
-                          << "Optimization iterations: " << opt_iters << std::endl;
-
-                if (old_reward * rep_thres < max_reward) {
-                    break;
-                }
+                params_star = policy_optimizer(
+                    std::bind(&Medrops::_optimize_policy, this, std::placeholders::_1, std::placeholders::_2),
+                    params_starting,
+                    false);
             }
-
-            if (max_reward < old_reward * rep_thres) {
-                params_star = old_params;
+            else {
+                std::cout << "Optimizing policy bounded to " << _boundary << "... " << std::flush;
+                params_star = policy_optimizer(
+                    std::bind(&Medrops::_optimize_policy, this, std::placeholders::_1, std::placeholders::_2),
+                    (params_starting.array() + _boundary) / (_boundary * 2.0),
+                    true);
+                params_star = params_star.array() * 2.0 * _boundary - _boundary;
             }
+            std::cout << opt_iters << "(" << _max_reward << ", " << _max_simu_reward << ", " << _max_real_reward << ") " << std::endl;
+            std::cout << "Max parameters: " << _max_params.transpose() << std::endl;
 
-            // std::cout << "BEST: " << limbo::opt::fun(_optimize_policy(params_star)) << std::endl;
-            // params_star = params_star.array()*2.0*_boundary-_boundary;
             _policy.normalize(_model);
             _policy.set_params(params_star);
-            old_params = params_star;
-            old_starting = params_starting;
 
-            std::cout << "Old reward: " << old_reward << std::endl;
             std::cout << "Best parameters: " << params_star.transpose() << std::endl;
             Eigen::write_binary("policy_params.bin", params_star);
 
@@ -186,11 +160,23 @@ namespace medrops {
 
             double r = _robot.predict_policy(policy, _model, world, Params::medrops::rollout_steps());
 
+            std::vector<double> R;
+            _robot.execute_dummy(policy, _model, world, Params::medrops::rollout_steps(), R, false);
+            double simu_reward = std::accumulate(R.begin(), R.end(), 0.0);
+            _robot.execute(policy, world, Params::medrops::rollout_steps(), R, false);
+            double real_reward = std::accumulate(R.begin(), R.end(), 0.0);
+
             opt_iters++;
-            if (max_reward < r)
-                max_reward = r;
+            if (_max_reward < r) {
+                _max_reward = r;
+                _max_simu_reward = simu_reward;
+                _max_real_reward = real_reward;
+                _max_params = policy.params().array();
+                // Eigen::write_binary("max_params.bin", policy.params());
+            }
+
             if (opt_iters % 1000 == 0) {
-                std::cout << opt_iters << "(" << max_reward << ") " << std::flush;
+                std::cout << opt_iters << "(" << _max_reward << ", " << _max_simu_reward << ", " << _max_real_reward << ") " << std::flush;
             }
 
             return limbo::opt::no_grad(r);
