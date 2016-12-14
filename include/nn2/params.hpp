@@ -35,71 +35,79 @@
 #ifndef _NN_PARAMS_HPP_
 #define _NN_PARAMS_HPP_
 namespace nn {
-  namespace params {
-    struct Dummy {
-      friend inline std::ostream& operator<<(std::ostream& output, const Dummy& e);
-      Dummy() : _x(42) {}
-      void mutate() {}
-      void random() {}
-      void develop() {}
-      size_t size() const {
-        return 0;
-      }
-      float data(size_t i) const {
-        return 0.0f;
-      }
-      float& operator[](size_t i) {
-        return _x;
-      }
-      float operator[](size_t i) const {
-        return _x;
-      }
-      template<typename A>
-      void serialize(A& ar, unsigned int v) {}
-      typedef float type_t;
-     protected:
-      float _x;
-    };
+    namespace params {
+        struct Dummy {
+            friend inline std::ostream& operator<<(std::ostream& output, const Dummy& e);
+            Dummy() : _x(42) {}
+            void mutate() {}
+            void random() {}
+            void develop() {}
+            size_t size() const
+            {
+                return 0;
+            }
+            float data(size_t i) const
+            {
+                return 0.0f;
+            }
+            float& operator[](size_t i)
+            {
+                return _x;
+            }
+            float operator[](size_t i) const
+            {
+                return _x;
+            }
+            template <typename A>
+            void serialize(A& ar, unsigned int v) {}
+            typedef float type_t;
 
-    std::ostream& operator<<(std::ostream& output, const Dummy& e) {
-      return output;
+        protected:
+            float _x;
+        };
+
+        std::ostream& operator<<(std::ostream& output, const Dummy& e)
+        {
+            return output;
+        }
+        template <int S>
+        struct Vectorf {
+            typedef float type_t;
+            BOOST_STATIC_CONSTEXPR int s = S;
+            Vectorf() : _data(S) {}
+            // magic cast !
+            template <typename T>
+            Vectorf(const T& v) : _data(S)
+            {
+                assert(v.size() == S);
+                for (size_t i = 0; i < v.size(); ++i)
+                    _data[i] = v.data(i);
+            }
+            float data(size_t i) const
+            {
+                assert(i < S);
+                return _data[i];
+            }
+            float& operator[](size_t i)
+            {
+                return _data[i];
+            }
+            float operator[](size_t i) const
+            {
+                return _data[i];
+            }
+
+            size_t size() const
+            {
+                return _data.size();
+            }
+            void mutate() {}
+            void random() {}
+            void develop() {}
+
+        protected:
+            std::vector<float> _data;
+        };
     }
-    template<int S>
-    struct Vectorf {
-      typedef float type_t;
-      BOOST_STATIC_CONSTEXPR int s=S;
-      Vectorf() : _data(S) {}
-      // magic cast !
-      template<typename T>
-      Vectorf(const T& v) :
-        _data(S) {
-        assert(v.size() == S);
-        for (size_t i = 0; i < v.size(); ++i)
-          _data[i] = v.data(i);
-      }
-      float data(size_t i) const {
-        assert(i < S) ;
-        return _data[i];
-      }
-      float& operator[](size_t i) {
-        return _data[i];
-      }
-      float operator[](size_t i) const {
-        return _data[i];
-      }
-
-      size_t size() const {
-        return _data.size();
-      }
-      void mutate() {}
-      void random() {}
-      void develop() {}
-     protected:
-      std::vector<float> _data;
-    };
-  }
-
-
-
 }
 #endif

@@ -18,8 +18,7 @@ namespace medrops {
             _nn = std::make_shared<nn_t>(
                 Params::nn_policy::state_dim(),
                 Params::nn_policy::hidden_neurons(),
-                Params::action_dim()
-            );
+                Params::action_dim());
             _nn->init();
             _params = Eigen::VectorXd::Zero(_nn->get_nb_connections());
         }
@@ -27,7 +26,7 @@ namespace medrops {
         void normalize(const Model& model)
         {
             Eigen::MatrixXd data = model.samples();
-            Eigen::MatrixXd samples = data.block(0, 0, data.rows(), data.cols()-1);
+            Eigen::MatrixXd samples = data.block(0, 0, data.rows(), data.cols() - 1);
             _means = samples.colwise().mean().transpose();
             _sigmas = Eigen::colwise_sig(samples).array().transpose();
 
@@ -35,9 +34,9 @@ namespace medrops {
             Eigen::VectorXd ph = Eigen::percentile(samples.array().abs(), 95);
             _limits = pl.array().max(ph.array());
 
-            #ifdef INTACT
-              _limits << 16.138, 9.88254, 14.7047, 0.996735, 0.993532;
-            #endif
+#ifdef INTACT
+            _limits << 16.138, 9.88254, 14.7047, 0.996735, 0.993532;
+#endif
         }
 
         Eigen::VectorXd next(const Eigen::VectorXd& state) const
@@ -75,7 +74,8 @@ namespace medrops {
             return _random;
         }
 
-        void set_params(const Eigen::VectorXd& params) {
+        void set_params(const Eigen::VectorXd& params)
+        {
             _params = params;
             _random = false;
             std::vector<double> weights(params.size());
