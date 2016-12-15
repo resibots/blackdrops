@@ -2,6 +2,7 @@
 #define MEDROPS_MEDROPS_HPP
 
 #include "binary_matrix.hpp"
+#include <chrono>
 #include <fstream>
 #include <limbo/opt/optimizer.hpp>
 
@@ -103,12 +104,16 @@ namespace medrops {
                 execute_and_record_data();
             }
 
+            std::chrono::steady_clock::time_point time_start;
             std::cout << "Starting learning..." << std::endl;
             for (size_t i = 0; i < iterations; i++) {
                 std::cout << std::endl
                           << "Learning iteration #" << (i + 1) << std::endl;
 
+                time_start = std::chrono::steady_clock::now();
                 learn_model();
+                double learn_model_ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - time_start).count();
+
                 _policy.normalize(_model);
                 std::cout << "Learned model..." << std::endl;
 
@@ -129,11 +134,15 @@ namespace medrops {
                     execute_loaded_policy();
                 }
 
+                time_start = std::chrono::steady_clock::now();
                 optimize_policy();
+                double optimize_ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - time_start).count();
                 std::cout << "Optimized policy..." << std::endl;
 
                 execute_and_record_data();
                 std::cout << "Executed action..." << std::endl;
+                std::cout << "Learning time: " << learn_model_ms << std::endl;
+                std::cout << "Optimization time: " << optimize_ms << std::endl;
             }
             _ofs.close();
         }
