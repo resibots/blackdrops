@@ -69,7 +69,7 @@ namespace medrops {
                 params_star = params_star.array() * 2.0 * _boundary - _boundary;
             }
             std::cout << opt_iters << "(" << _max_reward << ", " << _max_simu_reward << ", " << _max_real_reward << ") " << std::endl;
-            std::cout << "Max parameters: " << _max_params.transpose() << std::endl;
+            // std::cout << "Max parameters: " << _max_params.transpose() << std::endl;
 
             if (Params::opt_cmaes::elitism() == 0)
                 params_star = _max_params;
@@ -77,7 +77,7 @@ namespace medrops {
             _policy.normalize(_model);
             _policy.set_params(params_star);
 
-            std::cout << "Best parameters: " << params_star.transpose() << std::endl;
+            // std::cout << "Best parameters: " << params_star.transpose() << std::endl;
             Eigen::write_binary("policy_params.bin", params_star);
 
 #ifndef INTACT
