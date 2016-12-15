@@ -126,8 +126,8 @@ struct Params {
 
     struct gp_policy {
         BO_PARAM(double, l, 1);
-        BO_PARAM(double, max_u, 20.0); //max action
-        BO_PARAM(double, pseudo_samples, 5);
+        BO_PARAM(double, max_u, 10.0); //max action
+        BO_PARAM(double, pseudo_samples, 10);
         BO_PARAM(double, noise, 1e-5);
         BO_PARAM(double, max_sample, 6.0);
         //BO_PARAM(double, max_obs, 10.0);
@@ -167,7 +167,13 @@ struct Params {
 
     struct opt_cmaes : public limbo::defaults::opt_cmaes {
         BO_DYN_PARAM(double, max_fun_evals);
-        BO_PARAM(int, restarts, 10);
+        BO_PARAM(int, restarts, 3);
+        BO_PARAM(double, fun_tolerance, 1);
+        BO_PARAM(bool, fun_compute_initial, true);
+        BO_PARAM(int, cmaes_variant, aBIPOP_CMAES);
+        BO_PARAM(int, elitism, 1);
+        BO_PARAM(double, fun_target, 30);
+        BO_PARAM(bool, verbose, true);
     };
     struct opt_nloptnograd : public limbo::defaults::opt_nloptnograd {
         BO_PARAM(int, iterations, 1000000);
@@ -197,9 +203,7 @@ namespace global {
 template <typename Params>
 struct MeanIntact {
     size_t id = -1;
-
     MeanIntact(size_t dim_out = 1) {}
-
     void set_id(size_t id) {
         this->id = id;
     }
