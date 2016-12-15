@@ -4,7 +4,7 @@ from math import sqrt
 
 # grep "Reward: " cartpole_n8.log | tail -n 100 | sed -re 's/Reward: ([0-9\.]+)/\1/g' | sed ':a;N;$!ba;s/\n/,/g'
 # echo "["$(grep -rn "Dummy reward: " | grep "Dummy reward: " | sed -re 's/.*Dummy reward: ([0-9\.]+)/\1/g' | sed ':a;N;$!ba;s/\n/,/g')"]"
-# echo "["$(grep -rnE "Optimization iterations: [0-9]+.*|Dummy reward: [0-9]+\.?.*|Reward: [0-9]+\.?.*|Learning iteration #.*" | grep -E "Optimization iterations: [0-9]+.*|Dummy reward: [0-9]+\.?.*|Reward: [0-9]+\.?.*|Learning iteration #.*" | sed -re 'N;N;N;s/.*exp\_([0-9]+).*Learning iteration #([0-9]+).*\n.*Optimization iterations: ([0-9]+).*\n.*Dummy reward: ([0-9]+\.[0-9e\-]*)\n.*Reward: ([0-9]+\.[0-9e\-]*)/(\1, \2, \3, \4, \5),/g')"]"
+# echo "["$(grep -rnE "Optimization iterations: [0-9]+.*|Dummy reward: [0-9]+\.?.*|Reward: [0-9]+\.?.*|Learning iteration #.*" | grep -Pzo ".*Learning iteration #.*\n.*Optimization iterations: [0-9]+.*\n.*Dummy reward: [0-9]+\.?.*\n.*Reward: [0-9]+\.?.*" | sed -re 'N;N;N;s/.*exp\_([0-9]+).*Learning iteration #([0-9]+).*\n.*Optimization iterations: ([0-9]+).*\n.*Dummy reward: ([0-9]+\.[0-9e\-]*)\n.*Reward: ([0-9]+\.[0-9e\-]*)/(\1, \2, \3, \4, \5),/g')"]"
 
 stats = lambda n: (
                     mean(n),
