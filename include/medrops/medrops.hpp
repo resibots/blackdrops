@@ -147,6 +147,7 @@ namespace medrops {
                 std::cout << "Optimization time: " << optimize_ms << std::endl;
             }
             _ofs.close();
+            std::cout << "Experiment finished" << std::endl;
         }
 
     protected:
