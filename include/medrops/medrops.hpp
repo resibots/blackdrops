@@ -11,7 +11,7 @@ namespace medrops {
     template <typename Params, typename Model, typename Robot, typename Policy, typename PolicyOptimizer, typename RewardFunction>
     class Medrops {
     public:
-        int opt_iters;
+        int _opt_iters;
         double _max_reward;
         double _max_simu_reward;
         double _max_real_reward;
@@ -52,7 +52,7 @@ namespace medrops {
             Eigen::VectorXd params_starting = _policy.params();
             Eigen::write_binary("policy_params_starting_" + std::to_string(i) + ".bin", params_star);
 
-            opt_iters = 0;
+            _opt_iters = 0;
             _max_reward = 0;
             _max_simu_reward = 0;
             _max_real_reward = 0;
@@ -71,7 +71,7 @@ namespace medrops {
                     true);
                 params_star = params_star.array() * 2.0 * _boundary - _boundary;
             }
-            std::cout << opt_iters << "(" << _max_reward << ", " << _max_simu_reward << ", " << _max_real_reward << ") " << std::endl;
+            std::cout << _opt_iters << "(" << _max_reward << ", " << _max_simu_reward << ", " << _max_real_reward << ") " << std::endl;
             // std::cout << "Max parameters: " << _max_params.transpose() << std::endl;
 
             if (Params::opt_cmaes::elitism() == 0)
@@ -179,7 +179,7 @@ namespace medrops {
             _robot.execute(policy, world, Params::medrops::rollout_steps(), R, false);
             double real_reward = std::accumulate(R.begin(), R.end(), 0.0);
 
-            opt_iters++;
+            _opt_iters++;
             if (_max_reward < r) {
                 _max_reward = r;
                 _max_simu_reward = simu_reward;
@@ -188,8 +188,8 @@ namespace medrops {
                 // Eigen::write_binary("max_params.bin", policy.params());
             }
 
-            if (opt_iters % 1000 == 0) {
-                std::cout << opt_iters << "(" << _max_reward << ", " << _max_simu_reward << ", " << _max_real_reward << ") " << std::flush;
+            if (_opt_iters % 1000 == 0) {
+                std::cout << _opt_iters << "(" << _max_reward << ", " << _max_simu_reward << ", " << _max_real_reward << ") " << std::flush;
             }
 
             return limbo::opt::no_grad(r);
