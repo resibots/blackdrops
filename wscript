@@ -33,7 +33,7 @@ def build(bld):
                       target='test_cp',
                       uselib=libs,
                       uselib_local='limbo',
-                      variants = ['SIMU', 'SIMU DATA', 'SIMU INTACT'])
+                      variants = ['SIMU', 'SIMU DATA', 'SIMU INTACT', 'SIMU MEDIAN'])
 
     # limbo.create_variants(bld,
     #                   source='ode_test.cpp',

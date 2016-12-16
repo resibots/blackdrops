@@ -461,11 +461,13 @@ struct CartPole {
             //std::cout << "Rollout finished, took " << rollout_ms << "ms" << std::endl;
         });
 
-        // double r = rews.mean();
-
         double r = rews(0);
         if (Params::parallel_evaluations() > 1) {
+#ifdef MEDIAN
             r = Eigen::percentile_v(rews, 25) + Eigen::percentile_v(rews, 50) + Eigen::percentile_v(rews, 75);
+#else
+            r = rews.mean();
+#endif
         }
 
         return r;
