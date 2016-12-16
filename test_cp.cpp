@@ -157,12 +157,10 @@ struct Params {
         BO_DYN_PARAM(int, elitism);
         BO_DYN_PARAM(bool, handle_uncertainty);
 
-        BO_PARAM(int, cmaes_variant, aBIPOP_CMAES);
+        BO_PARAM(int, variant, aBIPOP_CMAES);
         BO_PARAM(int, verbose, false);
         BO_PARAM(bool, fun_compute_initial, true);
         // BO_PARAM(double, fun_target, 30);
-        // TODO: Pasar restarts, fun_tolerance, uncertainty y elitism a parametros dinamicos
-        // TODO: Cuando elitism esta en 0, guardar max_params en vez de best
     };
     struct opt_nloptnograd : public limbo::defaults::opt_nloptnograd {
         BO_PARAM(int, iterations, 20000);
