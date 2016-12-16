@@ -43,13 +43,15 @@ namespace medrops {
             _model.learn(_observations);
         }
 
-        void optimize_policy()
+        void optimize_policy(size_t i)
         {
             PolicyOptimizer policy_optimizer;
 
             // For now optimize policy without gradients
             Eigen::VectorXd params_star;
             Eigen::VectorXd params_starting = _policy.params();
+            Eigen::write_binary("policy_params_starting_" + std::to_string(i) + ".bin", params_star);
+
             opt_iters = 0;
             _max_reward = 0;
             _max_simu_reward = 0;
@@ -79,7 +81,7 @@ namespace medrops {
             _policy.set_params(params_star);
 
             // std::cout << "Best parameters: " << params_star.transpose() << std::endl;
-            Eigen::write_binary("policy_params.bin", params_star);
+            Eigen::write_binary("policy_params_" + std::to_string(i) + ".bin", params_star);
 
 #ifndef INTACT
             std::vector<double> R;
@@ -135,7 +137,7 @@ namespace medrops {
                 }
 
                 time_start = std::chrono::steady_clock::now();
-                optimize_policy();
+                optimize_policy(i + 1);
                 double optimize_ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - time_start).count();
                 std::cout << "Optimized policy..." << std::endl;
 
