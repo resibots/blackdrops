@@ -118,10 +118,10 @@ def get_statistics(data, th, ep, reducer=median):
     last_id = -1
     for e in data:
         if last_id != e[0]:
-            if last_id != -1 and len(ei) == ep:
-                iterations.append(list(ei))
-                dummy_rewards.append(list(edr))
-                rewards.append(list(er))
+            if last_id != -1 and len(ei) >= ep:
+                iterations.append(list(ei[:ep]))
+                dummy_rewards.append(list(edr[:ep]))
+                rewards.append(list(er[:ep]))
             ei = []
             edr = []
             er = []
@@ -130,23 +130,26 @@ def get_statistics(data, th, ep, reducer=median):
         edr.append(e[3])
         er.append(e[4])
 
-    if len(ei) == ep:
-        iterations.append(list(ei))
-        dummy_rewards.append(list(edr))
-        rewards.append(list(er))
+    if len(ei) >= ep:
+        iterations.append(list(ei[:ep]))
+        dummy_rewards.append(list(edr[:ep]))
+        rewards.append(list(er[:ep]))
 
     count_above_th = lambda vs: sum(map(lambda v: 1 if v >= th else 0, vs))
     count_below_th = lambda vs: sum(map(lambda v: 1 if v < th else 0, vs))
     def count_till_th(vs):
         pos = 0
         for v in vs:
-            pos += 1
             if v >= th:
                 return pos
-        return len(vs)+1
+            pos += 1
+        return len(vs)
 
+    def count_success_ath(vs):
+        if len(vs) == count_till_th(vs):
+            return 0
+        return 100*float(count_above_th(vs[count_till_th(vs)-1:])-1)/(len(vs)-count_till_th(vs))
 
-    count_success_ath = lambda vs: 100*float(count_above_th(vs[count_till_th(vs)-1:])-1)/(len(vs)-count_till_th(vs))
     stats_rewards = lambda eps: (
                         min(map(count_till_th, eps)),
                         reducer(map(count_till_th, eps)),
@@ -209,7 +212,7 @@ results = eval("["+out.replace("\n", " ")[:-2]+"]")
 # Do statistics
 th = 30
 ep = 15
-stats = get_statistics(results, th, ep, mean)
+stats = get_statistics(results, th, ep, median)
 
 # Description of get_statistics result:
 #   Processed repetitions (to be processed the episodes should be complete)
@@ -238,5 +241,14 @@ stats = get_statistics(results, th, ep, mean)
 #   Rewards raw data
 
 # Plot
+print "\nExperiment data (th is " + str(th) + "): "
+print "    Dummy th: ", stats[1]
+print "    Real th: ", stats[2]
+print "    Dummy success after th: ", stats[3]
+print "    Real success after th: ", stats[4]
+print "    Average of cmaes iterations: ", stats[9]
+
+print ""
 plot_box(stats[-2], "dummy_rewards_ep")
 plot_box(stats[-1], "rewards_ep")
+print "Box plots creatin finished."
