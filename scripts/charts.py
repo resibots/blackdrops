@@ -27,6 +27,9 @@ params = {
 }
 rcParams.update(params)
 
+# Command to verify which experiments ended and return the number of them
+# grep -rE "\#15|Dummy reward:.*" | grep -Pzo "\#15.*\n.*Dummy reward:.*" | sed -re "N;s/.*\n.*exp_([0-9]+).*/\1/g" | sort -V | wc -l
+
 try:
     from subprocess import DEVNULL
 except ImportError:
