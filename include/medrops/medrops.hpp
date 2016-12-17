@@ -72,6 +72,7 @@ namespace medrops {
                 params_star = params_star.array() * 2.0 * _boundary - _boundary;
             }
             std::cout << _opt_iters << "(" << _max_reward << ", " << _max_simu_reward << ", " << _max_real_reward << ") " << std::endl;
+            std::cout << "Optimization iterations: " << _opt_iters << std::endl;
             // std::cout << "Max parameters: " << _max_params.transpose() << std::endl;
 
             if (Params::opt_cmaes::elitism() == 0)
