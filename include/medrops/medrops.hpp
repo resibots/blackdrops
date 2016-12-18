@@ -175,14 +175,14 @@ namespace medrops {
 
             double r = _robot.predict_policy(policy, _model, world, Params::medrops::rollout_steps());
 
-            std::vector<double> R;
-            _robot.execute_dummy(policy, _model, world, Params::medrops::rollout_steps(), R, false);
-            double simu_reward = std::accumulate(R.begin(), R.end(), 0.0);
-            _robot.execute(policy, world, Params::medrops::rollout_steps(), R, false);
-            double real_reward = std::accumulate(R.begin(), R.end(), 0.0);
-
             _opt_iters++;
             if (_max_reward < r) {
+                std::vector<double> R;
+                _robot.execute_dummy(policy, _model, world, Params::medrops::rollout_steps(), R, false);
+                double simu_reward = std::accumulate(R.begin(), R.end(), 0.0);
+                _robot.execute(policy, world, Params::medrops::rollout_steps(), R, false);
+                double real_reward = std::accumulate(R.begin(), R.end(), 0.0);
+
                 _max_reward = r;
                 _max_simu_reward = simu_reward;
                 _max_real_reward = real_reward;
