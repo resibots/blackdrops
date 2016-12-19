@@ -137,12 +137,6 @@ struct Params {
         BO_DYN_PARAM(int, hidden_neurons);
     };
 
-    struct gp_policy {
-        BO_PARAM(int,l, 0.1);
-        BO_PARAM(double, virtual_observations, 20); //max action
-        //BO_DYN_PARAM(int, hidden_neurons);
-    };
-
     struct mean_constant {
         BO_PARAM(double, constant, 0.0);
     };
