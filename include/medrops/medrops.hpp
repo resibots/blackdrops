@@ -126,7 +126,7 @@ namespace medrops {
                 std::cout << "Average on errors: " << errors.transpose() << std::endl;
                 std::cout << "Average on sigmas: " << errors_sigma.transpose() << std::endl;
 
-                for (size_t j = 0; j < errors.size(); j++) {
+                for (int j = 0; j < errors.size(); j++) {
                     if (errors(j) > 1000) {
                         std::cout << "Detected big difference between the approximation and the model, terminating..." << std::endl;
                         exit(-1);
@@ -245,7 +245,7 @@ namespace medrops {
 
             Eigen::VectorXd errors(4);
             Eigen::VectorXd sigmas(4);
-            for (int i = 0; i < rvs.size(); i++) {
+            for (size_t i = 0; i < rvs.size(); i++) {
                 Eigen::VectorXd s;
                 Eigen::VectorXd m;
                 Eigen::VectorXd cm = comp_predict(rvs[i]);

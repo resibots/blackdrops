@@ -5,7 +5,7 @@
 #include <cmath>
 
 namespace Eigen {
-    template<class Matrix>
+    template <class Matrix>
     void write_binary(const std::string filename, const Matrix& matrix)
     {
         write_binary(filename.c_str(), matrix);
@@ -21,7 +21,7 @@ namespace Eigen {
         out.close();
     }
 
-    template<class Matrix>
+    template <class Matrix>
     void read_binary(const std::string filename, Matrix& matrix)
     {
         read_binary(filename.c_str(), matrix);
@@ -60,7 +60,7 @@ namespace Eigen {
     VectorXd percentile(const MatrixXd& matrix, int p)
     {
         VectorXd result(matrix.cols());
-        for (size_t i = 0; i < matrix.cols(); i++) {
+        for (int i = 0; i < matrix.cols(); i++) {
             result(i) = percentile_v(matrix.col(i), p);
         }
         return result;

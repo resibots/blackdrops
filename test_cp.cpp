@@ -522,8 +522,8 @@ struct RewardFunction {
     {
         double s_c_sq = 0.25 * 0.25;
         double dx = angle_dist(to_state(3), Params::goal_pos());
-        double dy = to_state(2) - Params::goal_vel();
-        double dz = to_state(1) - Params::goal_vel_x();
+        // double dy = to_state(2) - Params::goal_vel();
+        // double dz = to_state(1) - Params::goal_vel_x();
         double dw = to_state(0) - Params::goal_pos_x();
 
         // return std::exp(-0.5 / s_c_sq * (dx * dx + dy * dy + dz * dz + dw * dw));

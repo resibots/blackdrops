@@ -74,10 +74,10 @@ namespace medrops {
             for (size_t i = 0; i < samples.size(); ++i) {
                 if (i != 0)
                     ofs_data << std::endl;
-                for (size_t j = 0; j < samples[0].size(); ++j) {
+                for (int j = 0; j < samples[0].size(); ++j) {
                     ofs_data << samples[i](j) << " ";
                 }
-                for (size_t j = 0; j < obs.cols(); ++j) {
+                for (int j = 0; j < obs.cols(); ++j) {
                     if (j != 0)
                         ofs_data << " ";
                     ofs_data << obs(i, j);
