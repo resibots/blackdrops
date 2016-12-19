@@ -8,6 +8,7 @@
 #include <medrops/kernel_lf_opt.hpp>
 #include <medrops/linear_policy.hpp>
 #include <medrops/medrops.hpp>
+#include <medrops/gp_policy.hpp>
 
 #include <medrops/sf_nn_policy.hpp>
 
@@ -121,16 +122,6 @@ struct Params {
         BO_PARAM(bool, bounded, true);
     };
 
-    struct gp_policy {
-        BO_PARAM(double, l, 1);
-        BO_PARAM(double, max_u, 10.0); //max action
-        BO_PARAM(double, pseudo_samples, 10);
-        BO_PARAM(double, noise, 1e-5);
-        BO_PARAM(double, max_sample, 6.0);
-        //BO_PARAM(double, max_obs, 10.0);
-        //BO_DYN_PARAM(int, hidden_neurons);
-    };
-
     struct medrops {
         BO_PARAM(size_t, rollout_steps, 40);
         BO_DYN_PARAM(double, boundary);
@@ -152,10 +143,11 @@ struct Params {
         BO_DYN_PARAM(int, hidden_neurons);
     };
 
-    struct gp_policy {
-        BO_PARAM(int,l, 0.1);
-        BO_PARAM(double, virtual_observations, 20); //max action
-        //BO_DYN_PARAM(int, hidden_neurons);
+    struct gp_policy {//: public medrops::defaults::gp_policy_defaults{
+        BO_PARAM(double, max_u, 10.0); //max action
+        BO_PARAM(double, pseudo_samples, 5);
+        BO_PARAM(double, noise, 1e-5);
+        BO_PARAM(int, state_dim, 5);
     };
 
     struct mean_constant {
@@ -178,7 +170,7 @@ struct Params {
 
         BO_PARAM(int, variant, aBIPOP_CMAES);
         BO_PARAM(int, verbose, false);
-        BO_PARAM(bool, fun_compute_initial, true);
+        //BO_PARAM(bool, fun_compute_initial, true);
         // BO_PARAM(double, fun_target, 30);
     };
     struct opt_nloptnograd : public limbo::defaults::opt_nloptnograd {
@@ -681,8 +673,9 @@ int main(int argc, char** argv)
     std::cout << std::endl;
 
     using policy_opt_t = limbo::opt::Cmaes<Params>;
+    //using policy_opt_t = limbo::opt::NLOptGrad<Params>;
     using MGP_t = medrops::GPModel<Params, GP_t>;
-    medrops::Medrops<Params, MGP_t, CartPole, medrops::GPPolicy<Params>, policy_opt_t, RewardFunction> cp_system;
+    medrops::Medrops<Params, MGP_t, CartPole, medrops::GPPolicy<Params, MGP_t>, policy_opt_t, RewardFunction> cp_system;
 
 #ifndef DATA
 #ifdef INTACT

@@ -1,115 +1,132 @@
 #ifndef MEDROPS_GP_POLICY_HPP
 #define MEDROPS_GP_POLICY_HPP
-
 #include <limbo/tools/random_generator.hpp>
 #include <Eigen/Core>
 #include <limbo/tools/macros.hpp>
 #include <limbo/limbo.hpp>
+#include <limbo/tools.hpp>
 
 namespace medrops {
-
-    template <typename Params, typename KernelFunction>
+    namespace defaults{
+        struct gp_policy_defaults {
+            BO_PARAM(double, max_u, 10.0); //max action
+            BO_PARAM(double, pseudo_samples, 10);
+            BO_PARAM(double, noise, 1e-5);
+        };
+    }
+    template <typename Params, typename Model>
     struct GPPolicy {
+        using kernel_t = limbo::kernel::SquaredExpARD<Params>;
+        //using mean_t = limbo::mean::Data<Params>;
+        using mean_t = limbo::mean::Constant<Params>;
+        size_t sdim = Params::gp_policy::state_dim(); //input dimension
+        size_t ps = Params::gp_policy::pseudo_samples(); //total observations
+        using gp_t = limbo::model::GP<Params, kernel_t, mean_t>;
 
         GPPolicy()
         {
             _random = false;
              size_t sdim = Params::nn_policy::state_dim();
              size_t ps = Params::gp_policy::pseudo_samples();
-             _params = Eigen::VectorXd::Zero((sdim+2)*ps + 1);
-             _kernel_function = KernelFunction(sdim);
-             _kernel_function.set_h_params(Eigen::VectorXd::Ones(sdim+1));
+             _params = Eigen::VectorXd::Zero((sdim+1)*ps+sdim);
         }
 
-        Eigen::VectorXd next(const Eigen::VectorXd& state) const
+        void normalize(const Model& model)
         {
-            if (_random || _params.size() == 0) {
-                return Params::linear_policy::max_u() * (limbo::tools::random_vector(Params::action_dim()).array() * 2 - 1); //return max action
-            }
-
-            Eigen::VectorXd A = basisFunction(state);
-            //std::cout<<"A = "<<A<<std::endl;
-            //std::cout<<"_alphas = "<<_alphas<<std::endl;
-            Eigen::VectorXd act = limbo::tools::make_vector(A.dot(_alphas));
-            //std::cout<<act<<std::endl;
-            act = act.unaryExpr([](double x) {
-                return Params::gp_policy::max_u() * (9 * std::sin(x) / 8.0 + std::sin(3 * x) / 8.0);
-            });
-            //std::cout<<"ACTION = "<<act<<std::endl;
-            return act;
-            //return limbo::tools::make_vector();
-
+//             Eigen::MatrixXd data = model.samples();
+//             Eigen::MatrixXd samples = data.block(0, 0, data.rows(), data.cols() - 1);
+//             _means = samples.colwise().mean().transpose();
+//             _sigmas = Eigen::colwise_sig(samples).array().transpose();
+//
+//             Eigen::VectorXd pl = Eigen::percentile(samples.array().abs(), 5);
+//             Eigen::VectorXd ph = Eigen::percentile(samples.array().abs(), 95);
+//             _limits = pl.array().max(ph.array());
+//
+// #ifdef INTACT
+//             _limits << 16.138, 9.88254, 14.7047, 0.996735, 0.993532;
+// #endif
         }
 
+        Eigen::VectorXd next(const Eigen::VectorXd state) const
+        {
+            Eigen::VectorXd policy_params;
+            policy_params = _params; //Scalling of parameters
+            // std::cout<<policy_params.transpose()<<std::endl;
+            // std::getchar();
+            if (_random || policy_params.size() == 0) {
+                 return Params::gp_policy::max_u() * (limbo::tools::random_vector(Params::action_dim()).array() * 2 - 1); //return random action
+            }
+            //---extract pseudo samples from parameters
+            Eigen::VectorXd sample(sdim);
+            std::vector<Eigen::VectorXd> pseudo_samples;
+            for (int i=0; i<ps ; i++)
+            {
+                for(int j=0; j<sdim ;j++ )
+                {
+                        sample(j) = policy_params(i*sdim+j);
+                }
+                pseudo_samples.push_back(sample);
+                //std::cout<<sample.transpose()<<std::endl;
+            }
+            //--- extract pseudo observations from parameres
+            Eigen::VectorXd obs;
+            std::vector<Eigen::VectorXd> pseudo_observations;
+            obs = policy_params.segment(sdim*ps,ps);
+            for (int i=0; i<obs.size(); i++)
+            {
+                Eigen::VectorXd temp = limbo::tools::make_vector(obs(i));
+                pseudo_observations.push_back(temp);
+                //std::cout<<temp.transpose()<<std::endl;
+            }
+            //std::cout<<"PseudoTargets: \n"<<pseudo_observations<<"\n ------ \n";
+            //--- extract hyperparameters from parameters
+            Eigen::VectorXd ells(sdim);
+            ells = policy_params.tail(sdim);
+            //-- instantiating gp policy
+            gp_t gp_policy_obj(5,1);
+            //--- set hyperparameter ells in the kernel.
+            gp_policy_obj.kernel_function().set_h_params(ells);
+            //--- Compute the gp
+            Eigen::VectorXd noises = Eigen::VectorXd::Constant(ps, Params::gp_policy::noise());
+            gp_policy_obj.compute(pseudo_samples, pseudo_observations, noises); //TODO: Have to check the noises with actual PILCO
+            //--- Query the GP with state
+            //std::tuple<Eigen::VectorXd, double> result;
+            //std::cout<<"State : "<<state<<std::endl;
+            // result = gp_policy_obj.query(state);
+            Eigen::VectorXd action = gp_policy_obj.mu(state);
+            action = action.unaryExpr([](double x) {return Params::gp_policy::max_u() * (9 * std::sin(x) / 8.0 + std::sin(3 * x) / 8.0);});
+            //std::cout<<"State :"<<state.transpose()<<" Action :"<<action<<"  _random : "<<_random<<std::endl;
+            // if(state(3)<0.9){
+            //     std::cout<<"Got\n"<<state(3)<<std::endl;
+            //     std::getchar();
+            // }
+            return action;
+        }
         void set_random_policy()
         {
             _random = true;
         }
-
         bool random() const
         {
             return _random;
         }
-
         void set_params(const Eigen::VectorXd& params)
         {
-            size_t N = Params::linear_policy::state_dim();
-            int M = Params::gp_policy::pseudo_samples();
             _params = params;
-            _thetas = std::vector<Eigen::VectorXd>(M, Eigen::VectorXd(N));
-            for (int i=0; i<M; i++)
-            {
-                for (int j=0; j<N; j++)
-                {
-                    _thetas[i](j) = params(i*N + j); // M*N+N
-                }
-            }
-            _alphas = params.tail(M);//Eigen::MatrixXd::Map(_params.data(),N,N).transpose();
-            _random = false;
-            _kernel_function.set_h_params(params.segment(M*N+N, N+1).array().log());
         }
-
         Eigen::VectorXd params() const
         {
             if (_random || _params.size() == 0)
-                // return limbo::tools::random_vector((Params::linear_policy::state_dim() + 1) * Params::action_dim());
-                return limbo::tools::random_vector(
-                    (Params::linear_policy::state_dim()+2) *
-                    Params::gp_policy::pseudo_samples() + 1);
+                return limbo::tools::random_vector((sdim+1)*ps+sdim);
             return _params;
         }
-
-
-        double exp_kernel(const Eigen::VectorXd v1, const Eigen::VectorXd v2) const
-        {
-            double _l = Params::gp_policy::l();
-            //double ll= 1 / (2 * std::pow(_l, 2));
-            //double diff = std::pow((v1 - v2).norm(), 2);
-            //std::cout<<"ll = "<<ll<<std::endl;
-            //std::cout<<"diff = "<<diff<<std::endl;
-            return std::exp(-(1 / (2 * std::pow(_l, 2))) * std::pow((v1 - v2).norm(), 2));
-        }
-
-        Eigen::VectorXd basisFunction(const Eigen::VectorXd& state) const
-        {
-            int N = Params::gp_policy::pseudo_samples();//20; //total parameters 20*state.size()+20
-            Eigen::VectorXd result(N);
-            for (int i=0; i<N; i++ )
-            {
-                result(i) = _kernel_function(state,_thetas[i]);
-                 //std::cout<<"state = "<<state<<std::endl;
-                 //std::cout<<"_thetas = "<<_thetas[i]<<std::endl;
-                // std::cout<<"Result = "<<result(i)<<std::endl;
-            }
-            return result;
-        }
-
         Eigen::VectorXd _params;
-        std::vector<Eigen::VectorXd> _thetas; //pseudo samples
-        Eigen::VectorXd _alphas; //covarience_matrix x pseudo observations
-        KernelFunction _kernel_function;
         bool _random;
+
+        Model* _model;
+        Eigen::VectorXd _means;
+        Eigen::MatrixXd _sigmas;
+        Eigen::VectorXd _limits;
     };
 }
-
 #endif
