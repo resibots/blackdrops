@@ -145,9 +145,10 @@ struct Params {
 
     struct gp_policy {//: public medrops::defaults::gp_policy_defaults{
         BO_PARAM(double, max_u, 10.0); //max action
-        BO_PARAM(double, pseudo_samples, 5);
+        BO_PARAM(double, pseudo_samples, 10);
         BO_PARAM(double, noise, 1e-5);
         BO_PARAM(int, state_dim, 5);
+        BO_PARAM(bool, paramFromFile, true); //
     };
 
     struct mean_constant {

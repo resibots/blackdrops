@@ -6,6 +6,65 @@
 #include <limbo/limbo.hpp>
 #include <limbo/tools.hpp>
 
+///**************** Load csv file to Eigen::MatrixXd ***************************
+#include <Eigen/Dense>
+#include <vector>
+#include <fstream>
+using namespace Eigen;
+template<typename M>
+M load_csv (const std::string & path, const char delim =',') {
+    std::ifstream indata;
+    indata.open(path);
+    if(indata == NULL)
+        std::cout<<"Null stream \n";
+    std::string line;
+    std::vector<double> values;
+    //Eigen::VectorXd val;
+    uint rows = 0;
+    while (std::getline(indata, line)) {
+        std::stringstream lineStream(line);
+        std::string cell;
+        while (std::getline(lineStream, cell, delim)) {
+            values.push_back(std::stod(cell));
+        }
+        ++rows;
+    }
+    return Map<const Matrix<typename M::Scalar, M::RowsAtCompileTime, M::ColsAtCompileTime, RowMajor>>(values.data(), rows, values.size()/rows);
+}
+
+Eigen::VectorXd push_back(Eigen::VectorXd v1, Eigen::VectorXd v2)
+{
+    Eigen::VectorXd temp(v1.size()+v2.size());
+
+    for(int i=0; i<v1.size(); i++)
+    {
+        temp(i) = v1(i);
+        //std::cout<<temp(i)<<"\n";
+    }
+    for(int i=0; i<v2.size(); i++)
+    {
+        temp(v1.size()+i) = v2(i);
+        //std::cout<<temp(i)<<"\n";
+    }
+    return temp;
+}
+
+Eigen::VectorXd matx2vecx(const Eigen::MatrixXd mat)
+{
+    Eigen::VectorXd vec(mat.rows()*mat.cols());
+    int r,c;
+    r = mat.rows();
+    c = mat.cols();
+    for(int i=0; i<r; i++){
+        for(int j=0; j<c; j++){
+            vec(i*c+j) = mat(i,j);
+        }
+    }
+    return vec;
+}
+
+//************************* end ************************************************
+
 namespace medrops {
     namespace defaults{
         struct gp_policy_defaults {
@@ -29,6 +88,36 @@ namespace medrops {
              size_t sdim = Params::nn_policy::state_dim();
              size_t ps = Params::gp_policy::pseudo_samples();
              _params = Eigen::VectorXd::Zero((sdim+1)*ps+sdim);
+             this -> load_parameters_from_file();
+        }
+
+        void load_parameters_from_file()
+        {
+            MatrixXd A = load_csv<MatrixXd>("./exp/medrops/data/pseudoInputs.csv", '\t');
+            Eigen::VectorXd ps = matx2vecx(A);
+            //std::cout<<"PseudoStates: \n"<<ps<<"\n ------ \n";
+            MatrixXd B = load_csv<MatrixXd>("./exp/medrops/data/pseudoTargets.csv", '\t');
+            Eigen::VectorXd pt = matx2vecx(B);
+            //std::cout<<"PseudoTargets: \n"<<pt<<"\n ------- \n";
+            MatrixXd C = load_csv<MatrixXd>("./exp/medrops/data/hyperParams.csv", '\t');
+            Eigen::VectorXd temp = matx2vecx(C);
+            //std::cout<<temp<<"\n";
+            Eigen::VectorXd hParams = temp.head(temp.size()-2); //as last two are parameters for the GP not for Kernel. TODO: check if ell^2 or simply ells in MATLAB.
+            //std::cout<<"HyperParams: \n"<<hParams<<"\n............\n";
+            //hParams = hParams.array()/2;
+            //std::cout<<hParams<<"\n";
+
+            Eigen::VectorXd policyParams;
+            policyParams = push_back(policyParams,ps);//policyParams << ps , pt, hParams;
+            //std::cout<<"PseudoStates added: \n"<<policyParams<<"\n ------ \n";
+            policyParams = push_back(policyParams,pt);
+            //std::cout<<"PseudoTargets added: \n"<<policyParams<<"\n ------ \n";
+            policyParams = push_back(policyParams,hParams);
+            //std::cout<<"HyperParams added: \n"<<policyParams<<"\n ------ \n";
+            //std::cout<<"\n ----\n "<<policyParams<<"\n";
+            //std::cout<<"Param Size: "<<policyParams.size()<<"\n";
+            //std::getchar();
+            this->_params_from_file = policyParams;
         }
 
         void normalize(const Model& model)
@@ -50,9 +139,7 @@ namespace medrops {
         Eigen::VectorXd next(const Eigen::VectorXd state) const
         {
             Eigen::VectorXd policy_params;
-            policy_params = _params; //Scalling of parameters
-            // std::cout<<policy_params.transpose()<<std::endl;
-            // std::getchar();
+            policy_params = _params;
             if (_random || policy_params.size() == 0) {
                  return Params::gp_policy::max_u() * (limbo::tools::random_vector(Params::action_dim()).array() * 2 - 1); //return random action
             }
@@ -113,6 +200,8 @@ namespace medrops {
         void set_params(const Eigen::VectorXd& params)
         {
             _params = params;
+            if(Params::gp_policy::paramFromFile())
+                _params = _params_from_file;
         }
         Eigen::VectorXd params() const
         {
@@ -127,6 +216,7 @@ namespace medrops {
         Eigen::VectorXd _means;
         Eigen::MatrixXd _sigmas;
         Eigen::VectorXd _limits;
+        Eigen::VectorXd _params_from_file;
     };
 }
 #endif
