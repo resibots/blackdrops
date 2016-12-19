@@ -17,6 +17,7 @@ def configure(conf):
 def build(bld):
     libs = 'TBB EIGEN BOOST LIMBO LIBCMAES NLOPT SFERES2 BOOST_CHRONO RT SDL '
     cxxflags = bld.get_env()['CXXFLAGS']
+    cxxflags += ['-D NODSP']
 
     # limbo.create_variants(bld,
     #                   source='test.cpp',
@@ -32,12 +33,12 @@ def build(bld):
                       target='test_cp',
                       uselib=libs,
                       uselib_local='limbo',
-                      variants = ['SIMU', 'SIMU DATA', 'SIMU INTACT'])
+                      variants = ['SIMU', 'SIMU DATA', 'SIMU INTACT', 'SIMU MEDIAN', 'SIMU MEDIAN DATA'])
 
-    limbo.create_variants(bld,
-                      source='ode_test.cpp',
-                      includes='. ../../src ../ ./include',
-                      target='ode_test',
-                      uselib=libs,
-                      uselib_local='limbo',
-                      variants = ['SIMU'])
+    # limbo.create_variants(bld,
+    #                   source='ode_test.cpp',
+    #                   includes='. ../../src ../ ./include',
+    #                   target='ode_test',
+    #                   uselib=libs,
+    #                   uselib_local='limbo',
+    #                   variants = ['SIMU'])

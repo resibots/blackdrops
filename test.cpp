@@ -114,6 +114,7 @@ struct Params {
 
     struct medrops {
         BO_PARAM(size_t, rollout_steps, 40);
+        BO_PARAM(double, boundary, 5);
     };
 
     struct options {

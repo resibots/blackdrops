@@ -1,2 +1,4 @@
 *.pyc
 params_*
+*.log
+*.orig

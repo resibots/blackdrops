@@ -6,7 +6,7 @@
 
 namespace medrops {
 
-    template <typename Params>
+    template <typename Params, typename Model>
     struct SFNNPolicy {
 
         // using nn_t = medrops::MLP<medrops::NNLayer<medrops::Neuron<medrops::AfTanh>, medrops::PfSum>, medrops::NNLayer<medrops::Neuron<medrops::AfTanh>, medrops::PfSum>>;
@@ -18,10 +18,25 @@ namespace medrops {
             _nn = std::make_shared<nn_t>(
                 Params::nn_policy::state_dim(),
                 Params::nn_policy::hidden_neurons(),
-                Params::action_dim()
-            );
+                Params::action_dim());
             _nn->init();
             _params = Eigen::VectorXd::Zero(_nn->get_nb_connections());
+        }
+
+        void normalize(const Model& model)
+        {
+            Eigen::MatrixXd data = model.samples();
+            Eigen::MatrixXd samples = data.block(0, 0, data.rows(), data.cols() - 1);
+            _means = samples.colwise().mean().transpose();
+            _sigmas = Eigen::colwise_sig(samples).array().transpose();
+
+            Eigen::VectorXd pl = Eigen::percentile(samples.array().abs(), 5);
+            Eigen::VectorXd ph = Eigen::percentile(samples.array().abs(), 95);
+            _limits = pl.array().max(ph.array());
+
+#ifdef INTACT
+            _limits << 16.138, 9.88254, 14.7047, 0.996735, 0.993532;
+#endif
         }
 
         Eigen::VectorXd next(const Eigen::VectorXd& state) const
@@ -30,23 +45,18 @@ namespace medrops {
                 return Params::nn_policy::max_u() * (limbo::tools::random_vector(Params::action_dim()).array() * 2 - 1.0);
             }
 
-            std::vector<double> inputs(Params::nn_policy::state_dim());
-            Eigen::VectorXd::Map(inputs.data(), inputs.size()) = state;
+            Eigen::VectorXd nstate = state;
+            // nstate.segment(0, 3) = ((state-_means).array() / (_sigmas*3).array()).segment(0, 3);
+            nstate.segment(0, 3) = nstate.segment(0, 3).array() / _limits.segment(0, 3).array();
 
-            // for (size_t i = 0; i < inputs.size(); i++)
-            //   std::cout << inputs[i] << " ";
-            // std::cout << std::endl;
+            std::vector<double> inputs(Params::nn_policy::state_dim());
+            Eigen::VectorXd::Map(inputs.data(), inputs.size()) = nstate;
 
             _nn->step(inputs);
             _nn->step(inputs);
 
             std::vector<double> outputs = _nn->get_outf();
             Eigen::VectorXd act = Eigen::VectorXd::Map(outputs.data(), outputs.size());
-
-            // std::vector<double> out_weights = _nn->get_all_weights();
-            // Eigen::VectorXd weights = Eigen::VectorXd::Map(out_weights.data(), out_weights.size());
-            // std::cout << "weights: " << weights.segment(0, 6).transpose() << std::endl;
-            // std::cout << "action: " << act.transpose() << std::endl;
 
             act = act.unaryExpr([](double x) {
                 return Params::nn_policy::max_u() * x;//(9 * std::sin(x) / 8.0 + std::sin(3 * x) / 8.0);
@@ -64,7 +74,8 @@ namespace medrops {
             return _random;
         }
 
-        void set_params(const Eigen::VectorXd& params) {
+        void set_params(const Eigen::VectorXd& params)
+        {
             _params = params;
             _random = false;
             std::vector<double> weights(params.size());
@@ -83,6 +94,11 @@ namespace medrops {
         std::shared_ptr<nn_t> _nn;
         Eigen::VectorXd _params;
         bool _random;
+        Model* _model;
+
+        Eigen::VectorXd _means;
+        Eigen::MatrixXd _sigmas;
+        Eigen::VectorXd _limits;
     };
 }
 
