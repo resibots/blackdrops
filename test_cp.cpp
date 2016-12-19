@@ -8,8 +8,6 @@
 #include <medrops/kernel_lf_opt.hpp>
 #include <medrops/linear_policy.hpp>
 #include <medrops/medrops.hpp>
-#include <medrops/nn_policy.hpp>
-#include <nn/nn.hpp>
 
 #include <medrops/sf_nn_policy.hpp>
 
