@@ -199,6 +199,7 @@ namespace medrops {
         }
         void set_params(const Eigen::VectorXd& params)
         {
+            _random = false;
             _params = params;
             if(Params::gp_policy::paramFromFile())
                 _params = _params_from_file;
