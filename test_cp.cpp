@@ -148,7 +148,7 @@ struct Params {
         BO_PARAM(double, pseudo_samples, 10);
         BO_PARAM(double, noise, 1e-5);
         BO_PARAM(int, state_dim, 5);
-        BO_PARAM(bool, paramFromFile, true); //
+        BO_PARAM(bool, paramFromFile, false); //
     };
 
     struct mean_constant {
@@ -173,6 +173,9 @@ struct Params {
         BO_PARAM(int, verbose, false);
         //BO_PARAM(bool, fun_compute_initial, true);
         // BO_PARAM(double, fun_target, 30);
+        BO_PARAM(double, u_bound, 6.0);
+        BO_PARAM(double, l_bound, -6.0);
+
     };
     struct opt_nloptnograd : public limbo::defaults::opt_nloptnograd {
         BO_PARAM(int, iterations, 20000);

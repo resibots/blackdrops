@@ -19,7 +19,6 @@ M load_csv (const std::string & path, const char delim =',') {
         std::cout<<"Null stream \n";
     std::string line;
     std::vector<double> values;
-    //Eigen::VectorXd val;
     uint rows = 0;
     while (std::getline(indata, line)) {
         std::stringstream lineStream(line);
@@ -39,12 +38,11 @@ Eigen::VectorXd push_back(Eigen::VectorXd v1, Eigen::VectorXd v2)
     for(int i=0; i<v1.size(); i++)
     {
         temp(i) = v1(i);
-        //std::cout<<temp(i)<<"\n";
+
     }
     for(int i=0; i<v2.size(); i++)
     {
         temp(v1.size()+i) = v2(i);
-        //std::cout<<temp(i)<<"\n";
     }
     return temp;
 }
@@ -95,45 +93,21 @@ namespace medrops {
         {
             MatrixXd A = load_csv<MatrixXd>("./exp/medrops/data/pseudoInputs.csv", '\t');
             Eigen::VectorXd ps = matx2vecx(A);
-            //std::cout<<"PseudoStates: \n"<<ps<<"\n ------ \n";
             MatrixXd B = load_csv<MatrixXd>("./exp/medrops/data/pseudoTargets.csv", '\t');
             Eigen::VectorXd pt = matx2vecx(B);
-            //std::cout<<"PseudoTargets: \n"<<pt<<"\n ------- \n";
             MatrixXd C = load_csv<MatrixXd>("./exp/medrops/data/hyperParams.csv", '\t');
             Eigen::VectorXd temp = matx2vecx(C);
-            //std::cout<<temp<<"\n";
             Eigen::VectorXd hParams = temp.head(temp.size()-2); //as last two are parameters for the GP not for Kernel. TODO: check if ell^2 or simply ells in MATLAB.
-            //std::cout<<"HyperParams: \n"<<hParams<<"\n............\n";
-            //hParams = hParams.array()/2;
-            //std::cout<<hParams<<"\n";
-
             Eigen::VectorXd policyParams;
             policyParams = push_back(policyParams,ps);//policyParams << ps , pt, hParams;
-            //std::cout<<"PseudoStates added: \n"<<policyParams<<"\n ------ \n";
             policyParams = push_back(policyParams,pt);
-            //std::cout<<"PseudoTargets added: \n"<<policyParams<<"\n ------ \n";
             policyParams = push_back(policyParams,hParams);
-            //std::cout<<"HyperParams added: \n"<<policyParams<<"\n ------ \n";
-            //std::cout<<"\n ----\n "<<policyParams<<"\n";
-            //std::cout<<"Param Size: "<<policyParams.size()<<"\n";
-            //std::getchar();
             this->_params_from_file = policyParams;
         }
 
         void normalize(const Model& model)
         {
-//             Eigen::MatrixXd data = model.samples();
-//             Eigen::MatrixXd samples = data.block(0, 0, data.rows(), data.cols() - 1);
-//             _means = samples.colwise().mean().transpose();
-//             _sigmas = Eigen::colwise_sig(samples).array().transpose();
-//
-//             Eigen::VectorXd pl = Eigen::percentile(samples.array().abs(), 5);
-//             Eigen::VectorXd ph = Eigen::percentile(samples.array().abs(), 95);
-//             _limits = pl.array().max(ph.array());
-//
-// #ifdef INTACT
-//             _limits << 16.138, 9.88254, 14.7047, 0.996735, 0.993532;
-// #endif
+
         }
 
         Eigen::VectorXd next(const Eigen::VectorXd state) const
@@ -165,7 +139,6 @@ namespace medrops {
                 pseudo_observations.push_back(temp);
                 //std::cout<<temp.transpose()<<std::endl;
             }
-            //std::cout<<"PseudoTargets: \n"<<pseudo_observations<<"\n ------ \n";
             //--- extract hyperparameters from parameters
             Eigen::VectorXd ells(sdim);
             ells = policy_params.tail(sdim);
@@ -177,16 +150,8 @@ namespace medrops {
             Eigen::VectorXd noises = Eigen::VectorXd::Constant(ps, Params::gp_policy::noise());
             gp_policy_obj.compute(pseudo_samples, pseudo_observations, noises); //TODO: Have to check the noises with actual PILCO
             //--- Query the GP with state
-            //std::tuple<Eigen::VectorXd, double> result;
-            //std::cout<<"State : "<<state<<std::endl;
-            // result = gp_policy_obj.query(state);
             Eigen::VectorXd action = gp_policy_obj.mu(state);
             action = action.unaryExpr([](double x) {return Params::gp_policy::max_u() * (9 * std::sin(x) / 8.0 + std::sin(3 * x) / 8.0);});
-            //std::cout<<"State :"<<state.transpose()<<" Action :"<<action<<"  _random : "<<_random<<std::endl;
-            // if(state(3)<0.9){
-            //     std::cout<<"Got\n"<<state(3)<<std::endl;
-            //     std::getchar();
-            // }
             return action;
         }
         void set_random_policy()
@@ -207,7 +172,7 @@ namespace medrops {
         Eigen::VectorXd params() const
         {
             if (_random || _params.size() == 0)
-                return limbo::tools::random_vector((sdim+1)*ps+sdim);
+                return limbo::tools::random_vector((sdim+1)*ps+sdim);//TODO: set the proper bounds here
             return _params;
         }
         Eigen::VectorXd _params;
