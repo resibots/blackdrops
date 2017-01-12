@@ -67,9 +67,14 @@ namespace medrops {
                 std::cout << "Optimizing policy bounded to " << _boundary << "... " << std::flush;
                 params_star = policy_optimizer(
                     std::bind(&Medrops::_optimize_policy, this, std::placeholders::_1, std::placeholders::_2),
-                    (params_starting.array() + _boundary) / (_boundary * 2.0),
+                    params_starting,
                     true);
-                params_star = params_star.array() * 2.0 * _boundary - _boundary;
+
+                // params_star = policy_optimizer(
+                //     std::bind(&Medrops::_optimize_policy, this, std::placeholders::_1, std::placeholders::_2),
+                //     (params_starting.array() + _boundary) / (_boundary * 2.0),
+                //     true);
+                // params_star = params_star.array() * 2.0 * _boundary - _boundary;
             }
             std::cout << _opt_iters << "(" << _max_reward << ", " << _max_simu_reward << ", " << _max_real_reward << ") " << std::endl;
             std::cout << "Optimization iterations: " << _opt_iters << std::endl;
@@ -169,7 +174,8 @@ namespace medrops {
                 policy.set_params(params.array());
             }
             else {
-                policy.set_params(params.array() * 2.0 * _boundary - _boundary);
+                policy.set_params(params.array());
+                //policy.set_params(params.array() * 2.0 * _boundary - _boundary);
             }
             policy.normalize(_model);
 
