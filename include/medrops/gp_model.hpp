@@ -15,9 +15,9 @@ namespace medrops {
 
         void init()
         {
-            _gp_models = std::vector<std::shared_ptr<GP>>(4);
+            _gp_models = std::vector<std::shared_ptr<GP>>(Params::model_pred_dim());
             for (size_t i = 0; i < _gp_models.size(); i++) {
-                _gp_models[i] = std::make_shared<GP>(5, 1);
+                _gp_models[i] = std::make_shared<GP>(Params::model_input_dim(), 1);
 #ifdef INTACT
                 _gp_models[i]->mean_function().set_id(i);
 #endif
@@ -86,8 +86,8 @@ namespace medrops {
 
             Eigen::MatrixXd data(samples.size(), samples[0].size() + obs.cols());
             for (size_t i = 0; i < samples.size(); i++) {
-                data.block(i, 0, 1, 6) = samples[i].transpose();
-                data.block(i, 6, 1, 4) = obs.row(i);
+                data.block(i, 0, 1, Params::state_full_dim()) = samples[i].transpose();
+                data.block(i, Params::state_full_dim(), 1, Params::model_pred_dim()) = obs.row(i);
             }
             Eigen::write_binary("medrops_data.bin", data);
 
@@ -118,10 +118,10 @@ namespace medrops {
             std::cout << "Loading " << limit << "/" << data_comp.rows() << " rows from file." << std::endl;
 
             std::vector<Eigen::VectorXd> samples_comp(limit);
-            Eigen::MatrixXd observations_comp(limit, 4);
+            Eigen::MatrixXd observations_comp(limit, Params::model_pred_dim());
             for (size_t i = 0; i < limit; i++) {
-                samples_comp[i] = data_comp.row(i).segment(0, 6);
-                observations_comp.row(i) = data_comp.row(i).segment(6, 4);
+                samples_comp[i] = data_comp.row(i).segment(0, Params::state_full_dim());
+                observations_comp.row(i) = data_comp.row(i).segment(Params::state_full_dim(), Params::model_pred_dim());
             }
 
             init(); // TODO: Fix this properly
