@@ -69,12 +69,6 @@ namespace medrops {
                     std::bind(&Medrops::_optimize_policy, this, std::placeholders::_1, std::placeholders::_2),
                     params_starting,
                     true);
-
-                // params_star = policy_optimizer(
-                //     std::bind(&Medrops::_optimize_policy, this, std::placeholders::_1, std::placeholders::_2),
-                //     (params_starting.array() + _boundary) / (_boundary * 2.0),
-                //     true);
-                // params_star = params_star.array() * 2.0 * _boundary - _boundary;
             }
             std::cout << _opt_iters << "(" << _max_reward << ", " << _max_simu_reward << ", " << _max_real_reward << ") " << std::endl;
             std::cout << "Optimization iterations: " << _opt_iters << std::endl;
@@ -87,7 +81,7 @@ namespace medrops {
             _policy.set_params(params_star);
 
             // std::cout << "Best parameters: " << params_star.transpose() << std::endl;
-            Eigen::write_binary("policy_params_" + std::to_string(i) + ".bin", params_star);
+            Eigen::write_binary("policy_params_" + std::to_string(i) + ".bin", _policy.params(true));
 
 #ifndef INTACT
             std::vector<double> R;
@@ -170,13 +164,7 @@ namespace medrops {
             RewardFunction world;
             Policy policy;
 
-            if (_boundary == 0) {
-                policy.set_params(params.array());
-            }
-            else {
-                policy.set_params(params.array());
-                //policy.set_params(params.array() * 2.0 * _boundary - _boundary);
-            }
+            policy.set_params(params.array());
             policy.normalize(_model);
 
             double r = _robot.predict_policy(policy, _model, world, Params::medrops::rollout_steps());

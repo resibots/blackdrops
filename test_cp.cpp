@@ -117,7 +117,6 @@ struct Params {
     BO_PARAM(double, goal_pos_x, 0.0);
     BO_PARAM(double, goal_vel_x, 0.0);
 
-
     struct options {
         BO_PARAM(bool, bounded, true);
     };
@@ -143,7 +142,7 @@ struct Params {
         BO_DYN_PARAM(int, hidden_neurons);
     };
 
-    struct gp_policy {//: public medrops::defaults::gp_policy_defaults{
+    struct gp_policy { //: public medrops::defaults::gp_policy_defaults{
         BO_PARAM(double, max_u, 10.0); //max action
         BO_PARAM(double, pseudo_samples, 10);
         BO_PARAM(double, noise, 1e-5);
@@ -172,9 +171,8 @@ struct Params {
         BO_PARAM(int, verbose, false);
         BO_PARAM(bool, fun_compute_initial, true);
         // BO_PARAM(double, fun_target, 30);
-        BO_PARAM(double, u_bound, 6.0);
-        BO_PARAM(double, l_bound, -6.0);
-
+        BO_DYN_PARAM(double, ub);
+        BO_DYN_PARAM(double, lb);
     };
     struct opt_nloptnograd : public limbo::defaults::opt_nloptnograd {
         BO_PARAM(int, iterations, 20000);
@@ -562,6 +560,8 @@ BO_DECLARE_DYN_PARAM(double, Params::medrops, boundary);
 
 BO_DECLARE_DYN_PARAM(double, Params::opt_cmaes, max_fun_evals);
 BO_DECLARE_DYN_PARAM(double, Params::opt_cmaes, fun_tolerance);
+BO_DECLARE_DYN_PARAM(double, Params::opt_cmaes, lb);
+BO_DECLARE_DYN_PARAM(double, Params::opt_cmaes, ub);
 BO_DECLARE_DYN_PARAM(int, Params::opt_cmaes, restarts);
 BO_DECLARE_DYN_PARAM(int, Params::opt_cmaes, elitism);
 BO_DECLARE_DYN_PARAM(bool, Params::opt_cmaes, handle_uncertainty);
@@ -606,9 +606,13 @@ int main(int argc, char** argv)
             if (c < 0)
                 c = 0;
             Params::medrops::set_boundary(c);
+            Params::opt_cmaes::set_lb(-c);
+            Params::opt_cmaes::set_ub(c);
         }
         else {
             Params::medrops::set_boundary(0);
+            Params::opt_cmaes::set_lb(-6);
+            Params::opt_cmaes::set_ub(6);
         }
         std::string policy_load = "";
         if (vm.count("policy")) {
@@ -678,7 +682,7 @@ int main(int argc, char** argv)
     using policy_opt_t = limbo::opt::Cmaes<Params>;
     //using policy_opt_t = limbo::opt::NLOptGrad<Params>;
     using MGP_t = medrops::GPModel<Params, GP_t>;
-    medrops::Medrops<Params, MGP_t, CartPole, medrops::GPPolicy<Params, MGP_t>, policy_opt_t, RewardFunction> cp_system;
+    medrops::Medrops<Params, MGP_t, CartPole, medrops::SFNNPolicy<Params, MGP_t>, policy_opt_t, RewardFunction> cp_system;
 
 #ifndef DATA
 #ifdef INTACT

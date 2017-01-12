@@ -14,6 +14,7 @@ namespace medrops {
 
         SFNNPolicy()
         {
+            _boundary = Params::medrops::boundary();
             _random = false;
             _nn = std::make_shared<nn_t>(
                 Params::nn_policy::state_dim(),
@@ -76,7 +77,10 @@ namespace medrops {
 
         void set_params(const Eigen::VectorXd& params)
         {
-            _params = params;
+            if (_boundary == 0)
+                _params = params;
+            else
+                _params = params.array() * 2.0 * _boundary - _boundary;
             _random = false;
             std::vector<double> weights(params.size());
             Eigen::VectorXd::Map(weights.data(), weights.size()) = params;
@@ -84,11 +88,13 @@ namespace medrops {
             _nn->init();
         }
 
-        Eigen::VectorXd params() const
+        Eigen::VectorXd params(bool as_is = false) const
         {
             if (_random || _params.size() == 0)
                 return limbo::tools::random_vector(_nn->get_nb_connections());
-            return _params;
+            if (_boundary == 0 || as_is)
+                return _params;
+            return (_params.array() + _boundary) / (_boundary * 2.0);
         }
 
         std::shared_ptr<nn_t> _nn;
@@ -99,6 +105,8 @@ namespace medrops {
         Eigen::VectorXd _means;
         Eigen::MatrixXd _sigmas;
         Eigen::VectorXd _limits;
+
+        double _boundary;
     };
 }
 
