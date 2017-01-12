@@ -682,7 +682,11 @@ int main(int argc, char** argv)
     using policy_opt_t = limbo::opt::Cmaes<Params>;
     //using policy_opt_t = limbo::opt::NLOptGrad<Params>;
     using MGP_t = medrops::GPModel<Params, GP_t>;
+#ifndef GPPOLICY
     medrops::Medrops<Params, MGP_t, CartPole, medrops::SFNNPolicy<Params, MGP_t>, policy_opt_t, RewardFunction> cp_system;
+#else
+    medrops::Medrops<Params, MGP_t, CartPole, medrops::GPPolicy<Params, MGP_t>, policy_opt_t, RewardFunction> cp_system;
+#endif
 
 #ifndef DATA
 #ifdef INTACT
