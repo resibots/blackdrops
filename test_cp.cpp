@@ -171,7 +171,7 @@ struct Params {
 
         BO_PARAM(int, variant, aBIPOP_CMAES);
         BO_PARAM(int, verbose, false);
-        //BO_PARAM(bool, fun_compute_initial, true);
+        BO_PARAM(bool, fun_compute_initial, true);
         // BO_PARAM(double, fun_target, 30);
         BO_PARAM(double, u_bound, 6.0);
         BO_PARAM(double, l_bound, -6.0);
