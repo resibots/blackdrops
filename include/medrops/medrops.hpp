@@ -119,18 +119,18 @@ namespace medrops {
                 _policy.normalize(_model);
                 std::cout << "Learned model..." << std::endl;
 
-                Eigen::VectorXd errors;
-                Eigen::VectorXd errors_sigma;
-                std::tie(errors, errors_sigma) = get_accuracy();
-                std::cout << "Average on errors: " << errors.transpose() << std::endl;
-                std::cout << "Average on sigmas: " << errors_sigma.transpose() << std::endl;
-
-                for (int j = 0; j < errors.size(); j++) {
-                    if (errors(j) > 1000) {
-                        std::cout << "Detected big difference between the approximation and the model, terminating..." << std::endl;
-                        exit(-1);
-                    }
-                }
+                // Eigen::VectorXd errors;
+                // Eigen::VectorXd errors_sigma;
+                // std::tie(errors, errors_sigma) = get_accuracy();
+                // std::cout << "Average on errors: " << errors.transpose() << std::endl;
+                // std::cout << "Average on sigmas: " << errors_sigma.transpose() << std::endl;
+                //
+                // for (int j = 0; j < errors.size(); j++) {
+                //     if (errors(j) > 1000) {
+                //         std::cout << "Detected big difference between the approximation and the model, terminating..." << std::endl;
+                //         exit(-1);
+                //     }
+                // }
 
                 if (Params::policy_load() != "") {
                     execute_loaded_policy();
@@ -231,62 +231,62 @@ namespace medrops {
             return result;
         }
 
-        std::tuple<Eigen::VectorXd, Eigen::VectorXd> get_accuracy(int evaluations = 100000) const
-        {
-            Eigen::VectorXd bounds(5);
-            bounds << 3, 5, 6, M_PI, 10;
-            std::vector<Eigen::VectorXd> rvs = random_vectors(5, evaluations, bounds);
-
-            Eigen::VectorXd errors(4);
-            Eigen::VectorXd sigmas(4);
-            for (size_t i = 0; i < rvs.size(); i++) {
-                Eigen::VectorXd s;
-                Eigen::VectorXd m;
-                Eigen::VectorXd cm = comp_predict(rvs[i]);
-                Eigen::VectorXd gp_query(6);
-                gp_query.segment(0, 3) = rvs[i].segment(0, 3);
-                gp_query(3) = std::cos(rvs[i](3));
-                gp_query(4) = std::sin(rvs[i](3));
-                gp_query(5) = rvs[i](4);
-                std::tie(m, s) = _model.predictm(gp_query);
-
-                errors.array() += (m - cm).array().abs();
-                sigmas.array() += s.array();
-            }
-
-            return std::make_tuple(
-                errors.array() / evaluations * 1.0,
-                sigmas.array() / evaluations * 1.0);
-        }
-
-        Eigen::VectorXd comp_predict(const Eigen::VectorXd& v) const
-        {
-            double dt = 0.1, t = 0.0;
-
-            boost::numeric::odeint::runge_kutta4<std::vector<double>> ode_stepper;
-            std::vector<double> state(4);
-            state[0] = v(0);
-            state[1] = v(1);
-            state[2] = v(2);
-            state[3] = v(3);
-
-            boost::numeric::odeint::integrate_const(ode_stepper,
-                std::bind(&Medrops::dynamics, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, v(4)),
-                state, t, dt, dt / 2.0);
-
-            Eigen::VectorXd new_state = Eigen::VectorXd::Map(state.data(), state.size());
-            return (new_state.array() - v.segment(0, 4).array());
-        }
-
-        void dynamics(const std::vector<double>& x, std::vector<double>& dx, double t, double u) const
-        {
-            double l = 0.5, m = 0.5, M = 0.5, g = 9.82, b = 0.1;
-
-            dx[0] = x[1];
-            dx[1] = (2 * m * l * std::pow(x[2], 2.0) * std::sin(x[3]) + 3 * m * g * std::sin(x[3]) * std::cos(x[3]) + 4 * u - 4 * b * x[1]) / (4 * (M + m) - 3 * m * std::pow(std::cos(x[3]), 2.0));
-            dx[2] = (-3 * m * l * std::pow(x[2], 2.0) * std::sin(x[3]) * std::cos(x[3]) - 6 * (M + m) * g * std::sin(x[3]) - 6 * (u - b * x[1]) * std::cos(x[3])) / (4 * l * (m + M) - 3 * m * l * std::pow(std::cos(x[3]), 2.0));
-            dx[3] = x[2];
-        }
+        // std::tuple<Eigen::VectorXd, Eigen::VectorXd> get_accuracy(int evaluations = 100000) const
+        // {
+        //     Eigen::VectorXd bounds(5);
+        //     bounds << 3, 5, 6, M_PI, 10;
+        //     std::vector<Eigen::VectorXd> rvs = random_vectors(5, evaluations, bounds);
+        //
+        //     Eigen::VectorXd errors(4);
+        //     Eigen::VectorXd sigmas(4);
+        //     for (size_t i = 0; i < rvs.size(); i++) {
+        //         Eigen::VectorXd s;
+        //         Eigen::VectorXd m;
+        //         Eigen::VectorXd cm = comp_predict(rvs[i]);
+        //         Eigen::VectorXd gp_query(6);
+        //         gp_query.segment(0, 3) = rvs[i].segment(0, 3);
+        //         gp_query(3) = std::cos(rvs[i](3));
+        //         gp_query(4) = std::sin(rvs[i](3));
+        //         gp_query(5) = rvs[i](4);
+        //         std::tie(m, s) = _model.predictm(gp_query);
+        //
+        //         errors.array() += (m - cm).array().abs();
+        //         sigmas.array() += s.array();
+        //     }
+        //
+        //     return std::make_tuple(
+        //         errors.array() / evaluations * 1.0,
+        //         sigmas.array() / evaluations * 1.0);
+        // }
+        //
+        // Eigen::VectorXd comp_predict(const Eigen::VectorXd& v) const
+        // {
+        //     double dt = 0.1, t = 0.0;
+        //
+        //     boost::numeric::odeint::runge_kutta4<std::vector<double>> ode_stepper;
+        //     std::vector<double> state(4);
+        //     state[0] = v(0);
+        //     state[1] = v(1);
+        //     state[2] = v(2);
+        //     state[3] = v(3);
+        //
+        //     boost::numeric::odeint::integrate_const(ode_stepper,
+        //         std::bind(&Medrops::dynamics, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, v(4)),
+        //         state, t, dt, dt / 2.0);
+        //
+        //     Eigen::VectorXd new_state = Eigen::VectorXd::Map(state.data(), state.size());
+        //     return (new_state.array() - v.segment(0, 4).array());
+        // }
+        //
+        // void dynamics(const std::vector<double>& x, std::vector<double>& dx, double t, double u) const
+        // {
+        //     double l = 0.5, m = 0.5, M = 0.5, g = 9.82, b = 0.1;
+        //
+        //     dx[0] = x[1];
+        //     dx[1] = (2 * m * l * std::pow(x[2], 2.0) * std::sin(x[3]) + 3 * m * g * std::sin(x[3]) * std::cos(x[3]) + 4 * u - 4 * b * x[1]) / (4 * (M + m) - 3 * m * std::pow(std::cos(x[3]), 2.0));
+        //     dx[2] = (-3 * m * l * std::pow(x[2], 2.0) * std::sin(x[3]) * std::cos(x[3]) - 6 * (M + m) * g * std::sin(x[3]) - 6 * (u - b * x[1]) * std::cos(x[3])) / (4 * l * (m + M) - 3 * m * l * std::pow(std::cos(x[3]), 2.0));
+        //     dx[3] = x[2];
+        // }
     };
 }
 
