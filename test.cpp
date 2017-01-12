@@ -58,7 +58,7 @@ bool draw_pendulum(double theta, bool red = false)
 {
     double x = std::cos(theta), y = std::sin(theta);
 
-    SDL_Rect outlineRect = {SCREEN_WIDTH / 2 - 0.05 * SCREEN_HEIGHT / 4, SCREEN_HEIGHT / 2 - 0.05 * SCREEN_HEIGHT / 4, 0.1 * SCREEN_HEIGHT / 4, 0.1 * SCREEN_HEIGHT / 4};
+    SDL_Rect outlineRect = {static_cast<int>(SCREEN_WIDTH / 2 - 0.05 * SCREEN_HEIGHT / 4), static_cast<int>(SCREEN_HEIGHT / 2 - 0.05 * SCREEN_HEIGHT / 4), static_cast<int>(0.1 * SCREEN_HEIGHT / 4, 0.1 * SCREEN_HEIGHT / 4)};
     SDL_SetRenderDrawColor(renderer, 0x00, 0x00, 0xFF, 0xFF);
     SDL_RenderFillRect(renderer, &outlineRect);
     //Draw blue horizontal line
@@ -72,7 +72,7 @@ bool draw_pendulum(double theta, bool red = false)
 
 bool draw_goal(double x, double y)
 {
-    SDL_Rect outlineRect = {SCREEN_WIDTH / 2 - 0.05 * SCREEN_HEIGHT / 4, SCREEN_HEIGHT / 4 - 0.05 * SCREEN_HEIGHT / 4, 0.1 * SCREEN_HEIGHT / 4, 0.1 * SCREEN_HEIGHT / 4};
+    SDL_Rect outlineRect = {static_cast<int>(SCREEN_WIDTH / 2 - 0.05 * SCREEN_HEIGHT / 4), static_cast<int>(SCREEN_HEIGHT / 4 - 0.05 * SCREEN_HEIGHT / 4), static_cast<int>(0.1 * SCREEN_HEIGHT / 4, 0.1 * SCREEN_HEIGHT / 4)};
     SDL_SetRenderDrawColor(renderer, 0xFF, 0x00, 0x00, 0xFF);
     SDL_RenderFillRect(renderer, &outlineRect);
 
@@ -114,6 +114,11 @@ struct Params {
 
     struct medrops {
         BO_PARAM(size_t, rollout_steps, 40);
+        BO_PARAM(double, boundary, 5);
+    };
+
+    struct options {
+        BO_PARAM(bool, bounded, false);
     };
 
     struct gp_model {
@@ -298,11 +303,11 @@ struct Pendulum {
             draw_goal(0, -1);
 
             SDL_SetRenderDrawColor(renderer, 0x00, 0xFF, 0x00, 0xFF);
-            SDL_Rect outlineRect = {SCREEN_WIDTH / 2 + 0.05 * SCREEN_HEIGHT / 4, SCREEN_HEIGHT / 4 + 2.05 * SCREEN_HEIGHT / 4, _u / 2.5 * SCREEN_HEIGHT / 4, 0.1 * SCREEN_HEIGHT / 4};
+            SDL_Rect outlineRect = {static_cast<int>(SCREEN_WIDTH / 2 + 0.05 * SCREEN_HEIGHT / 4), static_cast<int>(SCREEN_HEIGHT / 4 + 2.05 * SCREEN_HEIGHT / 4), static_cast<int>(_u / 2.5 * SCREEN_HEIGHT / 4, 0.1 * SCREEN_HEIGHT / 4)};
             SDL_RenderFillRect(renderer, &outlineRect);
 
             SDL_SetRenderDrawColor(renderer, 0x00, 0xFF, 0xFF, 0xFF);
-            outlineRect = {SCREEN_WIDTH / 2 + 0.05 * SCREEN_HEIGHT / 4, SCREEN_HEIGHT / 4 + 2.55 * SCREEN_HEIGHT / 4, r * SCREEN_HEIGHT / 4, 0.1 * SCREEN_HEIGHT / 4};
+            outlineRect = {static_cast<int>(SCREEN_WIDTH / 2 + 0.05 * SCREEN_HEIGHT / 4), static_cast<int>(SCREEN_HEIGHT / 4 + 2.55 * SCREEN_HEIGHT / 4), static_cast<int>(r * SCREEN_HEIGHT / 4, 0.1 * SCREEN_HEIGHT / 4)};
             SDL_RenderFillRect(renderer, &outlineRect);
 
             //Update screen
@@ -370,11 +375,11 @@ struct Pendulum {
             draw_goal(0, -1);
 
             SDL_SetRenderDrawColor(renderer, 0x00, 0xFF, 0x00, 0xFF);
-            SDL_Rect outlineRect = {SCREEN_WIDTH / 2 + 0.05 * SCREEN_HEIGHT / 4, SCREEN_HEIGHT / 4 + 2.05 * SCREEN_HEIGHT / 4, u[0] / 2.5 * SCREEN_HEIGHT / 4, 0.1 * SCREEN_HEIGHT / 4};
+            SDL_Rect outlineRect = {static_cast<int>(SCREEN_WIDTH / 2 + 0.05 * SCREEN_HEIGHT / 4), static_cast<int>(SCREEN_HEIGHT / 4 + 2.05 * SCREEN_HEIGHT / 4), static_cast<int>(u[0] / 2.5 * SCREEN_HEIGHT / 4, 0.1 * SCREEN_HEIGHT / 4)};
             SDL_RenderFillRect(renderer, &outlineRect);
 
             SDL_SetRenderDrawColor(renderer, 0x00, 0xFF, 0xFF, 0xFF);
-            outlineRect = {SCREEN_WIDTH / 2 + 0.05 * SCREEN_HEIGHT / 4, SCREEN_HEIGHT / 4 + 2.55 * SCREEN_HEIGHT / 4, r * SCREEN_HEIGHT / 4, 0.1 * SCREEN_HEIGHT / 4};
+            outlineRect = {static_cast<int>(SCREEN_WIDTH / 2 + 0.05 * SCREEN_HEIGHT / 4), static_cast<int>(SCREEN_HEIGHT / 4 + 2.55 * SCREEN_HEIGHT / 4), static_cast<int>(r * SCREEN_HEIGHT / 4, 0.1 * SCREEN_HEIGHT / 4)};
             SDL_RenderFillRect(renderer, &outlineRect);
 
             //Update screen
