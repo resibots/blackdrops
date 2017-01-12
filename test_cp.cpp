@@ -127,7 +127,6 @@ struct Params {
     };
 
     struct gp_model {
-        // BO_PARAM(double, noise, 1e-20);
         BO_PARAM(double, noise, 1e-5);
     };
 
@@ -171,16 +170,12 @@ struct Params {
         BO_PARAM(int, verbose, false);
         BO_PARAM(bool, fun_compute_initial, true);
         // BO_PARAM(double, fun_target, 30);
-        BO_DYN_PARAM(double, ub);
-        BO_DYN_PARAM(double, lb);
+        BO_DYN_PARAM(double, ubound);
+        BO_DYN_PARAM(double, lbound);
     };
+
     struct opt_nloptnograd : public limbo::defaults::opt_nloptnograd {
         BO_PARAM(int, iterations, 20000);
-    };
-};
-
-struct GPParams {
-    struct opt_cmaes : public limbo::defaults::opt_cmaes {
     };
 };
 
@@ -560,8 +555,8 @@ BO_DECLARE_DYN_PARAM(double, Params::medrops, boundary);
 
 BO_DECLARE_DYN_PARAM(double, Params::opt_cmaes, max_fun_evals);
 BO_DECLARE_DYN_PARAM(double, Params::opt_cmaes, fun_tolerance);
-BO_DECLARE_DYN_PARAM(double, Params::opt_cmaes, lb);
-BO_DECLARE_DYN_PARAM(double, Params::opt_cmaes, ub);
+BO_DECLARE_DYN_PARAM(double, Params::opt_cmaes, lbound);
+BO_DECLARE_DYN_PARAM(double, Params::opt_cmaes, ubound);
 BO_DECLARE_DYN_PARAM(int, Params::opt_cmaes, restarts);
 BO_DECLARE_DYN_PARAM(int, Params::opt_cmaes, elitism);
 BO_DECLARE_DYN_PARAM(bool, Params::opt_cmaes, handle_uncertainty);
@@ -606,13 +601,13 @@ int main(int argc, char** argv)
             if (c < 0)
                 c = 0;
             Params::medrops::set_boundary(c);
-            Params::opt_cmaes::set_lb(-c);
-            Params::opt_cmaes::set_ub(c);
+            Params::opt_cmaes::set_lbound(-c);
+            Params::opt_cmaes::set_ubound(c);
         }
         else {
             Params::medrops::set_boundary(0);
-            Params::opt_cmaes::set_lb(-6);
-            Params::opt_cmaes::set_ub(6);
+            Params::opt_cmaes::set_lbound(-6);
+            Params::opt_cmaes::set_ubound(6);
         }
         std::string policy_load = "";
         if (vm.count("policy")) {
