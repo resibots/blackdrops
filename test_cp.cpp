@@ -148,7 +148,6 @@ struct Params {
         BO_PARAM(double, pseudo_samples, 10);
         BO_PARAM(double, noise, 1e-5);
         BO_PARAM(int, state_dim, 5);
-        BO_PARAM(bool, paramFromFile, false); //
     };
 
     struct mean_constant {
