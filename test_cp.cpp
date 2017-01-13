@@ -9,6 +9,7 @@
 #include <medrops/linear_policy.hpp>
 #include <medrops/medrops.hpp>
 #include <medrops/gp_policy.hpp>
+#include <medrops/cmaes.hpp>
 
 #include <medrops/sf_nn_policy.hpp>
 
@@ -172,6 +173,9 @@ struct Params {
         // BO_PARAM(double, fun_target, 30);
         BO_DYN_PARAM(double, ubound);
         BO_DYN_PARAM(double, lbound);
+
+        BO_PARAM(double, a, -32.0);
+        BO_PARAM(double, b, 0.0);
     };
 
     struct opt_nloptnograd : public limbo::defaults::opt_nloptnograd {
@@ -436,12 +440,12 @@ struct CartPole {
 
 #ifndef INTACT
                 if (Params::parallel_evaluations() > 1 || Params::opt_cmaes::handle_uncertainty()) {
-                    if (Params::opt_cmaes::handle_uncertainty()) {
-                        sigma = sigma.array();
-                    }
-                    else {
-                        sigma = sigma.array().sqrt();
-                    }
+                    // if (Params::opt_cmaes::handle_uncertainty()) {
+                    //     sigma = sigma.array();
+                    // }
+                    // else {
+                    sigma = sigma.array().sqrt();
+                    // }
                     for (int i = 0; i < mu.size(); i++) {
                         double s = gaussian_rand(mu(i), sigma(i));
                         mu(i) = std::max(mu(i) - sigma(i),
@@ -674,7 +678,7 @@ int main(int argc, char** argv)
     std::cout << "  boundary = " << Params::medrops::boundary() << std::endl;
     std::cout << std::endl;
 
-    using policy_opt_t = limbo::opt::Cmaes<Params>;
+    using policy_opt_t = limbo::opt::CustomCmaes<Params>;
     //using policy_opt_t = limbo::opt::NLOptGrad<Params>;
     using MGP_t = medrops::GPModel<Params, GP_t>;
 #ifndef GPPOLICY
