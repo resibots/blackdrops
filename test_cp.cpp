@@ -568,9 +568,10 @@ BO_DECLARE_DYN_PARAM(bool, Params::opt_cmaes, handle_uncertainty);
 int main(int argc, char** argv)
 {
     bool uncertainty = false;
+    int threads = tbb::task_scheduler_init::automatic;
     namespace po = boost::program_options;
     po::options_description desc("Command line arguments");
-    desc.add_options()("help,h", "Prints this help message")("parallel_evaluations,p", po::value<int>(), "Number of parallel monte carlo evaluations for policy reward estimation.")("hidden_neurons,n", po::value<int>(), "Number of hidden neurons in NN policy.")("boundary,b", po::value<double>(), "Boundary of the values during the optimization.")("policy,l", po::value<std::string>(), "Specifies a policy to load.")("max_evals,m", po::value<int>(), "Max function evaluations to optimize the policy.")("tolerance,t", po::value<double>(), "Maximum tolerance to continue optimizing the function.")("restarts,r", po::value<int>(), "Max number of restarts to use during optimization.")("elitism,e", po::value<int>(), "Elitism mode to use [0 to 3].")("uncertainty,u", po::bool_switch(&uncertainty)->default_value(false), "Enable uncertainty handling.");
+    desc.add_options()("help,h", "Prints this help message")("parallel_evaluations,p", po::value<int>(), "Number of parallel monte carlo evaluations for policy reward estimation.")("hidden_neurons,n", po::value<int>(), "Number of hidden neurons in NN policy.")("boundary,b", po::value<double>(), "Boundary of the values during the optimization.")("policy,l", po::value<std::string>(), "Specifies a policy to load.")("max_evals,m", po::value<int>(), "Max function evaluations to optimize the policy.")("tolerance,t", po::value<double>(), "Maximum tolerance to continue optimizing the function.")("restarts,r", po::value<int>(), "Max number of restarts to use during optimization.")("elitism,e", po::value<int>(), "Elitism mode to use [0 to 3].")("uncertainty,u", po::bool_switch(&uncertainty)->default_value(false), "Enable uncertainty handling.")("threads,d", po::value<int>(), "Max number of threads used by TBB");
 
     try {
         po::variables_map vm;
@@ -590,6 +591,9 @@ int main(int argc, char** argv)
         }
         else {
             Params::set_parallel_evaluations(100);
+        }
+        if (vm.count("threads")) {
+            threads = vm["threads"].as<int>();
         }
         if (vm.count("hidden_neurons")) {
             int c = vm["hidden_neurons"].as<int>();
@@ -664,6 +668,10 @@ int main(int argc, char** argv)
     if (!sdl_init()) {
         return 1;
     }
+#endif
+
+#ifdef USE_TBB
+    static tbb::task_scheduler_init init(threads);
 #endif
 
     Params::opt_cmaes::set_handle_uncertainty(uncertainty);
