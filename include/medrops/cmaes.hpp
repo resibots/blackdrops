@@ -1,50 +1,5 @@
-//| Copyright Inria May 2015
-//| This project has received funding from the European Research Council (ERC) under
-//| the European Union's Horizon 2020 research and innovation programme (grant
-//| agreement No 637972) - see http://www.resibots.eu
-//|
-//| Contributor(s):
-//|   - Jean-Baptiste Mouret (jean-baptiste.mouret@inria.fr)
-//|   - Antoine Cully (antoinecully@gmail.com)
-//|   - Kontantinos Chatzilygeroudis (konstantinos.chatzilygeroudis@inria.fr)
-//|   - Federico Allocati (fede.allocati@gmail.com)
-//|   - Vaios Papaspyros (b.papaspyros@gmail.com)
-//|   - Roberto Rama (bertoski@gmail.com)
-//|
-//| This software is a computer library whose purpose is to optimize continuous,
-//| black-box functions. It mainly implements Gaussian processes and Bayesian
-//| optimization.
-//| Main repository: http://github.com/resibots/limbo
-//| Documentation: http://www.resibots.eu/limbo
-//|
-//| This software is governed by the CeCILL-C license under French law and
-//| abiding by the rules of distribution of free software.  You can  use,
-//| modify and/ or redistribute the software under the terms of the CeCILL-C
-//| license as circulated by CEA, CNRS and INRIA at the following URL
-//| "http://www.cecill.info".
-//|
-//| As a counterpart to the access to the source code and  rights to copy,
-//| modify and redistribute granted by the license, users are provided only
-//| with a limited warranty  and the software's author,  the holder of the
-//| economic rights,  and the successive licensors  have only  limited
-//| liability.
-//|
-//| In this respect, the user's attention is drawn to the risks associated
-//| with loading,  using,  modifying and/or developing or reproducing the
-//| software by the user in light of its specific status of free software,
-//| that may mean  that it is complicated to manipulate,  and  that  also
-//| therefore means  that it is reserved for developers  and  experienced
-//| professionals having in-depth computer knowledge. Users are therefore
-//| encouraged to load and test the software's suitability as regards their
-//| requirements in conditions enabling the security of their systems and/or
-//| data to be ensured and,  more generally, to use and operate it in the
-//| same conditions as regards security.
-//|
-//| The fact that you are presently reading this means that you have had
-//| knowledge of the CeCILL-C license and that you accept its terms.
-//|
-#ifndef LIMBO_OPT_CMAES_HPP
-#define LIMBO_OPT_CMAES_HPP
+#ifndef MEDROPS_CMAES_HPP
+#define MEDROPS_CMAES_HPP
 
 #include <Eigen/Core>
 #include <iostream>
@@ -61,47 +16,258 @@
 #include <libcmaes/cmaes.h>
 
 namespace limbo {
-    namespace defaults {
-        struct opt_cmaes {
-            /// @ingroup opt_defaults
-            /// number of restarts of CMA-ES
-            BO_PARAM(int, restarts, 1);
-            /// @ingroup opt_defaults
-            /// number of calls to the function to be optimized
-            BO_PARAM(double, max_fun_evals, -1);
-            /// @ingroup opt_defaults
-            /// threshold based on the difference in value of a fixed number
-            /// of trials
-            BO_PARAM(double, fun_tolerance, -1);
-            /// @ingroup opt_defaults
-            /// function value target
-            BO_PARAM(double, fun_target, -1);
-            /// @ingroup opt_defaults
-            /// computes initial objective function value
-            BO_PARAM(bool, fun_compute_initial, false);
-            /// @ingroup opt_defaults
-            /// sets the version of cmaes to use
-            BO_PARAM(int, cmaes_variant, aIPOP_CMAES);
-            /// @ingroup opt_defaults
-            /// defines elitism strategy:
-            /// 0 -> no elitism
-            /// 1 -> elitism: reinjects the best-ever seen solution
-            /// 2 -> initial elitism: reinject x0 as long as it is not improved upon
-            /// 3 -> initial elitism on restart: restart if best encountered solution is not the the final
-            /// solution and reinjects the best solution until the population has better fitness, in its majority
-            BO_PARAM(int, elitism, 0);
-            /// @ingroup opt_defaults
-            /// enables or disables uncertainty handling
-            BO_PARAM(bool, handle_uncertainty, false);
-            /// @ingroup opt_defaults
-            /// enables or disables verbose mode for cmaes
-            BO_PARAM(bool, verbose, false);
-            BO_PARAM(double, u_bound, 1.0);
-            BO_PARAM(double, l_bound, 0.0);
-
-        };
-    }
     namespace opt {
+
+        template <typename Params, typename Covariance, typename TGenoPheno>
+        class customCMAStrategy : public libcmaes::BIPOPCMAStrategy<Covariance, TGenoPheno> {
+        public:
+            customCMAStrategy(libcmaes::FitFunc& func,
+                libcmaes::CMAParameters<TGenoPheno>& parameters)
+                : libcmaes::BIPOPCMAStrategy<Covariance, TGenoPheno>(func, parameters)
+            {
+                _t_limit = 3;
+                _delta = 0.1;
+                _alpha = 1.5;
+            }
+
+            ~customCMAStrategy() {}
+
+            void tell()
+            {
+                using eostrat = libcmaes::ESOStrategy<libcmaes::CMAParameters<TGenoPheno>, libcmaes::CMASolutions, libcmaes::CMAStopCriteria<TGenoPheno>>;
+#ifdef HAVE_DEBUG
+                std::chrono::time_point<std::chrono::system_clock> tstart = std::chrono::system_clock::now();
+#endif
+
+                // sort candidates.
+                // if (!eostrat::_parameters.get_uh())
+                eostrat::_solutions.sort_candidates();
+                // else
+                //     eostrat::uncertainty_handling();
+
+                // call on tpa computation of s(t)
+                if (eostrat::_parameters.get_tpa() == 2 && eostrat::_niter > 0)
+                    eostrat::tpa_update();
+
+                // update function value history, as needed.
+                eostrat::_solutions.update_best_candidates();
+
+                // CMA-ES update, depends on the selected 'flavor'.
+                Covariance::update(eostrat::_parameters, this->_esolver, eostrat::_solutions);
+
+                if (eostrat::_parameters.get_uh())
+                    if (eostrat::_solutions.suh() > 0.0)
+                        eostrat::_solutions.set_sigma(eostrat::_solutions.sigma() * eostrat::_parameters.alphathuh());
+
+                // other stuff.
+                if (!eostrat::_parameters.is_sep() && !eostrat::_parameters.is_vd())
+                    eostrat::_solutions.update_eigenv(this->_esolver._eigenSolver.eigenvalues(),
+                        this->_esolver._eigenSolver.eigenvectors());
+                else
+                    eostrat::_solutions.update_eigenv(eostrat::_solutions.sepcov(),
+                        dMat::Constant(eostrat::_parameters.dim(), 1, 1.0));
+#ifdef HAVE_DEBUG
+                std::chrono::time_point<std::chrono::system_clock> tstop = std::chrono::system_clock::now();
+                eostrat::_solutions._elapsed_tell = std::chrono::duration_cast<std::chrono::milliseconds>(tstop - tstart).count();
+#endif
+            }
+
+            void eval(const dMat& candidates,
+                const dMat& phenocandidates = dMat(0, 0))
+            {
+#ifdef HAVE_DEBUG
+                std::chrono::time_point<std::chrono::system_clock> tstart = std::chrono::system_clock::now();
+#endif
+                // one candidate per row.
+                // #pragma omp parallel for if (_parameters._mt_feval)
+                // for (int r = 0; r < candidates.cols(); r++)
+                tools::par::loop(0, candidates.cols(), [&](size_t r) {
+                    this->_solutions.candidates().at(r).set_x(candidates.col(r));
+                    this->_solutions.candidates().at(r).set_id(r);
+                    if (phenocandidates.size())
+                        this->_solutions.candidates().at(r).set_fvalue(this->_func(phenocandidates.col(r).data(), candidates.rows()));
+                    else
+                        this->_solutions.candidates().at(r).set_fvalue(this->_func(candidates.col(r).data(), candidates.rows()));
+
+                    //std::cerr << "candidate x: " << _solutions._candidates.at(r)._x.transpose() << std::endl;
+                });
+                int nfcalls = candidates.cols();
+
+                if (Params::opt_cmaes::handle_uncertainty()) {
+                    // new uncertainty
+                    int t_max = 100;
+                    // _t_limit = 3;
+                    dMat selected, discarded, undecided;
+                    std::map<int, int> ids;
+                    std::vector<double> mean, lower, upper;
+                    for (int r = 0; r < candidates.cols(); r++) {
+                        mean.push_back(this->_solutions.candidates().at(r).get_fvalue());
+                        ids[r] = r;
+                        lower.push_back(Params::opt_cmaes::a());
+                        upper.push_back(Params::opt_cmaes::b());
+                    }
+
+                    undecided = candidates;
+
+                    std::vector<int> u;
+                    u.push_back(undecided.cols());
+                    double R = std::abs(Params::opt_cmaes::a() - Params::opt_cmaes::b());
+                    int t = 1;
+                    std::vector<int> calls(undecided.cols(), 1);
+                    while (t < _t_limit && selected.cols() < this->_parameters.mu()) {
+                        t = t + 1;
+                        // std::cout << t << ": " << selected.cols() << " " << undecided.cols() << " " << discarded.cols() << " " << this->_parameters.lambda() << " " << this->_parameters.mu() << std::endl;
+                        // std::cin.get();
+                        u.push_back(undecided.cols());
+
+                        int n_b = 0;
+                        for (int k = 0; k < t; k++) {
+                            n_b += u[k] + (_t_limit - t + 1) * u[t - 1];
+                        }
+
+                        // for (int r = 0; r < undecided.cols(); r++) {
+                        tools::par::loop(0, undecided.cols(), [&](size_t r) {
+                        double val;
+                        if (phenocandidates.size())
+                            val = this->_func(phenocandidates.col(ids[r]).data(), candidates.rows());
+                        else
+                            val = this->_func(candidates.col(ids[r]).data(), candidates.rows());
+                        calls[ids[r]]++;
+                        mean[ids[r]] = (mean[ids[r]] + val) / 2.0;
+                        this->_solutions.candidates().at(ids[r]).set_fvalue(mean[ids[r]]);
+                        double c = R * std::sqrt((std::log(2 * n_b) - std::log(_delta)) / (2.0 * t));
+                        lower[ids[r]] = std::max(lower[ids[r]], mean[ids[r]] - c);
+                        upper[ids[r]] = std::min(upper[ids[r]], mean[ids[r]] + c);
+                        });
+
+                        nfcalls += undecided.cols();
+
+                        for (int r = 0; r < undecided.cols(); r++) {
+                            int c1 = 0, c2 = 0;
+                            for (int j = 0; j < undecided.cols(); j++) {
+                                // TO-DO: Check minimize/maximize
+                                if (lower[ids[r]] < upper[ids[j]])
+                                    c1++;
+                                if (upper[ids[r]] > lower[ids[j]])
+                                    c2++;
+                            }
+
+                            if (c1 >= (this->_parameters.lambda() - this->_parameters.mu() - discarded.cols())) {
+                                Eigen::VectorXd col = undecided.col(r);
+                                removeColumn(undecided, r);
+                                // update ids
+                                for (int k = r; k < undecided.cols() + 1; k++) {
+                                    ids[k] = ids[k + 1];
+                                }
+
+                                // add to selected
+                                selected.conservativeResize(undecided.rows(), selected.cols() + 1);
+                                selected.col(selected.cols() - 1) = col;
+                                r--;
+                            }
+
+                            else if (c2 >= (this->_parameters.mu() - selected.cols())) {
+                                Eigen::VectorXd col = undecided.col(r);
+                                removeColumn(undecided, r);
+                                // update ids
+                                for (int k = r; k < undecided.cols() + 1; k++) {
+                                    ids[k] = ids[k + 1];
+                                }
+
+                                // add to discarded
+                                discarded.conservativeResize(undecided.rows(), discarded.cols() + 1);
+                                discarded.col(discarded.cols() - 1) = col;
+                                r--;
+                            }
+                        }
+                    }
+
+                    // std::cout << "t_limit: " << _t_limit << std::endl;
+                    // for (int r = 0; r < calls.size(); r++) {
+                    //     std::cout << calls[r] << std::endl;
+                    // }
+                    // std::cout << "-------------------------" << std::endl;
+                    // for (int r = 0; r < mean.size(); r++) {
+                    //     std::cout << mean[r] << std::endl;
+                    // }
+                    // std::cin.get();
+
+                    if (selected.cols() == this->_parameters.mu())
+                        _t_limit = std::max(3, int(1.0 / (_alpha * _t_limit)));
+                    else
+                        _t_limit = std::min(int(_alpha * _t_limit), t_max);
+                }
+
+                // std::cout << _t_limit << std::endl;
+
+                // // evaluation step of uncertainty handling scheme.
+                // if (this->_parameters.get_uh()) {
+                //     this->perform_uh(candidates, phenocandidates, nfcalls);
+                // }
+
+                // if an elitist is active, reinject initial solution as needed.
+                if (this->_niter > 0 && (this->_parameters.elitist() || this->_parameters.initial_elitist() || (this->_initial_elitist && this->_parameters.initial_elitist_on_restart()))) {
+                    // get reference values.
+                    double ref_fvalue = std::numeric_limits<double>::max();
+                    libcmaes::Candidate ref_candidate;
+
+                    if (this->_parameters.initial_elitist_on_restart() || this->_parameters.initial_elitist()) {
+                        ref_fvalue = this->_solutions.initial_candidate().get_fvalue();
+                        ref_candidate = this->_solutions.initial_candidate();
+                    }
+                    else if (this->_parameters.elitist()) {
+                        ref_fvalue = this->_solutions.get_best_seen_candidate().get_fvalue();
+                        ref_candidate = this->_solutions.get_best_seen_candidate();
+                    }
+
+                    // reinject intial solution if half or more points have value above that of the initial point candidate.
+                    int count = 0;
+                    for (int r = 0; r < candidates.cols(); r++)
+                        if (this->_solutions.candidates().at(r).get_fvalue() < ref_fvalue)
+                            ++count;
+                    if (count / 2.0 < candidates.cols() / 2) {
+#ifdef HAVE_DEBUG
+                        std::cout << "reinjecting solution=" << ref_fvalue << std::endl;
+#endif
+                        this->_solutions.candidates().at(1) = ref_candidate;
+                    }
+                }
+
+                this->update_fevals(nfcalls);
+
+#ifdef HAVE_DEBUG
+                std::chrono::time_point<std::chrono::system_clock> tstop = std::chrono::system_clock::now();
+                this->_solutions._elapsed_eval = std::chrono::duration_cast<std::chrono::milliseconds>(tstop - tstart).count();
+#endif
+            }
+
+            void removeRow(Eigen::MatrixXd& matrix, unsigned int rowToRemove)
+            {
+                unsigned int numRows = matrix.rows() - 1;
+                unsigned int numCols = matrix.cols();
+
+                if (rowToRemove < numRows)
+                    matrix.block(rowToRemove, 0, numRows - rowToRemove, numCols) = matrix.block(rowToRemove + 1, 0, numRows - rowToRemove, numCols);
+
+                matrix.conservativeResize(numRows, numCols);
+            }
+
+            void removeColumn(Eigen::MatrixXd& matrix, unsigned int colToRemove)
+            {
+                unsigned int numRows = matrix.rows();
+                unsigned int numCols = matrix.cols() - 1;
+
+                if (colToRemove < numCols)
+                    matrix.block(0, colToRemove, numRows, numCols - colToRemove) = matrix.block(0, colToRemove + 1, numRows, numCols - colToRemove);
+
+                matrix.conservativeResize(numRows, numCols);
+            }
+
+        protected:
+            int _t_limit;
+            double _delta, _alpha;
+        };
+
         /// @ingroup opt
         /// Covariance Matrix Adaptation Evolution Strategy by Hansen et al.
         /// (See: https://www.lri.fr/~hansen/cmaesintro.html)
@@ -110,10 +276,19 @@ namespace limbo {
         /// - Only available if libcmaes is installed (see the compilation instructions)
         ///
         /// - Parameters :
-        ///   - double max_fun_evals
+        ///   - int variant
+        ///   - int elitism
         ///   - int restarts
+        ///   - double max_fun_evals
+        ///   - double fun_tolerance
+        ///   - double fun_target
+        ///   - bool fun_compute_initial
+        ///   - bool handle_uncertainty
+        ///   - bool verbose
+        ///   - double lb (lower bounds)
+        ///   - double ub (upper bounds)
         template <typename Params>
-        struct Cmaes {
+        struct CustomCmaes {
         public:
             template <typename F>
             Eigen::VectorXd operator()(const F& f, const Eigen::VectorXd& init, double bounded) const
@@ -122,34 +297,54 @@ namespace limbo {
 
                 // wrap the function
                 libcmaes::FitFunc f_cmaes = [&](const double* x, const int n) {
-                    Eigen::Map<const Eigen::VectorXd> m(x, n);
-                    // remember that our optimizers maximize
-                    return -eval(f, m);
+                Eigen::Map<const Eigen::VectorXd> m(x, n);
+                // remember that our optimizers maximize
+                return -eval(f, m);
                 };
 
-                if (bounded)
-                    return _opt_bounded(f_cmaes, dim, init);
-                else
-                    return _opt_unbounded(f_cmaes, dim, init);
+                assert(bounded);
+
+                // if (bounded)
+                return _opt_bounded(f_cmaes, dim, init);
+                // else
+                //     return _opt_unbounded(f_cmaes, dim, init);
             }
 
         private:
-            // F is a CMA-ES style function, not our function
-            template <typename F>
-            Eigen::VectorXd _opt_unbounded(F& f_cmaes, int dim, const Eigen::VectorXd& init) const
+            template <typename TGenoPheno>
+            libcmaes::CMASolutions run_cmaes(libcmaes::FitFunc& func,
+                libcmaes::CMAParameters<TGenoPheno>& parameters,
+                libcmaes::ProgressFunc<libcmaes::CMAParameters<TGenoPheno>, libcmaes::CMASolutions>& pfunc = libcmaes::CMAStrategy<libcmaes::CovarianceUpdate, TGenoPheno>::_defaultPFunc,
+                libcmaes::GradFunc gfunc = nullptr,
+                const libcmaes::CMASolutions& solutions = libcmaes::CMASolutions(),
+                libcmaes::PlotFunc<libcmaes::CMAParameters<TGenoPheno>, libcmaes::CMASolutions>& pffunc = libcmaes::CMAStrategy<libcmaes::CovarianceUpdate, TGenoPheno>::_defaultFPFunc) const
             {
                 using namespace libcmaes;
-                // initial step-size, i.e. estimated initial parameter error.
-                double sigma = 0.5;
-                std::vector<double> x0(init.data(), init.data() + init.size());
-
-                CMAParameters<> cmaparams(x0, sigma);
-                _set_common_params(cmaparams, dim);
-
-                // the optimization itself
-                CMASolutions cmasols = cmaes<>(f_cmaes, cmaparams);
-                return cmasols.get_best_seen_candidate().get_x_dvec();
+                ESOptimizer<customCMAStrategy<Params, ACovarianceUpdate, TGenoPheno>, CMAParameters<TGenoPheno>, CMASolutions> abipop(func, parameters);
+                if (gfunc != nullptr)
+                    abipop.set_gradient_func(gfunc);
+                abipop.set_progress_func(pfunc);
+                abipop.set_plot_func(pffunc);
+                abipop.optimize();
+                return abipop.get_solutions();
             }
+
+            // // F is a CMA-ES style function, not our function
+            // template <typename F>
+            // Eigen::VectorXd _opt_unbounded(F& f_cmaes, int dim, const Eigen::VectorXd& init) const
+            // {
+            //     using namespace libcmaes;
+            //     // initial step-size, i.e. estimated initial parameter error.
+            //     double sigma = 0.5;
+            //     std::vector<double> x0(init.data(), init.data() + init.size());
+            //
+            //     CMAParameters<> cmaparams(x0, sigma);
+            //     _set_common_params(cmaparams, dim);
+            //
+            //     // the optimization itself
+            //     CMASolutions cmasols = run_cmaes<>(f_cmaes, cmaparams);
+            //     return cmasols.get_best_seen_candidate().get_x_dvec();
+            // }
 
             // F is a CMA-ES style function, not our function
             template <typename F>
@@ -160,23 +355,19 @@ namespace limbo {
                 // boundary_transformation
                 double lbounds[dim], ubounds[dim]; // arrays for lower and upper parameter bounds, respectively
                 for (int i = 0; i < dim; i++) {
-                    // lbounds[i] = 0.0;
-                    // ubounds[i] = 1.0;
-                    lbounds[i] = Params::opt_cmaes::l_bound();
-                    ubounds[i] = Params::opt_cmaes::u_bound();
-
+                    lbounds[i] = Params::opt_cmaes::lbound();
+                    ubounds[i] = Params::opt_cmaes::ubound();
                 }
                 GenoPheno<pwqBoundStrategy> gp(lbounds, ubounds, dim);
                 // initial step-size, i.e. estimated initial parameter error.
-                // we suppose we are optimizing on [0, 1], but we have no idea where to start
-                double sigma = 0.5;
+                double sigma = 0.5 * std::abs(Params::opt_cmaes::ubound() - Params::opt_cmaes::lbound());
                 std::vector<double> x0(init.data(), init.data() + init.size());
                 // -1 for automatically decided lambda, 0 is for random seeding of the internal generator.
                 CMAParameters<GenoPheno<pwqBoundStrategy>> cmaparams(dim, &x0.front(), sigma, -1, 0, gp);
                 _set_common_params(cmaparams, dim);
 
                 // the optimization itself
-                CMASolutions cmasols = cmaes<GenoPheno<pwqBoundStrategy>>(f_cmaes, cmaparams);
+                CMASolutions cmasols = run_cmaes<GenoPheno<pwqBoundStrategy>>(f_cmaes, cmaparams);
                 //cmasols.print(std::cout, 1, gp);
                 //to_f_representation
                 return gp.pheno(cmasols.get_best_seen_candidate().get_x_dvec());
@@ -189,10 +380,7 @@ namespace limbo {
 
                 // set multi-threading to true
                 cmaparams.set_mt_feval(true);
-                // aCMAES should be the best choice
-                // [see: https://github.com/beniz/libcmaes/wiki/Practical-hints ]
-                // but we want the restart -> aIPOP_CMAES
-                cmaparams.set_algo(Params::opt_cmaes::cmaes_variant());
+                cmaparams.set_algo(Params::opt_cmaes::variant());
                 cmaparams.set_restarts(Params::opt_cmaes::restarts());
                 cmaparams.set_elitism(Params::opt_cmaes::elitism());
 
@@ -231,7 +419,7 @@ namespace limbo {
 
                 // enable or disable different parameters
                 cmaparams.set_initial_fvalue(Params::opt_cmaes::fun_compute_initial());
-                cmaparams.set_uh(Params::opt_cmaes::handle_uncertainty());
+                // cmaparams.set_uh(Params::opt_cmaes::handle_uncertainty());
                 cmaparams.set_quiet(!Params::opt_cmaes::verbose());
             }
         };

@@ -70,7 +70,7 @@ namespace medrops {
                     params_starting,
                     true);
             }
-            std::cout << _opt_iters << "(" << _max_reward << ", " << _max_simu_reward << ", " << _max_real_reward << ") " << std::endl;
+            // std::cout << _opt_iters << "(" << _max_reward << ", " << _max_simu_reward << ", " << _max_real_reward << ") " << std::endl;
             std::cout << "Optimization iterations: " << _opt_iters << std::endl;
             // std::cout << "Max parameters: " << _max_params.transpose() << std::endl;
 
@@ -99,6 +99,7 @@ namespace medrops {
         {
             _boundary = Params::medrops::boundary();
             _ofs.open("results.dat");
+            _ofs_opt.open("times.dat");
             _policy.set_random_policy();
 
             std::cout << "Executing random actions..." << std::endl;
@@ -145,8 +146,10 @@ namespace medrops {
                 std::cout << "Executed action..." << std::endl;
                 std::cout << "Learning time: " << learn_model_ms << std::endl;
                 std::cout << "Optimization time: " << optimize_ms << std::endl;
+                _ofs_opt << optimize_ms << std::endl;
             }
             _ofs.close();
+            _ofs_opt.close();
             std::cout << "Experiment finished" << std::endl;
         }
 
@@ -154,7 +157,7 @@ namespace medrops {
         Robot _robot;
         Policy _policy;
         Model _model;
-        std::ofstream _ofs;
+        std::ofstream _ofs, _ofs_opt;
 
         // state, action, prediction
         std::vector<std::tuple<Eigen::VectorXd, Eigen::VectorXd, Eigen::VectorXd>> _observations;
@@ -171,22 +174,22 @@ namespace medrops {
 
             _opt_iters++;
             if (_max_reward < r) {
-                std::vector<double> R;
-                _robot.execute_dummy(policy, _model, world, Params::medrops::rollout_steps(), R, false);
-                double simu_reward = std::accumulate(R.begin(), R.end(), 0.0);
-                _robot.execute(policy, world, Params::medrops::rollout_steps(), R, false);
-                double real_reward = std::accumulate(R.begin(), R.end(), 0.0);
-
+                //     std::vector<double> R;
+                //     _robot.execute_dummy(policy, _model, world, Params::medrops::rollout_steps(), R, false);
+                //     double simu_reward = std::accumulate(R.begin(), R.end(), 0.0);
+                //     _robot.execute(policy, world, Params::medrops::rollout_steps(), R, false);
+                //     double real_reward = std::accumulate(R.begin(), R.end(), 0.0);
+                //
                 _max_reward = r;
-                _max_simu_reward = simu_reward;
-                _max_real_reward = real_reward;
+                //     _max_simu_reward = simu_reward;
+                //     _max_real_reward = real_reward;
                 _max_params = policy.params().array();
-                // Eigen::write_binary("max_params.bin", policy.params());
+                //     // Eigen::write_binary("max_params.bin", policy.params());
             }
 
-            if (_opt_iters % 1000 == 0) {
-                std::cout << _opt_iters << "(" << _max_reward << ", " << _max_simu_reward << ", " << _max_real_reward << ") " << std::flush;
-            }
+            // if (_opt_iters % 1000 == 0) {
+            //     std::cout << _opt_iters << "(" << _max_reward << ", " << _max_simu_reward << ", " << _max_real_reward << ") " << std::flush;
+            // }
 
             return limbo::opt::no_grad(r);
         }
