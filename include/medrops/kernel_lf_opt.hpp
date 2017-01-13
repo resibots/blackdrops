@@ -68,7 +68,7 @@ namespace medrops {
 
                 // Std calculation of samples in logspace
                 Eigen::MatrixXd samples = _to_matrix(gp.samples());
-                Eigen::MatrixXd samples_std = Eigen::colwise_sig(samples).log();
+                Eigen::MatrixXd samples_std = Eigen::colwise_sig(samples).array().log();
 
                 double snr = std::log(500); // signal to noise threshold
                 double ls = std::log(100); // length scales threshold
