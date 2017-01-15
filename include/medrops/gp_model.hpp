@@ -19,7 +19,7 @@ namespace medrops {
             for (size_t i = 0; i < _gp_models.size(); i++) {
                 _gp_models[i] = std::make_shared<GP>(Params::model_input_dim(), 1);
 #ifdef INTACT
-                _gp_models[i]->mean_function().set_id(i);
+                _gp_models[i]->set_mean_function_id(i);
 #endif
             }
         }
@@ -99,6 +99,7 @@ namespace medrops {
                   _gp_models[i]->optimize_hyperparams();
             });
 
+            /*
             for (size_t i = 0; i < (size_t)obs.cols(); ++i) {
                 // Print hparams in logspace
                 Eigen::VectorXd p = _gp_models[i]->kernel_function().h_params();
@@ -106,6 +107,7 @@ namespace medrops {
                 p(p.size() - 1) = std::exp(2 * p(p.size() - 1));
                 std::cout << p.array().transpose() << std::endl;
             }
+            */
 
 #else
 
@@ -132,6 +134,7 @@ namespace medrops {
                   std::cout << "Computation for gp " << i << " ended." << std::endl;
             });
 
+            /*
             for (size_t i = 0; i < (size_t)observations_comp.cols(); ++i) {
                 // Print hparams in logspace
                 Eigen::VectorXd p = _gp_models[i]->kernel_function().h_params();
@@ -139,6 +142,7 @@ namespace medrops {
                 p(p.size() - 1) = std::exp(2 * p(p.size() - 1));
                 std::cout << p.array().transpose() << std::endl;
             }
+            */
 
 #endif
             _initialized = true;
