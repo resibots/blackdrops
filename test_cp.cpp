@@ -133,7 +133,10 @@ struct Params {
         BO_PARAM(double, noise, 1e-5);
     };
     struct model_spgp : public limbo::defaults::model_spgp {
-        BO_PARAM(double, samples_percent, 20);
+        BO_PARAM(double, samples_percent, 10);
+        BO_PARAM(double, jitter, 1e-5);
+        BO_PARAM(int, min_m, 100);
+        BO_PARAM(double, sig, 0.001);
     };
     struct model_gpmm : public limbo::defaults::model_gpmm {
       BO_PARAM(int, threshold, 300);
