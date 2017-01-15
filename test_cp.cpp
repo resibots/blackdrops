@@ -1,8 +1,10 @@
 #include <limbo/limbo.hpp>
+#include <limbo/experimental/model/spgp.hpp>
 
 #include <boost/numeric/odeint.hpp>
 #include <boost/program_options.hpp>
 
+#include <medrops/gp_multi_model.hpp>
 #include <medrops/exp_sq_ard.hpp>
 #include <medrops/gp_model.hpp>
 #include <medrops/kernel_lf_opt.hpp>
@@ -129,6 +131,12 @@ struct Params {
 
     struct gp_model {
         BO_PARAM(double, noise, 1e-5);
+    };
+    struct model_spgp : public limbo::defaults::model_spgp {
+        BO_PARAM(double, samples_percent, 20);
+    };
+    struct model_gpmm : public limbo::defaults::model_gpmm {
+      BO_PARAM(int, threshold, 300);
     };
 
     struct linear_policy {
@@ -550,7 +558,9 @@ using mean_t = MeanIntact<Params>;
 #else
 using mean_t = limbo::mean::Constant<Params>;
 #endif
+
 using GP_t = limbo::model::GP<Params, kernel_t, mean_t, medrops::KernelLFOpt<Params, limbo::opt::NLOptGrad<Params, nlopt::LD_SLSQP>>>;
+using SPGP_t = limbo::model::SPGP<Params, kernel_t, mean_t>;
 
 BO_DECLARE_DYN_PARAM(size_t, Params, parallel_evaluations);
 BO_DECLARE_DYN_PARAM(std::string, Params, policy_load);
@@ -688,7 +698,9 @@ int main(int argc, char** argv)
 
     using policy_opt_t = limbo::opt::CustomCmaes<Params>;
     //using policy_opt_t = limbo::opt::NLOptGrad<Params>;
-    using MGP_t = medrops::GPModel<Params, GP_t>;
+    using GPMM_t = limbo::model::GPMultiModel<Params, GP_t, SPGP_t>;
+    using MGP_t = medrops::GPModel<Params, GPMM_t>;
+
 #ifndef GPPOLICY
     medrops::Medrops<Params, MGP_t, CartPole, medrops::SFNNPolicy<Params, MGP_t>, policy_opt_t, RewardFunction> cp_system;
 #else
