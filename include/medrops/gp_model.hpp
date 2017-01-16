@@ -95,11 +95,11 @@ namespace medrops {
             Eigen::VectorXd noises = Eigen::VectorXd::Constant(samples.size(), Params::gp_model::noise());
             init(); // TODO: Fix this properly
             tbb::parallel_for(size_t(0), (size_t)obs.cols(), size_t(1), [&](size_t i) {
-                  _gp_models[i]->compute(samples, _to_vector(obs.col(i)), noises);
-                  _gp_models[i]->optimize_hyperparams();
+                _gp_models[i]->compute(samples, _to_vector(obs.col(i)), noises);
+                _gp_models[i]->optimize_hyperparams();
             });
 
-            /*
+/*
             for (size_t i = 0; i < (size_t)obs.cols(); ++i) {
                 // Print hparams in logspace
                 Eigen::VectorXd p = _gp_models[i]->kernel_function().h_params();
@@ -129,12 +129,12 @@ namespace medrops {
             init(); // TODO: Fix this properly
             Eigen::VectorXd noises = Eigen::VectorXd::Constant(samples_comp.size(), Params::gp_model::noise());
             tbb::parallel_for(size_t(0), (size_t)observations_comp.cols(), size_t(1), [&](size_t i) {
-                  _gp_models[i]->compute(samples_comp, _to_vector(observations_comp.col(i)), noises);
-                  _gp_models[i]->optimize_hyperparams();
-                  std::cout << "Computation for gp " << i << " ended." << std::endl;
+                _gp_models[i]->compute(samples_comp, _to_vector(observations_comp.col(i)), noises);
+                _gp_models[i]->optimize_hyperparams();
+                std::cout << "Computation for gp " << i << " ended." << std::endl;
             });
 
-            /*
+/*
             for (size_t i = 0; i < (size_t)observations_comp.cols(); ++i) {
                 // Print hparams in logspace
                 Eigen::VectorXd p = _gp_models[i]->kernel_function().h_params();

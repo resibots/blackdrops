@@ -1,18 +1,18 @@
+#include <limbo/experimental/model/spgp.hpp>
 #include <limbo/limbo.hpp>
 #include <limbo/mean/constant.hpp>
-#include <limbo/experimental/model/spgp.hpp>
 
 #include <boost/numeric/odeint.hpp>
 #include <boost/program_options.hpp>
 
-#include <medrops/gp_multi_model.hpp>
+#include <medrops/cmaes.hpp>
 #include <medrops/exp_sq_ard.hpp>
 #include <medrops/gp_model.hpp>
+#include <medrops/gp_multi_model.hpp>
+#include <medrops/gp_policy.hpp>
 #include <medrops/kernel_lf_opt.hpp>
 #include <medrops/linear_policy.hpp>
 #include <medrops/medrops.hpp>
-#include <medrops/gp_policy.hpp>
-#include <medrops/cmaes.hpp>
 #include <medrops/sf_nn_policy.hpp>
 
 #if defined(USE_SDL) && !defined(NODSP)
@@ -139,7 +139,7 @@ struct Params {
         BO_PARAM(double, sig, 0.001);
     };
     struct model_gpmm : public limbo::defaults::model_gpmm {
-      BO_PARAM(int, threshold, 300);
+        BO_PARAM(int, threshold, 300);
     };
 
     struct linear_policy {
@@ -215,8 +215,9 @@ struct MeanIntact {
 
     MeanIntact(size_t dim_out = 1) {}
 
-    MeanIntact(const MeanIntact &other) {
-      id = other.id;
+    MeanIntact(const MeanIntact& other)
+    {
+        id = other.id;
     }
 
     void set_id(size_t id)

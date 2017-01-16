@@ -2,3 +2,4 @@
 params_*
 *.log
 *.orig
+.clang-format

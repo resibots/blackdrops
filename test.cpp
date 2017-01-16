@@ -3,13 +3,13 @@
 #include <boost/numeric/odeint.hpp>
 #include <boost/program_options.hpp>
 
+#include <medrops/cmaes.hpp>
 #include <medrops/exp_sq_ard.hpp>
 #include <medrops/gp_model.hpp>
+#include <medrops/gp_policy.hpp>
 #include <medrops/kernel_lf_opt.hpp>
 #include <medrops/linear_policy.hpp>
 #include <medrops/medrops.hpp>
-#include <medrops/gp_policy.hpp>
-#include <medrops/cmaes.hpp>
 
 #include <medrops/sf_nn_policy.hpp>
 
@@ -203,8 +203,9 @@ struct MeanIntact {
 
     MeanIntact(size_t dim_out = 1) {}
 
-    MeanIntact(const MeanIntact &other) {
-      id = other.id;
+    MeanIntact(const MeanIntact& other)
+    {
+        id = other.id;
     }
 
     void set_id(int id)
@@ -396,50 +397,50 @@ struct Pendulum {
         Eigen::VectorXd rews(N);
 
         tbb::parallel_for(size_t(0), N, size_t(1), [&](size_t i) {
-          double reward = 0.0;
-          // init state
-          Eigen::VectorXd init_diff = Eigen::VectorXd::Zero(Params::model_pred_dim());
-          Eigen::VectorXd init = Eigen::VectorXd::Zero(Params::model_input_dim());
-          init(1) = std::cos(0.0);
-          init(2) = std::sin(0.0);
-          for (size_t j = 0; j < steps; j++) {
-              Eigen::VectorXd query_vec(Params::model_input_dim() + Params::action_dim());
-              Eigen::VectorXd u = policy.next(init);
-              query_vec.head(Params::model_input_dim()) = init;
-              query_vec.tail(Params::action_dim()) = u;
+            double reward = 0.0;
+            // init state
+            Eigen::VectorXd init_diff = Eigen::VectorXd::Zero(Params::model_pred_dim());
+            Eigen::VectorXd init = Eigen::VectorXd::Zero(Params::model_input_dim());
+            init(1) = std::cos(0.0);
+            init(2) = std::sin(0.0);
+            for (size_t j = 0; j < steps; j++) {
+                Eigen::VectorXd query_vec(Params::model_input_dim() + Params::action_dim());
+                Eigen::VectorXd u = policy.next(init);
+                query_vec.head(Params::model_input_dim()) = init;
+                query_vec.tail(Params::action_dim()) = u;
 
-              Eigen::VectorXd mu;
-              Eigen::VectorXd sigma;
-              std::tie(mu, sigma) = model.predictm(query_vec);
+                Eigen::VectorXd mu;
+                Eigen::VectorXd sigma;
+                std::tie(mu, sigma) = model.predictm(query_vec);
 
 #ifndef INTACT
-              if (Params::parallel_evaluations() > 1 || Params::opt_cmaes::handle_uncertainty()) {
-                  // if (Params::opt_cmaes::handle_uncertainty()) {
-                  //     sigma = sigma.array();
-                  // }
-                  // else {
-                  sigma = sigma.array().sqrt();
-                  // }
-                  for (int i = 0; i < mu.size(); i++) {
-                      double s = gaussian_rand(mu(i), sigma(i));
-                      mu(i) = std::max(mu(i) - sigma(i),
-                          std::min(s, mu(i) + sigma(i)));
-                  }
-              }
+                if (Params::parallel_evaluations() > 1 || Params::opt_cmaes::handle_uncertainty()) {
+                    // if (Params::opt_cmaes::handle_uncertainty()) {
+                    //     sigma = sigma.array();
+                    // }
+                    // else {
+                    sigma = sigma.array().sqrt();
+                    // }
+                    for (int i = 0; i < mu.size(); i++) {
+                        double s = gaussian_rand(mu(i), sigma(i));
+                        mu(i) = std::max(mu(i) - sigma(i),
+                            std::min(s, mu(i) + sigma(i)));
+                    }
+                }
 #endif
 
-              Eigen::VectorXd final = init_diff + mu;
-              // while (final(1) < -M_PI)
-              //     final(1) += 2 * M_PI;
-              // while (final(1) > M_PI)
-              //     final(1) -= 2 * M_PI;
-              reward += world(init_diff, u, final);
-              init_diff = final;
-              init(0) = final(0);
-              init(1) = std::cos(final(1));
-              init(2) = std::sin(final(1));
-          }
-          rews(i) = reward;
+                Eigen::VectorXd final = init_diff + mu;
+                // while (final(1) < -M_PI)
+                //     final(1) += 2 * M_PI;
+                // while (final(1) > M_PI)
+                //     final(1) -= 2 * M_PI;
+                reward += world(init_diff, u, final);
+                init_diff = final;
+                init(0) = final(0);
+                init(1) = std::cos(final(1));
+                init(2) = std::sin(final(1));
+            }
+            rews(i) = reward;
         });
 
         double r = rews(0);
