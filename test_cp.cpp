@@ -1,4 +1,5 @@
 #include <limbo/limbo.hpp>
+#include <limbo/mean/constant.hpp>
 #include <limbo/experimental/model/spgp.hpp>
 
 #include <boost/numeric/odeint.hpp>
@@ -11,7 +12,6 @@
 #include <medrops/linear_policy.hpp>
 #include <medrops/medrops.hpp>
 #include <medrops/gp_policy.hpp>
-
 #include <medrops/sf_nn_policy.hpp>
 
 #if defined(USE_SDL) && !defined(NODSP)
@@ -207,9 +207,13 @@ namespace global {
 
 template <typename Params>
 struct MeanIntact {
-    size_t id = -1;
+    int id = -1;
 
     MeanIntact(size_t dim_out = 1) {}
+
+    MeanIntact(const MeanIntact &other) {
+      id = other.id;
+    }
 
     void set_id(size_t id)
     {
@@ -689,7 +693,7 @@ int main(int argc, char** argv)
 
     using policy_opt_t = limbo::opt::Cmaes<Params>;
     //using policy_opt_t = limbo::opt::NLOptGrad<Params>;
-    using GPMM_t = limbo::model::GPMultiModel<Params, GP_t, SPGP_t>;
+    using GPMM_t = limbo::model::GPMultiModel<Params, mean_t, GP_t, SPGP_t>;
     using MGP_t = medrops::GPModel<Params, GPMM_t>;
 
 #ifndef GPPOLICY

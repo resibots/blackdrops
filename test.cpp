@@ -195,11 +195,15 @@ namespace global {
 
 template <typename Params>
 struct MeanIntact {
-    size_t id = -1;
+    int id = -1;
 
     MeanIntact(size_t dim_out = 1) {}
 
-    void set_id(size_t id)
+    MeanIntact(const MeanIntact &other) {
+      id = other.id;
+    }
+
+    void set_id(int id)
     {
         this->id = id;
     }
