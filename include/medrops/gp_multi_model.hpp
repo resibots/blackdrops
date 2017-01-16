@@ -11,11 +11,11 @@ namespace limbo {
 
   namespace model {
 
-    template <typename Params, typename GPLow, typename GPHigh>
+    template <typename Params, typename MeanFunction, typename GPLow, typename GPHigh>
     class GPMultiModel {
     public:
       /// useful because the model might be created before knowing anything about the process
-      GPMultiModel()
+      GPMultiModel() : _dim_in(-1), _dim_out(-1)
       {
         _gp_low = std::make_shared<GPLow>();
         _gp_high = std::make_shared<GPHigh>();
@@ -23,30 +23,36 @@ namespace limbo {
       }
 
       /// useful because the model might be created before having samples
-      GPMultiModel(int dim_in, int dim_out)
+      GPMultiModel(int dim_in, int dim_out) : _dim_in(dim_in), _dim_out(dim_out)
       {
-        _gp_low = std::make_shared<GPLow>(dim_in, dim_out);
-        _gp_high = std::make_shared<GPHigh>(dim_in, dim_out);
+        _gp_low = std::make_shared<GPLow>(_dim_in, _dim_out);
+        _gp_high = std::make_shared<GPHigh>(_dim_in, _dim_out);
+        _mean_function = MeanFunction(_dim_out);
         _samples_size = 0;
       }
 
-      void set_mean_function_id(size_t id) {
-        _gp_low->mean_function().set_id(id);
-        _gp_high->mean_function().set_id(id);
-      }
+      const MeanFunction& mean_function() const { return _mean_function; }
+      MeanFunction& mean_function() { return _mean_function; }
 
       /// Compute the GP from samples, observation, noise. This call needs to be explicit!
       void compute(const std::vector<Eigen::VectorXd>& samples,
           const std::vector<Eigen::VectorXd>& observations,
           const Eigen::VectorXd& noises)
       {
+        if (_dim_out == -1) {
+          _dim_in = samples[0].size();
+          _dim_out = observations[0].size();
+          _mean_function = MeanFunction(_dim_out);
+        }
         _samples = samples;
         _samples_size = samples.size();
         if (_samples_size < Params::model_gpmm::threshold()) {
           std::cout << "GP LOW" << std::endl;
+          _gp_low->mean_function() = _mean_function;
           _gp_low->compute(samples, observations, noises);
         } else {
           std::cout << "GP HIGH" << std::endl;
+          _gp_high->mean_function() = _mean_function;
           _gp_high->compute(samples, observations, noises);
         }
       }
@@ -92,6 +98,9 @@ namespace limbo {
       }
 
     private:
+      int _dim_in = -1;
+      int _dim_out = -1;
+      MeanFunction _mean_function;
       std::vector<Eigen::VectorXd> _samples;
       std::shared_ptr<GPLow> _gp_low;
       std::shared_ptr<GPHigh> _gp_high;
