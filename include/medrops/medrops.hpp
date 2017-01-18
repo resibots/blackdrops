@@ -138,10 +138,6 @@ namespace medrops {
                     }
                 }
 
-                if (Params::policy_load() != "") {
-                    execute_loaded_policy();
-                }
-
                 time_start = std::chrono::steady_clock::now();
                 optimize_policy(i + 1);
                 double optimize_ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - time_start).count();
@@ -200,30 +196,6 @@ namespace medrops {
             }
 
             return limbo::opt::no_grad(r);
-        }
-
-        void execute_loaded_policy()
-        {
-            Eigen::MatrixXd params;
-            Eigen::read_binary(Params::policy_load(), params);
-
-            Policy policy;
-            policy.normalize(_model);
-            policy.set_params(params.array());
-
-            RewardFunction world;
-            std::vector<double> R;
-
-            double reward = _robot.predict_policy(policy, _model, world, Params::medrops::rollout_steps());
-
-            _robot.execute_dummy(policy, _model, world, Params::medrops::rollout_steps(), R, false);
-            double simu_reward = std::accumulate(R.begin(), R.end(), 0.0);
-
-            _robot.execute(policy, world, Params::medrops::rollout_steps(), R, false);
-            double real_reward = std::accumulate(R.begin(), R.end(), 0.0);
-
-            std::cout << "Rewards: " << reward << ", " << simu_reward << ", " << real_reward << std::endl;
-            exit(-1);
         }
 
         Eigen::VectorXd get_random_vector(size_t dim, Eigen::VectorXd bounds) const

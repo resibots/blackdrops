@@ -113,7 +113,6 @@ struct Params {
     BO_PARAM(size_t, model_pred_dim, 4);
 
     BO_DYN_PARAM(size_t, parallel_evaluations);
-    BO_DYN_PARAM(std::string, policy_load);
     BO_DYN_PARAM(bool, verbose);
 
     BO_PARAM(double, goal_pos, M_PI);
@@ -185,6 +184,7 @@ struct Params {
         // BO_PARAM(double, fun_target, 30);
         BO_DYN_PARAM(double, ubound);
         BO_DYN_PARAM(double, lbound);
+        BO_DYN_PARAM(int, lambda);
 
         BO_PARAM(double, a, -32.0);
         BO_PARAM(double, b, 0.0);
@@ -572,7 +572,6 @@ using GP_t = limbo::model::GP<Params, kernel_t, mean_t, medrops::KernelLFOpt<Par
 using SPGP_t = limbo::model::SPGP<Params, kernel_t, mean_t>;
 
 BO_DECLARE_DYN_PARAM(size_t, Params, parallel_evaluations);
-BO_DECLARE_DYN_PARAM(std::string, Params, policy_load);
 BO_DECLARE_DYN_PARAM(int, Params::nn_policy, hidden_neurons);
 BO_DECLARE_DYN_PARAM(double, Params::medrops, boundary);
 BO_DECLARE_DYN_PARAM(bool, Params, verbose);
@@ -581,6 +580,7 @@ BO_DECLARE_DYN_PARAM(double, Params::opt_cmaes, max_fun_evals);
 BO_DECLARE_DYN_PARAM(double, Params::opt_cmaes, fun_tolerance);
 BO_DECLARE_DYN_PARAM(double, Params::opt_cmaes, lbound);
 BO_DECLARE_DYN_PARAM(double, Params::opt_cmaes, ubound);
+BO_DECLARE_DYN_PARAM(int, Params::opt_cmaes, lambda);
 BO_DECLARE_DYN_PARAM(int, Params::opt_cmaes, restarts);
 BO_DECLARE_DYN_PARAM(int, Params::opt_cmaes, elitism);
 BO_DECLARE_DYN_PARAM(bool, Params::opt_cmaes, handle_uncertainty);
@@ -592,7 +592,7 @@ int main(int argc, char** argv)
     int threads = tbb::task_scheduler_init::automatic;
     namespace po = boost::program_options;
     po::options_description desc("Command line arguments");
-    desc.add_options()("help,h", "Prints this help message")("parallel_evaluations,p", po::value<int>(), "Number of parallel monte carlo evaluations for policy reward estimation.")("hidden_neurons,n", po::value<int>(), "Number of hidden neurons in NN policy.")("boundary,b", po::value<double>(), "Boundary of the values during the optimization.")("policy,l", po::value<std::string>(), "Specifies a policy to load.")("max_evals,m", po::value<int>(), "Max function evaluations to optimize the policy.")("tolerance,t", po::value<double>(), "Maximum tolerance to continue optimizing the function.")("restarts,r", po::value<int>(), "Max number of restarts to use during optimization.")("elitism,e", po::value<int>(), "Elitism mode to use [0 to 3].")("uncertainty,u", po::bool_switch(&uncertainty)->default_value(false), "Enable uncertainty handling.")("threads,d", po::value<int>(), "Max number of threads used by TBB")("verbose,v", po::bool_switch(&verbose)->default_value(false), "Enable verbose mode.");
+    desc.add_options()("help,h", "Prints this help message")("parallel_evaluations,p", po::value<int>(), "Number of parallel monte carlo evaluations for policy reward estimation.")("hidden_neurons,n", po::value<int>(), "Number of hidden neurons in NN policy.")("boundary,b", po::value<double>(), "Boundary of the values during the optimization.")("lambda,l", po::value<int>(), "Initial population in CMA-ES (-1 to default)")("max_evals,m", po::value<int>(), "Max function evaluations to optimize the policy.")("tolerance,t", po::value<double>(), "Maximum tolerance to continue optimizing the function.")("restarts,r", po::value<int>(), "Max number of restarts to use during optimization.")("elitism,e", po::value<int>(), "Elitism mode to use [0 to 3].")("uncertainty,u", po::bool_switch(&uncertainty)->default_value(false), "Enable uncertainty handling.")("threads,d", po::value<int>(), "Max number of threads used by TBB")("verbose,v", po::bool_switch(&verbose)->default_value(false), "Enable verbose mode.");
 
     try {
         po::variables_map vm;
@@ -638,11 +638,12 @@ int main(int argc, char** argv)
             Params::opt_cmaes::set_lbound(-6);
             Params::opt_cmaes::set_ubound(6);
         }
-        std::string policy_load = "";
-        if (vm.count("policy")) {
-            policy_load = vm["policy"].as<std::string>();
+
+        int lambda = -1;
+        if (vm.count("lambda")) {
+            lambda = vm["lambda"].as<int>();
         }
-        Params::set_policy_load(policy_load);
+        Params::opt_cmaes::set_lambda(lambda);
 
         // Cmaes parameters
         if (vm.count("max_evals")) {
@@ -705,7 +706,9 @@ int main(int argc, char** argv)
     std::cout << "  restarts = " << Params::opt_cmaes::restarts() << std::endl;
     std::cout << "  elitism = " << Params::opt_cmaes::elitism() << std::endl;
     std::cout << "  handle_uncertainty = " << Params::opt_cmaes::handle_uncertainty() << std::endl;
+    std::cout << "  lambda (CMA-ES population) = " << Params::opt_cmaes::lambda() << std::endl;
     std::cout << "  boundary = " << Params::medrops::boundary() << std::endl;
+    std::cout << "  tbb threads = " << threads << std::endl;
     std::cout << std::endl;
 
     using policy_opt_t = limbo::opt::CustomCmaes<Params>;

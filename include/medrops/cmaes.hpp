@@ -75,6 +75,7 @@ namespace limbo {
             void eval(const dMat& candidates,
                 const dMat& phenocandidates = dMat(0, 0))
             {
+                using eostrat = libcmaes::ESOStrategy<libcmaes::CMAParameters<TGenoPheno>, libcmaes::CMASolutions, libcmaes::CMAStopCriteria<TGenoPheno>>;
 #ifdef HAVE_DEBUG
                 std::chrono::time_point<std::chrono::system_clock> tstart = std::chrono::system_clock::now();
 #endif
@@ -96,7 +97,11 @@ namespace limbo {
                 if (Params::opt_cmaes::handle_uncertainty()) {
                     // new uncertainty
                     int t_max = 20;
-                    // _t_limit = 3;
+
+                    // if (eostrat::_niter == 0) {
+                    //     _t_limit = 3;
+                    // }
+
                     dMat selected, discarded, undecided;
                     std::map<int, int> ids;
                     std::vector<double> mean, lower, upper;
@@ -363,7 +368,7 @@ namespace limbo {
                 double sigma = 0.5 * std::abs(Params::opt_cmaes::ubound() - Params::opt_cmaes::lbound());
                 std::vector<double> x0(init.data(), init.data() + init.size());
                 // -1 for automatically decided lambda, 0 is for random seeding of the internal generator.
-                CMAParameters<GenoPheno<pwqBoundStrategy>> cmaparams(dim, &x0.front(), sigma, -1, 0, gp);
+                CMAParameters<GenoPheno<pwqBoundStrategy>> cmaparams(dim, &x0.front(), sigma, Params::opt_cmaes::lambda(), 0, gp);
                 _set_common_params(cmaparams, dim);
 
                 // the optimization itself
