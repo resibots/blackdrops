@@ -101,6 +101,7 @@ namespace medrops {
             _boundary = Params::medrops::boundary();
             _ofs.open("results.dat");
             _ofs_opt.open("times.dat");
+            _ofs_model.open("times_model.dat");
             _policy.set_random_policy();
 
             std::cout << "Executing random actions..." << std::endl;
@@ -117,6 +118,7 @@ namespace medrops {
                 time_start = std::chrono::steady_clock::now();
                 learn_model();
                 double learn_model_ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - time_start).count();
+                _ofs_model << learn_model_ms << std::endl;
 
                 _policy.normalize(_model);
                 std::cout << "Learned model..." << std::endl;
@@ -153,6 +155,7 @@ namespace medrops {
             }
             _ofs.close();
             _ofs_opt.close();
+            _ofs_model.close();
             std::cout << "Experiment finished" << std::endl;
         }
 
@@ -160,7 +163,7 @@ namespace medrops {
         Robot _robot;
         Policy _policy;
         Model _model;
-        std::ofstream _ofs, _ofs_opt;
+        std::ofstream _ofs, _ofs_opt, _ofs_model;
 
         // state, action, prediction
         std::vector<std::tuple<Eigen::VectorXd, Eigen::VectorXd, Eigen::VectorXd>> _observations;

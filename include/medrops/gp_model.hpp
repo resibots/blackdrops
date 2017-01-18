@@ -24,26 +24,6 @@ namespace medrops {
             }
         }
 
-        inline double angle_dist(double a, double b)
-        {
-            double theta = b - a;
-            while (theta < -M_PI)
-                theta += 2 * M_PI;
-            while (theta > M_PI)
-                theta -= 2 * M_PI;
-            return theta;
-        }
-        double get_reward(const Eigen::VectorXd& from_state, const Eigen::VectorXd& action, const Eigen::VectorXd& to_state) const
-        {
-            double s_c_sq = 0.25 * 0.25;
-            double dx = angle_dist(to_state(3), Params::goal_pos());
-            // double dy = to_state(2) - Params::goal_vel();
-            // double dz = to_state(1) - Params::goal_vel_x();
-            double dw = to_state(0) - Params::goal_pos_x();
-
-            return std::exp(-0.5 / s_c_sq * (dx * dx /*+ dy * dy + dz * dz*/ + dw * dw));
-        }
-
         void learn(const std::vector<std::tuple<Eigen::VectorXd, Eigen::VectorXd, Eigen::VectorXd>>& observations)
         {
 #if defined(INTACT) || defined(DATA)
@@ -67,21 +47,6 @@ namespace medrops {
 
                 samples.push_back(s);
                 obs.row(i) = pred;
-            }
-
-            std::ofstream ofs_data("medrops_gp_data.dat");
-            ofs_data << std::setprecision(std::numeric_limits<long double>::digits10 + 1);
-            for (size_t i = 0; i < samples.size(); ++i) {
-                if (i != 0)
-                    ofs_data << std::endl;
-                for (int j = 0; j < samples[0].size(); ++j) {
-                    ofs_data << samples[i](j) << " ";
-                }
-                for (int j = 0; j < obs.cols(); ++j) {
-                    if (j != 0)
-                        ofs_data << " ";
-                    ofs_data << obs(i, j);
-                }
             }
 
             Eigen::MatrixXd data(samples.size(), samples[0].size() + obs.cols());
