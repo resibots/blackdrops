@@ -95,7 +95,7 @@ namespace limbo {
 
                 if (Params::opt_cmaes::handle_uncertainty()) {
                     // new uncertainty
-                    int t_max = 100;
+                    int t_max = 20;
                     // _t_limit = 3;
                     dMat selected, discarded, undecided;
                     std::map<int, int> ids;
