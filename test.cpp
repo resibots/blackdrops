@@ -113,6 +113,7 @@ struct Params {
 
     BO_DYN_PARAM(size_t, parallel_evaluations);
     BO_DYN_PARAM(std::string, policy_load);
+    BO_PARAM(bool, verbose, false);
 
     BO_PARAM(double, goal_pos, M_PI);
     BO_PARAM(double, goal_vel, 0.0);

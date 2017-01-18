@@ -19,7 +19,7 @@ namespace medrops {
             for (size_t i = 0; i < _gp_models.size(); i++) {
                 _gp_models[i] = std::make_shared<GP>(Params::model_input_dim(), 1);
 #ifdef INTACT
-                _gp_models[i]->set_mean_function_id(i);
+                _gp_models[i]->mean_function().set_id(i);
 #endif
             }
         }
