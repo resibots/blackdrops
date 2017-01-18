@@ -1,16 +1,18 @@
+#include <limbo/experimental/model/spgp.hpp>
 #include <limbo/limbo.hpp>
+#include <limbo/mean/constant.hpp>
 
 #include <boost/numeric/odeint.hpp>
 #include <boost/program_options.hpp>
 
+#include <medrops/cmaes.hpp>
 #include <medrops/exp_sq_ard.hpp>
 #include <medrops/gp_model.hpp>
+#include <medrops/gp_multi_model.hpp>
+#include <medrops/gp_policy.hpp>
 #include <medrops/kernel_lf_opt.hpp>
 #include <medrops/linear_policy.hpp>
 #include <medrops/medrops.hpp>
-#include <medrops/gp_policy.hpp>
-#include <medrops/cmaes.hpp>
-
 #include <medrops/sf_nn_policy.hpp>
 
 #if defined(USE_SDL) && !defined(NODSP)
@@ -112,6 +114,7 @@ struct Params {
 
     BO_DYN_PARAM(size_t, parallel_evaluations);
     BO_DYN_PARAM(std::string, policy_load);
+    BO_DYN_PARAM(bool, verbose);
 
     BO_PARAM(double, goal_pos, M_PI);
     BO_PARAM(double, goal_vel, 0.0);
@@ -129,6 +132,15 @@ struct Params {
 
     struct gp_model {
         BO_PARAM(double, noise, 1e-5);
+    };
+    struct model_spgp : public limbo::defaults::model_spgp {
+        BO_PARAM(double, samples_percent, 10);
+        BO_PARAM(double, jitter, 1e-5);
+        BO_PARAM(int, min_m, 100);
+        BO_PARAM(double, sig, 0.001);
+    };
+    struct model_gpmm : public limbo::defaults::model_gpmm {
+        BO_PARAM(int, threshold, 300);
     };
 
     struct linear_policy {
@@ -200,9 +212,14 @@ namespace global {
 
 template <typename Params>
 struct MeanIntact {
-    size_t id = -1;
+    int id = -1;
 
     MeanIntact(size_t dim_out = 1) {}
+
+    MeanIntact(const MeanIntact& other)
+    {
+        id = other.id;
+    }
 
     void set_id(size_t id)
     {
@@ -550,12 +567,15 @@ using mean_t = MeanIntact<Params>;
 #else
 using mean_t = limbo::mean::Constant<Params>;
 #endif
+
 using GP_t = limbo::model::GP<Params, kernel_t, mean_t, medrops::KernelLFOpt<Params, limbo::opt::NLOptGrad<Params, nlopt::LD_SLSQP>>>;
+using SPGP_t = limbo::model::SPGP<Params, kernel_t, mean_t>;
 
 BO_DECLARE_DYN_PARAM(size_t, Params, parallel_evaluations);
 BO_DECLARE_DYN_PARAM(std::string, Params, policy_load);
 BO_DECLARE_DYN_PARAM(int, Params::nn_policy, hidden_neurons);
 BO_DECLARE_DYN_PARAM(double, Params::medrops, boundary);
+BO_DECLARE_DYN_PARAM(bool, Params, verbose);
 
 BO_DECLARE_DYN_PARAM(double, Params::opt_cmaes, max_fun_evals);
 BO_DECLARE_DYN_PARAM(double, Params::opt_cmaes, fun_tolerance);
@@ -568,10 +588,11 @@ BO_DECLARE_DYN_PARAM(bool, Params::opt_cmaes, handle_uncertainty);
 int main(int argc, char** argv)
 {
     bool uncertainty = false;
+    bool verbose = false;
     int threads = tbb::task_scheduler_init::automatic;
     namespace po = boost::program_options;
     po::options_description desc("Command line arguments");
-    desc.add_options()("help,h", "Prints this help message")("parallel_evaluations,p", po::value<int>(), "Number of parallel monte carlo evaluations for policy reward estimation.")("hidden_neurons,n", po::value<int>(), "Number of hidden neurons in NN policy.")("boundary,b", po::value<double>(), "Boundary of the values during the optimization.")("policy,l", po::value<std::string>(), "Specifies a policy to load.")("max_evals,m", po::value<int>(), "Max function evaluations to optimize the policy.")("tolerance,t", po::value<double>(), "Maximum tolerance to continue optimizing the function.")("restarts,r", po::value<int>(), "Max number of restarts to use during optimization.")("elitism,e", po::value<int>(), "Elitism mode to use [0 to 3].")("uncertainty,u", po::bool_switch(&uncertainty)->default_value(false), "Enable uncertainty handling.")("threads,d", po::value<int>(), "Max number of threads used by TBB");
+    desc.add_options()("help,h", "Prints this help message")("parallel_evaluations,p", po::value<int>(), "Number of parallel monte carlo evaluations for policy reward estimation.")("hidden_neurons,n", po::value<int>(), "Number of hidden neurons in NN policy.")("boundary,b", po::value<double>(), "Boundary of the values during the optimization.")("policy,l", po::value<std::string>(), "Specifies a policy to load.")("max_evals,m", po::value<int>(), "Max function evaluations to optimize the policy.")("tolerance,t", po::value<double>(), "Maximum tolerance to continue optimizing the function.")("restarts,r", po::value<int>(), "Max number of restarts to use during optimization.")("elitism,e", po::value<int>(), "Elitism mode to use [0 to 3].")("uncertainty,u", po::bool_switch(&uncertainty)->default_value(false), "Enable uncertainty handling.")("threads,d", po::value<int>(), "Max number of threads used by TBB")("verbose,v", po::bool_switch(&verbose)->default_value(false), "Enable verbose mode.");
 
     try {
         po::variables_map vm;
@@ -674,6 +695,7 @@ int main(int argc, char** argv)
     static tbb::task_scheduler_init init(threads);
 #endif
 
+    Params::set_verbose(verbose);
     Params::opt_cmaes::set_handle_uncertainty(uncertainty);
 
     std::cout << std::endl;
@@ -687,8 +709,14 @@ int main(int argc, char** argv)
     std::cout << std::endl;
 
     using policy_opt_t = limbo::opt::CustomCmaes<Params>;
-    //using policy_opt_t = limbo::opt::NLOptGrad<Params>;
+//using policy_opt_t = limbo::opt::NLOptGrad<Params>;
+#ifdef SPGPS
+    using GPMM_t = limbo::model::GPMultiModel<Params, mean_t, GP_t, SPGP_t>;
+    using MGP_t = medrops::GPModel<Params, GPMM_t>;
+#else
     using MGP_t = medrops::GPModel<Params, GP_t>;
+#endif
+
 #ifndef GPPOLICY
     medrops::Medrops<Params, MGP_t, CartPole, medrops::SFNNPolicy<Params, MGP_t>, policy_opt_t, RewardFunction> cp_system;
 #else

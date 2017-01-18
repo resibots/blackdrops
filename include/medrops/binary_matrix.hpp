@@ -26,6 +26,7 @@ namespace Eigen {
     {
         read_binary(filename.c_str(), matrix);
     }
+
     template <class Matrix>
     void read_binary(const char* filename, Matrix& matrix)
     {

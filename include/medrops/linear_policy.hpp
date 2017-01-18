@@ -24,6 +24,9 @@ namespace medrops {
             return act;
         }
 
+        template <typename Model>
+        void normalize(const Model& model) {}
+
         void set_random_policy()
         {
             _random = true;
