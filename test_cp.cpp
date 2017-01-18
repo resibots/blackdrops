@@ -709,9 +709,13 @@ int main(int argc, char** argv)
     std::cout << std::endl;
 
     using policy_opt_t = limbo::opt::CustomCmaes<Params>;
-    //using policy_opt_t = limbo::opt::NLOptGrad<Params>;
+//using policy_opt_t = limbo::opt::NLOptGrad<Params>;
+#ifdef SPGPS
     using GPMM_t = limbo::model::GPMultiModel<Params, mean_t, GP_t, SPGP_t>;
     using MGP_t = medrops::GPModel<Params, GPMM_t>;
+#else
+    using MGP_t = medrops::GPModel<Params, GP_t>;
+#endif
 
 #ifndef GPPOLICY
     medrops::Medrops<Params, MGP_t, CartPole, medrops::SFNNPolicy<Params, MGP_t>, policy_opt_t, RewardFunction> cp_system;
