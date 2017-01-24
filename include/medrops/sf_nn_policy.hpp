@@ -46,9 +46,7 @@ namespace medrops {
                 return Params::nn_policy::max_u() * (limbo::tools::random_vector(Params::action_dim()).array() * 2 - 1.0);
             }
 
-            Eigen::VectorXd nstate = state;
-            // nstate.segment(0, 3) = ((state-_means).array() / (_sigmas*3).array()).segment(0, 3);
-            nstate.segment(0, 3) = nstate.segment(0, 3).array() / _limits.segment(0, 3).array();
+            Eigen::VectorXd nstate = state.array() / _limits.array();
 
             std::vector<double> inputs(Params::nn_policy::state_dim());
             Eigen::VectorXd::Map(inputs.data(), inputs.size()) = nstate;

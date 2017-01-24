@@ -28,7 +28,21 @@ namespace medrops {
             _params = Eigen::VectorXd::Zero((_sdim + 1) * _ps + _sdim);
         }
 
-        void normalize(const Model& model) {}
+        void normalize(const Model& model)
+        {
+            Eigen::MatrixXd data = model.samples();
+            Eigen::MatrixXd samples = data.block(0, 0, data.rows(), data.cols() - 1);
+            _means = samples.colwise().mean().transpose();
+            _sigmas = Eigen::colwise_sig(samples).array().transpose();
+
+            Eigen::VectorXd pl = Eigen::percentile(samples.array().abs(), 5);
+            Eigen::VectorXd ph = Eigen::percentile(samples.array().abs(), 95);
+            _limits = pl.array().max(ph.array());
+
+#ifdef INTACT
+            _limits << 16.138, 9.88254, 14.7047, 0.996735, 0.993532;
+#endif
+        }
 
         Eigen::VectorXd next(const Eigen::VectorXd state) const
         {
@@ -73,7 +87,8 @@ namespace medrops {
             gp_policy_obj.compute(pseudo_samples, pseudo_observations, noises); //TODO: Have to check the noises with actual PILCO
 
             //--- Query the GP with state
-            Eigen::VectorXd action = gp_policy_obj.mu(state);
+            Eigen::VectorXd nstate = state.array() / _limits.array();
+            Eigen::VectorXd action = gp_policy_obj.mu(nstate);
             action = action.unaryExpr([](double x) {return Params::gp_policy::max_u() * (9 * std::sin(x) / 8.0 + std::sin(3 * x) / 8.0); });
 
             return action;
@@ -107,6 +122,10 @@ namespace medrops {
         size_t _ps; //total observations
         Eigen::VectorXd _params;
         bool _random;
+
+        Eigen::VectorXd _means;
+        Eigen::MatrixXd _sigmas;
+        Eigen::VectorXd _limits;
     };
 }
 #endif
