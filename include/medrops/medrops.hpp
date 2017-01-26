@@ -75,8 +75,9 @@ namespace medrops {
             std::cout << "Optimization iterations: " << _opt_iters << std::endl;
             // std::cout << "Max parameters: " << _max_params.transpose() << std::endl;
 
-            if (Params::opt_cmaes::elitism() == 0)
-                params_star = _max_params;
+            // Since we are optimizing a noisy function, it is not good to keep the best ever found
+            // if (Params::opt_cmaes::elitism() == 0)
+            //     params_star = _max_params;
 
             _policy.normalize(_model);
             _policy.set_params(params_star);

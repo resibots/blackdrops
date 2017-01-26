@@ -456,7 +456,7 @@ struct CartPole {
                 std::tie(mu, sigma) = model.predictm(query_vec);
 
 #ifndef INTACT
-                if (Params::parallel_evaluations() > 1 || Params::opt_cmaes::handle_uncertainty()) {
+                // if (Params::parallel_evaluations() > 1 || Params::opt_cmaes::handle_uncertainty()) {
                     if (Params::opt_cmaes::handle_uncertainty()) {
                         sigma = sigma.array();
                     }
@@ -468,7 +468,7 @@ struct CartPole {
                         mu(i) = std::max(mu(i) - sigma(i),
                             std::min(s, mu(i) + sigma(i)));
                     }
-                }
+                // }
 #endif
 
                 Eigen::VectorXd final = init_diff + mu;
