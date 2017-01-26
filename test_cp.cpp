@@ -457,12 +457,12 @@ struct CartPole {
 
 #ifndef INTACT
                 if (Params::parallel_evaluations() > 1 || Params::opt_cmaes::handle_uncertainty()) {
-                    // if (Params::opt_cmaes::handle_uncertainty()) {
-                    //     sigma = sigma.array();
-                    // }
-                    // else {
-                    sigma = sigma.array().sqrt();
-                    // }
+                    if (Params::opt_cmaes::handle_uncertainty()) {
+                        sigma = sigma.array();
+                    }
+                    else {
+                        sigma = sigma.array().sqrt();
+                    }
                     for (int i = 0; i < mu.size(); i++) {
                         double s = gaussian_rand(mu(i), sigma(i));
                         mu(i) = std::max(mu(i) - sigma(i),

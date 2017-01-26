@@ -40,10 +40,10 @@ namespace limbo {
 #endif
 
                 // sort candidates.
-                // if (!eostrat::_parameters.get_uh())
-                eostrat::_solutions.sort_candidates();
-                // else
-                //     eostrat::uncertainty_handling();
+                if (!eostrat::_parameters.get_uh())
+                    eostrat::_solutions.sort_candidates();
+                else
+                    eostrat::uncertainty_handling();
 
                 // call on tpa computation of s(t)
                 if (eostrat::_parameters.get_tpa() == 2 && eostrat::_niter > 0)
@@ -75,7 +75,7 @@ namespace limbo {
             void eval(const dMat& candidates,
                 const dMat& phenocandidates = dMat(0, 0))
             {
-                using eostrat = libcmaes::ESOStrategy<libcmaes::CMAParameters<TGenoPheno>, libcmaes::CMASolutions, libcmaes::CMAStopCriteria<TGenoPheno>>;
+// using eostrat = libcmaes::ESOStrategy<libcmaes::CMAParameters<TGenoPheno>, libcmaes::CMASolutions, libcmaes::CMAStopCriteria<TGenoPheno>>;
 #ifdef HAVE_DEBUG
                 std::chrono::time_point<std::chrono::system_clock> tstart = std::chrono::system_clock::now();
 #endif
@@ -94,121 +94,15 @@ namespace limbo {
                 });
                 int nfcalls = candidates.cols();
 
-                if (Params::opt_cmaes::handle_uncertainty()) {
-                    // new uncertainty
-                    int t_max = 20;
-
-                    // if (eostrat::_niter == 0) {
-                    //     _t_limit = 3;
-                    // }
-
-                    dMat selected, discarded, undecided;
-                    std::map<int, int> ids;
-                    std::vector<double> mean, lower, upper;
-                    for (int r = 0; r < candidates.cols(); r++) {
-                        mean.push_back(this->_solutions.candidates().at(r).get_fvalue());
-                        ids[r] = r;
-                        lower.push_back(Params::opt_cmaes::a());
-                        upper.push_back(Params::opt_cmaes::b());
-                    }
-
-                    undecided = candidates;
-
-                    std::vector<int> u;
-                    u.push_back(undecided.cols());
-                    double R = std::abs(Params::opt_cmaes::a() - Params::opt_cmaes::b());
-                    int t = 1;
-                    std::vector<int> calls(undecided.cols(), 1);
-                    while (t < _t_limit && selected.cols() < this->_parameters.mu()) {
-                        t = t + 1;
-                        // std::cout << t << ": " << selected.cols() << " " << undecided.cols() << " " << discarded.cols() << " " << this->_parameters.lambda() << " " << this->_parameters.mu() << std::endl;
-                        // std::cin.get();
-                        u.push_back(undecided.cols());
-
-                        int n_b = 0;
-                        for (int k = 0; k < t; k++) {
-                            n_b += u[k] + (_t_limit - t + 1) * u[t - 1];
-                        }
-
-                        // for (int r = 0; r < undecided.cols(); r++) {
-                        tools::par::loop(0, undecided.cols(), [&](size_t r) {
-                        double val;
-                        if (phenocandidates.size())
-                            val = this->_func(phenocandidates.col(ids[r]).data(), candidates.rows());
-                        else
-                            val = this->_func(candidates.col(ids[r]).data(), candidates.rows());
-                        calls[ids[r]]++;
-                        mean[ids[r]] = (mean[ids[r]] + val) / 2.0;
-                        this->_solutions.candidates().at(ids[r]).set_fvalue(mean[ids[r]]);
-                        double c = R * std::sqrt((std::log(2 * n_b) - std::log(_delta)) / (2.0 * t));
-                        lower[ids[r]] = std::max(lower[ids[r]], mean[ids[r]] - c);
-                        upper[ids[r]] = std::min(upper[ids[r]], mean[ids[r]] + c);
-                        });
-
-                        nfcalls += undecided.cols();
-
-                        for (int r = 0; r < undecided.cols(); r++) {
-                            int c1 = 0, c2 = 0;
-                            for (int j = 0; j < undecided.cols(); j++) {
-                                // TO-DO: Check minimize/maximize
-                                if (lower[ids[r]] < upper[ids[j]])
-                                    c1++;
-                                if (upper[ids[r]] > lower[ids[j]])
-                                    c2++;
-                            }
-
-                            if (c1 >= (this->_parameters.lambda() - this->_parameters.mu() - discarded.cols())) {
-                                Eigen::VectorXd col = undecided.col(r);
-                                removeColumn(undecided, r);
-                                // update ids
-                                for (int k = r; k < undecided.cols() + 1; k++) {
-                                    ids[k] = ids[k + 1];
-                                }
-
-                                // add to selected
-                                selected.conservativeResize(undecided.rows(), selected.cols() + 1);
-                                selected.col(selected.cols() - 1) = col;
-                                r--;
-                            }
-
-                            else if (c2 >= (this->_parameters.mu() - selected.cols())) {
-                                Eigen::VectorXd col = undecided.col(r);
-                                removeColumn(undecided, r);
-                                // update ids
-                                for (int k = r; k < undecided.cols() + 1; k++) {
-                                    ids[k] = ids[k + 1];
-                                }
-
-                                // add to discarded
-                                discarded.conservativeResize(undecided.rows(), discarded.cols() + 1);
-                                discarded.col(discarded.cols() - 1) = col;
-                                r--;
-                            }
-                        }
-                    }
-
-                    // std::cout << "t_limit: " << _t_limit << std::endl;
-                    // for (int r = 0; r < calls.size(); r++) {
-                    //     std::cout << calls[r] << std::endl;
-                    // }
-                    // std::cout << "-------------------------" << std::endl;
-                    // for (int r = 0; r < mean.size(); r++) {
-                    //     std::cout << mean[r] << std::endl;
-                    // }
-                    // std::cin.get();
-
-                    if (selected.cols() == this->_parameters.mu())
-                        _t_limit = std::max(3, int(1.0 / (_alpha * _t_limit)));
-                    else
-                        _t_limit = std::min(int(_alpha * _t_limit), t_max);
+                // evaluation step of uncertainty handling scheme.
+                if (this->_parameters.get_uh()) {
+                    // this->perform_uh(candidates, phenocandidates, nfcalls);
+                    dMat candidates_uh;
+                    this->select_candidates_uh(candidates, phenocandidates, candidates_uh);
+                    std::vector<libcmaes::RankedCandidate> nvcandidates;
+                    this->eval_candidates_uh(candidates, candidates_uh, nvcandidates, nfcalls);
+                    this->set_candidates_uh(nvcandidates);
                 }
-
-                // std::cout << _t_limit << std::endl;
-
-                // // evaluation step of uncertainty handling scheme.
-                // if (this->_parameters.get_uh()) {
-                //     this->perform_uh(candidates, phenocandidates, nfcalls);
-                // }
 
                 // if an elitist is active, reinject initial solution as needed.
                 if (this->_niter > 0 && (this->_parameters.elitist() || this->_parameters.initial_elitist() || (this->_initial_elitist && this->_parameters.initial_elitist_on_restart()))) {
@@ -244,6 +138,23 @@ namespace limbo {
                 std::chrono::time_point<std::chrono::system_clock> tstop = std::chrono::system_clock::now();
                 this->_solutions._elapsed_eval = std::chrono::duration_cast<std::chrono::milliseconds>(tstop - tstart).count();
 #endif
+            }
+
+            void eval_candidates_uh(const dMat& candidates, const dMat& candidates_uh, std::vector<libcmaes::RankedCandidate>& nvcandidates, int& nfcalls)
+            {
+                // creation of #candidates.cols() same RankedCandidates --- should not take a lot of time
+                nvcandidates = std::vector<libcmaes::RankedCandidate>(candidates.cols(), libcmaes::RankedCandidate(0.0, this->_solutions.candidates().at(0), 0));
+                // re-evaluate
+                // for (int r = 0; r < candidates.cols(); r++) {
+                tools::par::loop(0, candidates.cols(), [&](int r) {
+                    if (r < this->_solutions.lambda_reev()) {
+                        double nfvalue = this->_func(candidates_uh.col(r).data(), candidates_uh.rows());
+                        nvcandidates[r] = libcmaes::RankedCandidate(nfvalue, this->_solutions.candidates().at(r), r);
+                        nfcalls++;
+                    }
+                    else
+                      nvcandidates[r] = libcmaes::RankedCandidate(this->_solutions.candidates().at(r).get_fvalue(), this->_solutions.candidates().at(r), r);
+                });
             }
 
             void removeRow(Eigen::MatrixXd& matrix, unsigned int rowToRemove)
@@ -424,7 +335,7 @@ namespace limbo {
 
                 // enable or disable different parameters
                 cmaparams.set_initial_fvalue(Params::opt_cmaes::fun_compute_initial());
-                // cmaparams.set_uh(Params::opt_cmaes::handle_uncertainty());
+                cmaparams.set_uh(Params::opt_cmaes::handle_uncertainty());
                 cmaparams.set_quiet(!Params::opt_cmaes::verbose());
             }
         };
