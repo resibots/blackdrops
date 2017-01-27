@@ -11,17 +11,18 @@ namespace medrops {
         struct gp_policy_defaults {
             BO_PARAM(double, max_u, 10.0); //max action
             BO_PARAM(double, pseudo_samples, 10);
-            BO_PARAM(double, noise, 1e-5);
+            BO_PARAM(double, noise, 0.01);
         };
     }
     template <typename Params, typename Model>
     struct GPPolicy {
         using kernel_t = limbo::kernel::SquaredExpARD<Params>;
-        using mean_t = limbo::mean::Constant<Params>;
+        using mean_t = limbo::mean::Data<Params>;
         using gp_t = limbo::model::GP<Params, kernel_t, mean_t>;
 
         GPPolicy()
         {
+            _boundary = Params::medrops::boundary();
             _random = false;
             _sdim = Params::nn_policy::state_dim();
             _ps = Params::gp_policy::pseudo_samples();
@@ -110,10 +111,10 @@ namespace medrops {
             _params = params;
         }
 
-        Eigen::VectorXd params(bool as_is = false) const
+        Eigen::VectorXd params() const
         {
             if (_random || _params.size() == 0)
-                return limbo::tools::random_vector((_sdim + 1) * _ps + _sdim); //TODO: set the proper bounds here
+                return limbo::tools::random_vector((_sdim + 1) * _ps + _sdim); //.array() * 2.0 * _boundary - _boundary;
             return _params;
         }
 
@@ -122,6 +123,7 @@ namespace medrops {
         size_t _ps; //total observations
         Eigen::VectorXd _params;
         bool _random;
+        double _boundary;
 
         Eigen::VectorXd _means;
         Eigen::MatrixXd _sigmas;

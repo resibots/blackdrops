@@ -50,7 +50,7 @@ namespace medrops {
             // For now optimize policy without gradients
             Eigen::VectorXd params_star;
             Eigen::VectorXd params_starting = _policy.params();
-            Eigen::write_binary("policy_params_starting_" + std::to_string(i) + ".bin", params_star);
+            Eigen::write_binary("policy_params_starting_" + std::to_string(i) + ".bin", params_starting);
 
             _opt_iters = 0;
             _max_reward = 0;
@@ -64,7 +64,7 @@ namespace medrops {
                     false);
             }
             else {
-                std::cout << "Optimizing policy bounded to " << _boundary << "... " << std::flush;
+                std::cout << "Optimizing policy bounded to [-" << _boundary << ", " << _boundary << "]... " << std::flush;
                 params_star = policy_optimizer(
                     std::bind(&Medrops::_optimize_policy, this, std::placeholders::_1, std::placeholders::_2),
                     params_starting,
@@ -82,8 +82,8 @@ namespace medrops {
             _policy.normalize(_model);
             _policy.set_params(params_star);
 
-            // std::cout << "Best parameters: " << params_star.transpose() << std::endl;
-            Eigen::write_binary("policy_params_" + std::to_string(i) + ".bin", _policy.params(true));
+            // std::cout << "Best parameters: " << _policy.params().transpose() << std::endl;
+            Eigen::write_binary("policy_params_" + std::to_string(i) + ".bin", _policy.params());
 
 #ifndef INTACT
             std::vector<double> R;

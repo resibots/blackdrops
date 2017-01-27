@@ -75,10 +75,7 @@ namespace medrops {
 
         void set_params(const Eigen::VectorXd& params)
         {
-            if (_boundary == 0)
-                _params = params;
-            else
-                _params = params.array() * 2.0 * _boundary - _boundary;
+            _params = params;
             _random = false;
             std::vector<double> weights(params.size());
             Eigen::VectorXd::Map(weights.data(), weights.size()) = params;
@@ -86,13 +83,11 @@ namespace medrops {
             _nn->init();
         }
 
-        Eigen::VectorXd params(bool as_is = false) const
+        Eigen::VectorXd params() const
         {
             if (_random || _params.size() == 0)
-                return limbo::tools::random_vector(_nn->get_nb_connections());
-            if (_boundary == 0 || as_is)
-                return _params;
-            return (_params.array() + _boundary) / (_boundary * 2.0);
+                return limbo::tools::random_vector(_nn->get_nb_connections()).array() * 2.0 * _boundary - _boundary;
+            return _params;
         }
 
         std::shared_ptr<nn_t> _nn;
