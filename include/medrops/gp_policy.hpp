@@ -14,7 +14,7 @@ namespace medrops {
             BO_PARAM(double, noise, 0.01);
         };
     }
-    template <typename Params, typename Model>
+    template <typename Params>
     struct GPPolicy {
         using kernel_t = limbo::kernel::SquaredExpARD<Params>;
         using mean_t = limbo::mean::Data<Params>;
@@ -29,6 +29,7 @@ namespace medrops {
             _params = Eigen::VectorXd::Zero((_sdim + 1) * _ps + _sdim);
         }
 
+        template <typename Model>
         void normalize(const Model& model)
         {
             Eigen::MatrixXd data = model.samples();

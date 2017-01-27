@@ -6,7 +6,7 @@
 
 namespace medrops {
 
-    template <typename Params, typename Model>
+    template <typename Params>
     struct SFNNPolicy {
 
         // using nn_t = medrops::MLP<medrops::NNLayer<medrops::Neuron<medrops::AfTanh>, medrops::PfSum>, medrops::NNLayer<medrops::Neuron<medrops::AfTanh>, medrops::PfSum>>;
@@ -24,10 +24,11 @@ namespace medrops {
             _params = Eigen::VectorXd::Zero(_nn->get_nb_connections());
         }
 
+        template <typename Model>
         void normalize(const Model& model)
         {
             Eigen::MatrixXd data = model.samples();
-            Eigen::MatrixXd samples = data.block(0, 0, data.rows(), data.cols() - 1);
+            Eigen::MatrixXd samples = data.block(0, 0, data.rows(), Params::model_input_dim());
             _means = samples.colwise().mean().transpose();
             _sigmas = Eigen::colwise_sig(samples).array().transpose();
 
@@ -93,7 +94,6 @@ namespace medrops {
         std::shared_ptr<nn_t> _nn;
         Eigen::VectorXd _params;
         bool _random;
-        Model* _model;
 
         Eigen::VectorXd _means;
         Eigen::MatrixXd _sigmas;

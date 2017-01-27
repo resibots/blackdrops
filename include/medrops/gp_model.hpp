@@ -51,8 +51,8 @@ namespace medrops {
 
             Eigen::MatrixXd data(samples.size(), samples[0].size() + obs.cols());
             for (size_t i = 0; i < samples.size(); i++) {
-                data.block(i, 0, 1, Params::state_full_dim()) = samples[i].transpose();
-                data.block(i, Params::state_full_dim(), 1, Params::model_pred_dim()) = obs.row(i);
+                data.block(i, 0, 1, Params::model_input_dim() + Params::action_dim()) = samples[i].transpose();
+                data.block(i, Params::model_input_dim() + Params::action_dim(), 1, Params::model_pred_dim()) = obs.row(i);
             }
             Eigen::write_binary("medrops_data.bin", data);
 

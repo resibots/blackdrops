@@ -721,9 +721,9 @@ int main(int argc, char** argv)
 #endif
 
 #ifndef GPPOLICY
-    medrops::Medrops<Params, MGP_t, CartPole, medrops::SFNNPolicy<Params, MGP_t>, policy_opt_t, RewardFunction> cp_system;
+    medrops::Medrops<Params, MGP_t, CartPole, medrops::SFNNPolicy<Params>, policy_opt_t, RewardFunction> cp_system;
 #else
-    medrops::Medrops<Params, MGP_t, CartPole, medrops::GPPolicy<Params, MGP_t>, policy_opt_t, RewardFunction> cp_system;
+    medrops::Medrops<Params, MGP_t, CartPole, medrops::GPPolicy<Params>, policy_opt_t, RewardFunction> cp_system;
 #endif
 
 #ifndef DATA

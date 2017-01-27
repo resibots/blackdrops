@@ -612,9 +612,9 @@ int main(int argc, char** argv)
     //using policy_opt_t = limbo::opt::NLOptGrad<Params>;
     using MGP_t = medrops::GPModel<Params, GP_t>;
 #ifndef GPPOLICY
-    medrops::Medrops<Params, MGP_t, Pendulum, medrops::SFNNPolicy<Params, MGP_t>, policy_opt_t, RewardFunction> pend_system;
+    medrops::Medrops<Params, MGP_t, Pendulum, medrops::SFNNPolicy<Params>, policy_opt_t, RewardFunction> pend_system;
 #else
-    medrops::Medrops<Params, MGP_t, Pendulum, medrops::GPPolicy<Params, MGP_t>, policy_opt_t, RewardFunction> pend_system;
+    medrops::Medrops<Params, MGP_t, Pendulum, medrops::GPPolicy<Params>, policy_opt_t, RewardFunction> pend_system;
 #endif
 
 #ifndef DATA
