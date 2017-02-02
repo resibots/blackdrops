@@ -35,10 +35,10 @@ struct Params {
     struct graphics : robot_dart::defaults::graphics {
     };
 #endif
-    BO_PARAM(size_t, action_dim, 5);
-    BO_PARAM(size_t, state_full_dim, 10);
-    BO_PARAM(size_t, model_input_dim, 10);
-    BO_PARAM(size_t, model_pred_dim, 10);
+    BO_PARAM(size_t, action_dim, 3);
+    BO_PARAM(size_t, state_full_dim, 9);
+    BO_PARAM(size_t, model_input_dim, 9);
+    BO_PARAM(size_t, model_pred_dim, 6);
 
     BO_DYN_PARAM(size_t, parallel_evaluations);
     BO_DYN_PARAM(bool, verbose);
@@ -66,21 +66,21 @@ struct Params {
     };
 
     struct linear_policy {
-        BO_PARAM(int, state_dim, 10);
-        BO_PARAM(double, max_u, 40.0);
+        BO_PARAM(int, state_dim, 9);
+        BO_PARAM(double, max_u, 6.0);
     };
 
     struct nn_policy {
-        BO_PARAM(int, state_dim, 10);
-        BO_PARAM(double, max_u, 40.0);
+        BO_PARAM(int, state_dim, 9);
+        BO_PARAM(double, max_u, 6.0);
         BO_DYN_PARAM(int, hidden_neurons);
     };
 
     struct gp_policy { //: public medrops::defaults::gp_policy_defaults{
-        BO_PARAM(double, max_u, 40.0); //max action
+        BO_PARAM(double, max_u, 6.0); //max action
         BO_PARAM(double, pseudo_samples, 10);
         BO_PARAM(double, noise, 0.01);
-        BO_PARAM(int, state_dim, 10);
+        BO_PARAM(int, state_dim, 9);
     };
 
     struct mean_constant {
@@ -162,58 +162,58 @@ namespace data {
     std::vector<Eigen::VectorXd> vels, poses, coms;
 }
 
-template <typename Policy>
-class PolicyControl : public robot_dart::RobotControl {
-public:
-    using robot_t = std::shared_ptr<robot_dart::Robot>;
-
-    PolicyControl() {}
-    PolicyControl(const std::vector<double>& ctrl, robot_t robot)
-        : robot_dart::RobotControl(ctrl, robot)
-    {
-        _robot->set_actuator_types(dart::dynamics::Joint::FORCE);
-        _prev_time = 0.0;
-        _t = 0.0;
-    }
-
-    void update(double t)
-    {
-        set_commands();
-        _t = t;
-    }
-
-    void set_commands()
-    {
-        double dt = 0.1;
-
-        if (_t == 0.0 || (_t - _prev_time) >= dt) {
-            Eigen::VectorXd pos = _robot->skeleton()->getPositions();
-            Eigen::VectorXd vel = _robot->skeleton()->getVelocities();
-            Eigen::VectorXd state(vel.size() + pos.size());
-            state.head(vel.size()) = vel;
-            state.tail(pos.size()) = pos;
-            Eigen::VectorXd commands = _policy.next(state);
-            data::vels.push_back(vel);
-            data::poses.push_back(pos);
-            data::coms.push_back(commands);
-            // std::cout << "state: " << vel.transpose() << " " << pos.transpose() << std::endl;
-            // std::cout << "command: " << commands.transpose() << std::endl;
-            assert(_dof == (size_t)commands.size());
-            _robot->skeleton()->setCommands(commands);
-            _prev_commands = commands;
-            _prev_time = _t;
-        }
-        else
-            _robot->skeleton()->setCommands(_prev_commands);
-    }
-
-    Policy _policy;
-
-protected:
-    double _prev_time;
-    double _t;
-    Eigen::VectorXd _prev_commands;
-};
+// template <typename Policy>
+// class PolicyControl : public robot_dart::RobotControl {
+// public:
+//     using robot_t = std::shared_ptr<robot_dart::Robot>;
+//
+//     PolicyControl() {}
+//     PolicyControl(const std::vector<double>& ctrl, robot_t robot)
+//         : robot_dart::RobotControl(ctrl, robot)
+//     {
+//         _robot->set_actuator_types(dart::dynamics::Joint::FORCE);
+//         _prev_time = 0.0;
+//         _t = 0.0;
+//     }
+//
+//     void update(double t)
+//     {
+//         set_commands();
+//         _t = t;
+//     }
+//
+//     void set_commands()
+//     {
+//         double dt = 0.1;
+//
+//         if (_t == 0.0 || (_t - _prev_time) >= dt) {
+//             Eigen::VectorXd pos = _robot->skeleton()->getPositions();
+//             Eigen::VectorXd vel = _robot->skeleton()->getVelocities();
+//             Eigen::VectorXd state(vel.size() + pos.size());
+//             state.head(vel.size()) = vel;
+//             state.tail(pos.size()) = pos;
+//             Eigen::VectorXd commands = _policy.next(state);
+//             data::vels.push_back(vel);
+//             data::poses.push_back(pos);
+//             data::coms.push_back(commands);
+//             // std::cout << "state: " << vel.transpose() << " " << pos.transpose() << std::endl;
+//             // std::cout << "command: " << commands.transpose() << std::endl;
+//             assert(_dof == (size_t)commands.size());
+//             _robot->skeleton()->setCommands(commands);
+//             _prev_commands = commands;
+//             _prev_time = _t;
+//         }
+//         else
+//             _robot->skeleton()->setCommands(_prev_commands);
+//     }
+//
+//     Policy _policy;
+//
+// protected:
+//     double _prev_time;
+//     double _t;
+//     Eigen::VectorXd _prev_commands;
+// };
 
 namespace global {
     std::shared_ptr<robot_dart::Robot> global_robot;
@@ -222,13 +222,33 @@ namespace global {
 #else
     using policy_t = medrops::GPPolicy<Params>;
 #endif
-#ifdef GRAPHIC
-    using robot_simu_t = robot_dart::RobotDARTSimu<robot_dart::robot_control<PolicyControl<policy_t>>, robot_dart::desc<boost::fusion::vector<RobotTraj>>, robot_dart::graphics<robot_dart::Graphics<Params>>>;
-#else
-    using robot_simu_t = robot_dart::RobotDARTSimu<robot_dart::robot_control<PolicyControl<policy_t>>, robot_dart::desc<boost::fusion::vector<RobotTraj>>>;
-#endif
+    // #ifdef GRAPHIC
+    //     using robot_simu_t = robot_dart::RobotDARTSimu<robot_dart::robot_control<PolicyControl<policy_t>>, robot_dart::desc<boost::fusion::vector<RobotTraj>>, robot_dart::graphics<robot_dart::Graphics<Params>>>;
+    // #else
+    //     using robot_simu_t = robot_dart::RobotDARTSimu<robot_dart::robot_control<PolicyControl<policy_t>>, robot_dart::desc<boost::fusion::vector<RobotTraj>>>;
+    // #endif
 
-    Eigen::VectorXd goal(5);
+    Eigen::VectorXd goal(3);
+}
+
+Eigen::VectorXd get_robot_state(const std::shared_ptr<robot_dart::Robot>& robot, bool full = false)
+{
+    Eigen::VectorXd pos = robot->skeleton()->getPositions();
+    Eigen::VectorXd vel = robot->skeleton()->getVelocities();
+    size_t size = vel.size() + pos.size();
+    if (full)
+        size += pos.size();
+    Eigen::VectorXd state(size);
+    state.head(vel.size()) = vel;
+    if (!full)
+        state.tail(pos.size()) = pos;
+    else {
+        for (int i = 0; i < pos.size(); i++) {
+            state(vel.size() + 2 * i) = std::cos(pos(i));
+            state(vel.size() + 2 * i + 1) = std::sin(pos(i));
+        }
+    }
+    return state;
 }
 
 struct Omnigrasper {
@@ -239,48 +259,119 @@ struct Omnigrasper {
         Eigen::VectorXd pp = policy.params();
         std::vector<double> params(pp.size());
         Eigen::VectorXd::Map(params.data(), pp.size()) = pp;
-        double t = 4.0, dt = 0.001;
+        double t = 2.0, dt = 0.001;
 
         std::shared_ptr<robot_dart::Robot> simulated_robot = global::global_robot->clone();
         simulated_robot->fix_to_world();
         simulated_robot->set_position_enforced(true);
 
-        data::vels.clear();
-        data::poses.clear();
-        data::coms.clear();
+        // data::vels.clear();
+        // data::poses.clear();
+        // data::coms.clear();
 
-        global::robot_simu_t simu(params, simulated_robot);
+        std::vector<Eigen::VectorXd> vels, poses, coms;
+
+        class PolicyControl : public robot_dart::RobotControl {
+        public:
+            using robot_t = std::shared_ptr<robot_dart::Robot>;
+
+            PolicyControl() {}
+            PolicyControl(const std::vector<double>& ctrl, robot_t robot)
+                : robot_dart::RobotControl(ctrl, robot)
+            {
+                _robot->set_actuator_types(dart::dynamics::Joint::FORCE);
+                _prev_time = 0.0;
+                _prev_time_ds = 0.0;
+                _t = 0.0;
+            }
+
+            void update(double t)
+            {
+                _t = t;
+                set_commands();
+            }
+
+            void set_commands()
+            {
+                double dt = 0.05;
+                double ds = 0.1;
+
+                if (_t == 0.0 || (_t - _prev_time) >= dt) {
+                    Eigen::VectorXd commands = _policy.next(get_robot_state(_robot, true));
+                    // if (_t == 0.0 || (_t - _prev_time_ds) >= ds) {
+                    Eigen::VectorXd state = get_robot_state(_robot);
+                    Eigen::VectorXd vel = state.head(3);
+                    Eigen::VectorXd pos = state.tail(3);
+                    vels->push_back(vel);
+                    poses->push_back(pos);
+                    coms->push_back(commands);
+                    _prev_time_ds = _t;
+                    // }
+                    assert(_dof == (size_t)commands.size());
+                    _robot->skeleton()->setCommands(commands);
+                    _prev_commands = commands;
+                    _prev_time = int(_t / dt) * dt;
+                }
+                else
+                    _robot->skeleton()->setCommands(_prev_commands);
+            }
+
+            global::policy_t _policy;
+            std::vector<Eigen::VectorXd>* vels;
+            std::vector<Eigen::VectorXd>* poses;
+            std::vector<Eigen::VectorXd>* coms;
+
+        protected:
+            double _prev_time, _prev_time_ds;
+            double _t;
+            Eigen::VectorXd _prev_commands;
+        };
+
+#ifdef GRAPHIC
+        using robot_simu_t = robot_dart::RobotDARTSimu<robot_dart::robot_control<PolicyControl>, robot_dart::graphics<robot_dart::Graphics<Params>>>;
+#else
+        using robot_simu_t = robot_dart::RobotDARTSimu<robot_dart::robot_control<PolicyControl>>;
+#endif
+
+        robot_simu_t simu(params, simulated_robot);
         simu.set_step(dt);
         size_t total_steps = size_t(t / dt);
         simu.set_desc_dump(total_steps / steps);
         // if (policy.random())
         //     simu.controller().set_random_policy();
         simu.controller()._policy = policy;
+        simu.controller().vels = &vels;
+        simu.controller().poses = &poses;
+        simu.controller().coms = &coms;
 
         R = std::vector<double>();
 
         simu.run(t);
 
-        std::vector<Eigen::VectorXd> states;
-        simu.get_descriptor<RobotTraj>(states);
+        // std::vector<Eigen::VectorXd> states;
+        // simu.get_descriptor<RobotTraj>(states);
 
         // std::cout << "Yeah:" << std::endl;
         // for (size_t j = 1; j < states.size(); j++)
         // size_t step = total_steps / steps;
-        for (size_t j = 0; j < steps; j++) {
+        if (display)
+            std::cout << "#: " << vels.size() << std::endl;
+        for (size_t j = 0; j < vels.size() - 1; j++) {
             size_t id = j; // * step;
-            Eigen::VectorXd init(Params::model_input_dim());
-            init.head(5) = data::vels[id];
-            init.tail(5) = data::poses[id];
-            Eigen::VectorXd u = data::coms[id];
-            Eigen::VectorXd final(Params::model_input_dim());
-            final.head(5) = data::vels[id + 1];
-            final.tail(5) = data::poses[id + 1];
+            Eigen::VectorXd init(Params::model_pred_dim());
+            init.head(3) = vels[id];
+            init.tail(3) = poses[id];
+            Eigen::VectorXd u = coms[id];
+            Eigen::VectorXd final(Params::model_pred_dim());
+            final.head(3) = vels[id + 1];
+            final.tail(3) = poses[id + 1];
             // Eigen::VectorXd init = states[j - 1].head(Params::model_input_dim());
             // Eigen::VectorXd u = states[j - 1].segment(Params::model_input_dim(), Params::action_dim());
             // Eigen::VectorXd final = states[j].head(Params::model_input_dim());
-            // std::cout << "state: " << init.transpose() << std::endl;
-            // std::cout << "command: " << u.transpose() << std::endl;
+            if (display) {
+                std::cout << "state: " << init.transpose() << std::endl;
+                std::cout << "command: " << u.transpose() << std::endl;
+            }
             // std::cout << "next state: " << final.transpose() << std::endl;
             double r = world(init, u, final);
             R.push_back(r);
@@ -388,11 +479,9 @@ struct RewardFunction {
         // double de = (to_state.tail(5) - global::goal).squaredNorm();
         double de = 0.0;
         for (size_t i = 0; i < 3; i++) {
-            double dx = angle_dist(to_state(5 + i), global::goal(i));
+            double dx = angle_dist(to_state(3 + i), global::goal(i));
             de += dx * dx;
         }
-        // std::cout << to_state.tail(5).transpose() << " vs " << global::goal.transpose() << std::endl;
-        // std::cout << de << std::endl;
 
         return std::exp(-0.5 / s_c_sq * de);
     }
@@ -543,9 +632,11 @@ int main(int argc, char** argv)
     std::cout << "  tbb threads = " << threads << std::endl;
     std::cout << std::endl;
 
-    global::goal << 1, 1, 1, 1, 1;
+    // global::goal << 2, 1, -1;
+    global::goal << 1, 1, 1;
 
-    init_simu("/home/kchatzil/Workspaces/ResiBots/robots/robot_simu/robot_dart/res/models/omnigrasper.urdf");
+    // init_simu("/home/kchatzil/Workspaces/ResiBots/robots/robot_simu/robot_dart/res/models/omnigrasper_3dof.urdf");
+    init_simu(std::string(std::getenv("RESIBOTS_DIR")) + "/share/arm_models/URDF/omnigrasper_3dof.urdf");
 
     using policy_opt_t = limbo::opt::CustomCmaes<Params>;
 //using policy_opt_t = limbo::opt::NLOptGrad<Params>;

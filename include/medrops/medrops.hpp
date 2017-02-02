@@ -72,6 +72,7 @@ namespace medrops {
             }
             if (Params::verbose())
                 std::cout << _opt_iters << "(" << _max_reward << ", " << _max_simu_reward << ", " << _max_real_reward << ") " << std::endl;
+            std::cout << _opt_iters << "(" << _max_reward << ") " << std::endl;
             std::cout << "Optimization iterations: " << _opt_iters << std::endl;
             // std::cout << "Max parameters: " << _max_params.transpose() << std::endl;
 
@@ -85,16 +86,16 @@ namespace medrops {
             // std::cout << "Best parameters: " << _policy.params().transpose() << std::endl;
             Eigen::write_binary("policy_params_" + std::to_string(i) + ".bin", _policy.params());
 
-#ifndef INTACT
-            std::vector<double> R;
-            RewardFunction world;
-            _robot.execute_dummy(_policy, _model, world, Params::medrops::rollout_steps(), R);
-            std::cout << "Dummy reward: " << std::accumulate(R.begin(), R.end(), 0.0) << std::endl;
-
-            for (auto r : R)
-                _ofs << r << " ";
-            _ofs << std::endl;
-#endif
+            // #ifndef INTACT
+            //             std::vector<double> R;
+            //             RewardFunction world;
+            //             _robot.execute_dummy(_policy, _model, world, Params::medrops::rollout_steps(), R);
+            //             std::cout << "Dummy reward: " << std::accumulate(R.begin(), R.end(), 0.0) << std::endl;
+            //
+            //             for (auto r : R)
+            //                 _ofs << r << " ";
+            //             _ofs << std::endl;
+            // #endif
         }
 
         void learn(size_t init, size_t iterations)
@@ -104,6 +105,9 @@ namespace medrops {
             _ofs_opt.open("times.dat");
             _ofs_model.open("times_model.dat");
             _policy.set_random_policy();
+            // Eigen::VectorXd pp = limbo::tools::random_vector(_policy.params().size()).array() * 2.0 * _boundary - _boundary;
+            // Eigen::read_binary("policy_params_1_20hz.bin", pp);
+            // _policy.set_params(pp);
 
             std::cout << "Executing random actions..." << std::endl;
             for (size_t i = 0; i < init; i++) {
@@ -117,7 +121,7 @@ namespace medrops {
                           << "Learning iteration #" << (i + 1) << std::endl;
 
                 time_start = std::chrono::steady_clock::now();
-                learn_model();
+                // learn_model();
                 double learn_model_ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - time_start).count();
                 _ofs_model << learn_model_ms << std::endl;
 
@@ -173,7 +177,10 @@ namespace medrops {
             policy.set_params(params.array());
             policy.normalize(_model);
 
-            double r = _robot.predict_policy(policy, _model, world, Params::medrops::rollout_steps());
+            std::vector<double> R;
+            _robot.execute(policy, world, Params::medrops::rollout_steps(), R, false);
+
+            double r = std::accumulate(R.begin(), R.end(), 0.0);
 
             _opt_iters++;
             if (_max_reward < r) {
@@ -191,6 +198,9 @@ namespace medrops {
                 _max_params = policy.params().array();
                 // Eigen::write_binary("max_params.bin", policy.params());
             }
+
+            if (_opt_iters % 500 == 0)
+                std::cout << _opt_iters << "(" << _max_reward << ") " << std::flush;
 
             if (Params::verbose() && _opt_iters % 1000 == 0) {
                 std::cout << _opt_iters << "(" << _max_reward << ", " << _max_simu_reward << ", " << _max_real_reward << ") " << std::flush;
