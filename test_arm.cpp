@@ -3,6 +3,7 @@
 #include <limbo/mean/constant.hpp>
 
 #include <robot_dart/robot_dart_simu.hpp>
+#include <robot_dart/position_control.hpp>
 #ifdef GRAPHIC
 #include <robot_dart/graphics.hpp>
 #endif
@@ -17,6 +18,7 @@
 #include <medrops/kernel_lf_opt.hpp>
 #include <medrops/linear_policy.hpp>
 #include <medrops/medrops.hpp>
+#define MULTI_LIMITS
 #include <medrops/sf_nn_policy.hpp>
 
 template <typename T>
@@ -36,7 +38,7 @@ struct Params {
     };
 #endif
     BO_PARAM(size_t, action_dim, 3);
-    BO_PARAM(size_t, state_full_dim, 9);
+    BO_PARAM(size_t, state_full_dim, 12);
     BO_PARAM(size_t, model_input_dim, 9);
     BO_PARAM(size_t, model_pred_dim, 6);
 
@@ -48,7 +50,7 @@ struct Params {
     };
 
     struct medrops {
-        BO_PARAM(size_t, rollout_steps, 40);
+        BO_PARAM(size_t, rollout_steps, 39);
         BO_DYN_PARAM(double, boundary);
     };
 
@@ -72,7 +74,11 @@ struct Params {
 
     struct nn_policy {
         BO_PARAM(int, state_dim, 9);
+#ifndef MULTI_LIMITS
         BO_PARAM(double, max_u, 6.0);
+#else
+        BO_PARAM_ARRAY(double, max_u, 2.5, 44.7, 14.0);
+#endif
         BO_DYN_PARAM(int, hidden_neurons);
     };
 
@@ -102,7 +108,7 @@ struct Params {
         BO_DYN_PARAM(bool, handle_uncertainty);
 
         BO_PARAM(int, variant, aBIPOP_CMAES);
-        BO_PARAM(int, verbose, false);
+        BO_PARAM(bool, verbose, false);
         BO_PARAM(bool, fun_compute_initial, true);
         // BO_PARAM(double, fun_target, 30);
         BO_DYN_PARAM(double, ubound);
@@ -233,6 +239,19 @@ namespace global {
 
 Eigen::VectorXd get_robot_state(const std::shared_ptr<robot_dart::Robot>& robot, bool full = false)
 {
+    // // Eigen::Vector3d size;
+    // // size << 0, 0, 0.252;
+    // // Eigen::VectorXd p = robot->body_trans("arm_3_sub")->getCOM();
+    // Eigen::VectorXd pos = robot->skeleton()->getPositions();
+    // auto bd = robot->skeleton()->getBodyNode("arm_3_sub");
+    // Eigen::VectorXd p = bd->getCOM();
+    // Eigen::VectorXd v = bd->getCOMLinearVelocity();
+    // Eigen::VectorXd r(Params::model_input_dim());
+    // r.segment(3, 3) = p;
+    // r.head(3) = v;
+    // r.tail(3) = pos;
+    // return r;
+    // std::cout << robot->skeleton()->getVelocityUpperLimits().transpose() << std::endl;
     Eigen::VectorXd pos = robot->skeleton()->getPositions();
     Eigen::VectorXd vel = robot->skeleton()->getVelocities();
     size_t size = vel.size() + pos.size();
@@ -269,7 +288,7 @@ struct Omnigrasper {
         // data::poses.clear();
         // data::coms.clear();
 
-        std::vector<Eigen::VectorXd> vels, poses, coms;
+        std::vector<Eigen::VectorXd> vels, poses, coms, qs;
 
         class PolicyControl : public robot_dart::RobotControl {
         public:
@@ -301,10 +320,13 @@ struct Omnigrasper {
                     // if (_t == 0.0 || (_t - _prev_time_ds) >= ds) {
                     Eigen::VectorXd state = get_robot_state(_robot);
                     Eigen::VectorXd vel = state.head(3);
+                    // Eigen::VectorXd pos = state.segment(3, 3);
+                    // Eigen::VectorXd qq = state.tail(3);
                     Eigen::VectorXd pos = state.tail(3);
                     vels->push_back(vel);
                     poses->push_back(pos);
                     coms->push_back(commands);
+                    // qs->push_back(qq);
                     _prev_time_ds = _t;
                     // }
                     assert(_dof == (size_t)commands.size());
@@ -320,6 +342,7 @@ struct Omnigrasper {
             std::vector<Eigen::VectorXd>* vels;
             std::vector<Eigen::VectorXd>* poses;
             std::vector<Eigen::VectorXd>* coms;
+            std::vector<Eigen::VectorXd>* qs;
 
         protected:
             double _prev_time, _prev_time_ds;
@@ -343,6 +366,7 @@ struct Omnigrasper {
         simu.controller().vels = &vels;
         simu.controller().poses = &poses;
         simu.controller().coms = &coms;
+        simu.controller().qs = &qs;
 
         R = std::vector<double>();
 
@@ -354,28 +378,40 @@ struct Omnigrasper {
         // std::cout << "Yeah:" << std::endl;
         // for (size_t j = 1; j < states.size(); j++)
         // size_t step = total_steps / steps;
-        if (display)
-            std::cout << "#: " << vels.size() << std::endl;
+        // if (display)
+        //     std::cout << "#: " << vels.size() << std::endl;
         for (size_t j = 0; j < vels.size() - 1; j++) {
             size_t id = j; // * step;
             Eigen::VectorXd init(Params::model_pred_dim());
             init.head(3) = vels[id];
-            init.tail(3) = poses[id];
+            // init.segment(3, 3) = poses[id];
+            init.tail(3) = poses[id]; //qs[id];
+            Eigen::VectorXd init_full(Params::model_input_dim());
+            init_full.head(3) = init.head(3);
+            for (int i = 0; i < 3; i++) {
+                init_full(3 + 2 * i) = std::cos(init(3 + i));
+                init_full(3 + 2 * i + 1) = std::sin(init(3 + i));
+            }
             Eigen::VectorXd u = coms[id];
             Eigen::VectorXd final(Params::model_pred_dim());
             final.head(3) = vels[id + 1];
-            final.tail(3) = poses[id + 1];
+            // final.segment(3, 3) = poses[id + 1];
+            final.tail(3) = poses[id + 1]; //qs[id + 1];
             // Eigen::VectorXd init = states[j - 1].head(Params::model_input_dim());
             // Eigen::VectorXd u = states[j - 1].segment(Params::model_input_dim(), Params::action_dim());
             // Eigen::VectorXd final = states[j].head(Params::model_input_dim());
             if (display) {
                 std::cout << "state: " << init.transpose() << std::endl;
                 std::cout << "command: " << u.transpose() << std::endl;
+                // std::cout << poses[id].transpose() << " to " << poses[id + 1].transpose() << std::endl;
+                // std::cout << "vel: " << vels[id].transpose() << std::endl;
+                // std::cout << "vel: " << vels[id + 1].transpose() << std::endl;
+                // std::cout << "my_vel: " << ((poses[id + 1] - poses[id]).array() / 0.05).transpose() << std::endl;
             }
             // std::cout << "next state: " << final.transpose() << std::endl;
             double r = world(init, u, final);
             R.push_back(r);
-            res.push_back(std::make_tuple(init, u, final - init));
+            res.push_back(std::make_tuple(init_full, u, final - init));
         }
 
         if (!policy.random() && display) {
@@ -391,12 +427,19 @@ struct Omnigrasper {
     {
         R = std::vector<double>();
         // init state
-        Eigen::VectorXd init = Eigen::VectorXd::Zero(Params::model_input_dim());
+        Eigen::VectorXd init = Eigen::VectorXd::Zero(Params::model_pred_dim());
+        // init(5) = 0.58;
         for (size_t j = 0; j < steps; j++) {
             Eigen::VectorXd query_vec(Params::model_input_dim() + Params::action_dim());
+            Eigen::VectorXd init_full(Params::model_input_dim());
+            init_full.head(3) = init.head(3);
+            for (int i = 0; i < 3; i++) {
+                init_full(3 + 2 * i) = std::cos(init(3 + i));
+                init_full(3 + 2 * i + 1) = std::sin(init(3 + i));
+            }
             // init.tail(Params::model_input_dim()) = init.tail(Params::model_input_dim()).unaryExpr([](double x) { return angle_dist(0,x); });
-            Eigen::VectorXd u = policy.next(init);
-            query_vec.head(Params::model_input_dim()) = init;
+            Eigen::VectorXd u = policy.next(init_full);
+            query_vec.head(Params::model_input_dim()) = init_full;
             query_vec.tail(Params::action_dim()) = u;
 
             Eigen::VectorXd mu;
@@ -404,6 +447,9 @@ struct Omnigrasper {
             std::tie(mu, sigma) = model.predictm(query_vec);
 
             Eigen::VectorXd final = init + mu;
+            // std::cout << init.transpose() << " to " << final.transpose() << " dx: " << mu.transpose() << std::endl;
+            // std::cout << "state: " << init.transpose() << std::endl;
+            // std::cout << "command: " << u.transpose() << std::endl;
             // final.tail(Params::model_input_dim()) = final.tail(Params::model_input_dim()).unaryExpr([](double x) { return angle_dist(0,x); });
 
             double r = world(init, mu, final);
@@ -423,11 +469,18 @@ struct Omnigrasper {
 
             double reward = 0.0;
             // init state
-            Eigen::VectorXd init = Eigen::VectorXd::Zero(Params::model_input_dim());
+            Eigen::VectorXd init = Eigen::VectorXd::Zero(Params::model_pred_dim());
+            // init(5) = 0.58;
             for (size_t j = 0; j < steps; j++) {
                 Eigen::VectorXd query_vec(Params::model_input_dim() + Params::action_dim());
-                Eigen::VectorXd u = policy.next(init);
-                query_vec.head(Params::model_input_dim()) = init;
+                Eigen::VectorXd init_full(Params::model_input_dim());
+                init_full.head(3) = init.head(3);
+                for (int i = 0; i < 3; i++) {
+                    init_full(3 + 2 * i) = std::cos(init(3 + i));
+                    init_full(3 + 2 * i + 1) = std::sin(init(3 + i));
+                }
+                Eigen::VectorXd u = policy.next(init_full);
+                query_vec.head(Params::model_input_dim()) = init_full;
                 query_vec.tail(Params::action_dim()) = u;
 
                 Eigen::VectorXd mu;
@@ -476,7 +529,7 @@ struct RewardFunction {
     double operator()(const Eigen::VectorXd& from_state, const Eigen::VectorXd& action, const Eigen::VectorXd& to_state) const
     {
         double s_c_sq = 0.25 * 0.25;
-        // double de = (to_state.tail(5) - global::goal).squaredNorm();
+        // double de = (to_state.segment(3, 3) - global::goal).squaredNorm();
         double de = 0.0;
         for (size_t i = 0; i < 3; i++) {
             double dx = angle_dist(to_state(3 + i), global::goal(i));
@@ -490,6 +543,28 @@ struct RewardFunction {
 void init_simu(const std::string& robot_file)
 {
     global::global_robot = std::make_shared<robot_dart::Robot>(robot_dart::Robot(robot_file, {}, "arm", true));
+
+    // get goal position
+    std::shared_ptr<robot_dart::Robot> simulated_robot = global::global_robot->clone();
+    simulated_robot->fix_to_world();
+    simulated_robot->set_position_enforced(true);
+
+    // // using robot_simu_t = robot_dart::RobotDARTSimu<robot_dart::robot_control<robot_dart::PositionControl>>;
+    // #ifdef GRAPHIC
+    //     using robot_simu_t = robot_dart::RobotDARTSimu<robot_dart::robot_control<robot_dart::PositionControl>, robot_dart::graphics<robot_dart::Graphics<Params>>>;
+    // #else
+    //     using robot_simu_t = robot_dart::RobotDARTSimu<robot_dart::robot_control<robot_dart::PositionControl>>;
+    // #endif
+    //     std::vector<double> params(3, 1.0);
+    //     // params[0] = -2.5;
+    //     // params[2] = 1.0;
+    //
+    //     robot_simu_t simu(params, simulated_robot);
+    //     simu.run(2);
+    //     global::goal = get_robot_state(simulated_robot).segment(3, 3);
+    //     std::cout << "Goal is: " << global::goal.transpose() << std::endl;
+    global::goal = Eigen::VectorXd(3);
+    global::goal << 1, 1, 1;
 }
 
 using kernel_t = medrops::SquaredExpARD<Params>;
@@ -633,7 +708,7 @@ int main(int argc, char** argv)
     std::cout << std::endl;
 
     // global::goal << 2, 1, -1;
-    global::goal << 1, 1, 1;
+    // global::goal << 1, 1, 1;
 
     // init_simu("/home/kchatzil/Workspaces/ResiBots/robots/robot_simu/robot_dart/res/models/omnigrasper_3dof.urdf");
     init_simu(std::string(std::getenv("RESIBOTS_DIR")) + "/share/arm_models/URDF/omnigrasper_3dof.urdf");

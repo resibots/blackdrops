@@ -22,25 +22,25 @@ namespace medrops {
                 Params::action_dim());
             _nn->init();
             _params = Eigen::VectorXd::Zero(_nn->get_nb_connections());
-            _limits = Eigen::VectorXd(9);
-            // _limits << 30.0, 30.0, 30.0, 3.14, 3.14, 3.14; 10.5124 23.5371 35.8726 3.14391 1.81071 1.83343
-            // _limits << 9.36686, 19.3844, 38.1972, 3.15046, 1.81577, 1.86595;
-            _limits << 10.1127, 24.3294, 42.2179, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0;
+            // _limits = Eigen::VectorXd(6);
+            // _limits << 2.67992, 2.20705, 3.89703, 0.300936, 0.274408, 0.488859;
+            // // _limits << 30.0, 30.0, 30.0, 3.14, 3.14, 3.14; 10.5124 23.5371 35.8726 3.14391 1.81071 1.83343
+            // // _limits << 9.36686, 19.3844, 38.1972, 3.15046, 1.81577, 1.86595;
+            // // _limits << 10.1127, 24.3294, 42.2179, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0;
+            // _limits << 1.0, 1.0, 1.0, 1.0, 1.0, 1.0;
         }
 
         template <typename Model>
         void normalize(const Model& model)
         {
-// Eigen::MatrixXd data = model.samples();
-// Eigen::MatrixXd samples = data.block(0, 0, data.rows(), Params::model_input_dim());
-// _means = samples.colwise().mean().transpose();
-// _sigmas = Eigen::colwise_sig(samples).array().transpose();
-//
-// Eigen::VectorXd pl = Eigen::percentile(samples.array().abs(), 5);
-// Eigen::VectorXd ph = Eigen::percentile(samples.array().abs(), 95);
-// _limits = pl.array().max(ph.array());
-// _limits = Eigen::VectorXd(6);
-// _limits << 20.0, 20.0, 20.0, 3.14, 3.14, 3.14;
+            Eigen::MatrixXd data = model.samples();
+            Eigen::MatrixXd samples = data.block(0, 0, data.rows(), Params::model_input_dim());
+            _means = samples.colwise().mean().transpose();
+            _sigmas = Eigen::colwise_sig(samples).array().transpose();
+
+            Eigen::VectorXd pl = Eigen::percentile(samples.array().abs(), 5);
+            Eigen::VectorXd ph = Eigen::percentile(samples.array().abs(), 95);
+            _limits = pl.array().max(ph.array());
 
 #ifdef INTACT
             _limits << 16.138, 9.88254, 14.7047, 0.996735, 0.993532;
@@ -50,10 +50,18 @@ namespace medrops {
         Eigen::VectorXd next(const Eigen::VectorXd& state) const
         {
             if (_random || _params.size() == 0) {
+#ifndef MULTI_LIMITS
                 return Params::nn_policy::max_u() * (limbo::tools::random_vector(Params::action_dim()).array() * 2 - 1.0);
+#else
+                Eigen::VectorXd act = (limbo::tools::random_vector(Params::action_dim()).array() * 2 - 1.0);
+                for (int i = 0; i < act.size(); i++) {
+                    act(i) = act(i) * Params::nn_policy::max_u(i);
+                }
+                return act;
+#endif
             }
 
-            Eigen::VectorXd nstate = state.array() / _limits.array();
+            Eigen::VectorXd nstate = state.array() / _limits.array(); //((state - _means).array() / (_sigmas * 3).array()); //state.array() / _limits.array();
 
             std::vector<double> inputs(Params::nn_policy::state_dim());
             Eigen::VectorXd::Map(inputs.data(), inputs.size()) = nstate;
@@ -64,9 +72,15 @@ namespace medrops {
             std::vector<double> outputs = _nn->get_outf();
             Eigen::VectorXd act = Eigen::VectorXd::Map(outputs.data(), outputs.size());
 
+#ifndef MULTI_LIMITS
             act = act.unaryExpr([](double x) {
                 return Params::nn_policy::max_u() * x;//(9 * std::sin(x) / 8.0 + std::sin(3 * x) / 8.0);
             });
+#else
+            for (int i = 0; i < act.size(); i++) {
+                act(i) = act(i) * Params::nn_policy::max_u(i);
+            }
+#endif
             return act;
         }
 

@@ -47,22 +47,48 @@ namespace medrops {
 
                 samples.push_back(s);
                 obs.row(i) = pred;
+                // std::cout << s.transpose() << std::endl;
+                // std::cout << pred.transpose() << std::endl;
             }
 
-            Eigen::MatrixXd data(samples.size(), samples[0].size() + obs.cols());
+            Eigen::MatrixXd data = _to_matrix((const std::vector<Eigen::VectorXd>&)samples);
+            Eigen::MatrixXd samp = data.block(0, 0, data.rows(), Params::model_input_dim() + Params::action_dim());
+            _means = samp.colwise().mean().transpose();
+            _sigmas = Eigen::colwise_sig(samp).array().transpose();
+            Eigen::VectorXd pl = Eigen::percentile(samp.array().abs(), 5);
+            Eigen::VectorXd ph = Eigen::percentile(samp.array().abs(), 95);
+            _limits = pl.array().max(ph.array());
+
+            Eigen::MatrixXd data2(samples.size(), samples[0].size() + obs.cols());
             for (size_t i = 0; i < samples.size(); i++) {
-                data.block(i, 0, 1, Params::model_input_dim() + Params::action_dim()) = samples[i].transpose();
-                data.block(i, Params::model_input_dim() + Params::action_dim(), 1, Params::model_pred_dim()) = obs.row(i);
+                data2.block(i, 0, 1, Params::model_input_dim() + Params::action_dim()) = samples[i].transpose(); //.array() / _limits.array();
+                data2.block(i, Params::model_input_dim() + Params::action_dim(), 1, Params::model_pred_dim()) = obs.row(i);
             }
-            Eigen::write_binary("medrops_data.bin", data);
+            Eigen::write_binary("medrops_data.bin", data2);
+
+            std::vector<Eigen::VectorXd> transf_samples(samples.size());
+            for (size_t i = 0; i < samples.size(); i++) {
+                // transf_samples[i] = Eigen::VectorXd(samples[i].size());
+                // std::cout << samples[i].size() << " vs " << _limits.size() << std::endl;
+                transf_samples[i] = samples[i]; //(samples[i].array() - _means.array()) / _sigmas.array();
+            }
 
             std::cout << "GP Samples: " << samples.size() << std::endl;
             Eigen::VectorXd noises = Eigen::VectorXd::Constant(samples.size(), Params::gp_model::noise());
             init(); // TODO: Fix this properly
             tbb::parallel_for(size_t(0), (size_t)obs.cols(), size_t(1), [&](size_t i) {
-                _gp_models[i]->compute(samples, _to_vector(obs.col(i)), noises);
+                _gp_models[i]->compute(transf_samples, _to_vector(obs.col(i)), noises);
                 _gp_models[i]->optimize_hyperparams();
             });
+
+// for (size_t i = 0; i < transf_samples.size(); i++) {
+//     Eigen::VectorXd mu;
+//     Eigen::VectorXd sigma;
+//     std::tie(mu, sigma) = predictm(transf_samples[i]);
+//     // std::cout << mu.size() << " vs " << obs.row(i).size() << std::endl;
+//     Eigen::VectorXd diff = (mu.transpose() - obs.row(i));
+//     std::cout << diff.squaredNorm() << " with sigma: " << sigma.transpose() << std::endl;
+// }
 
 /*
             for (size_t i = 0; i < (size_t)obs.cols(); ++i) {
@@ -151,7 +177,7 @@ namespace medrops {
             tbb::parallel_for(size_t(0), _gp_models.size(), size_t(1), [&](size_t i) {
                 double s;
                 Eigen::VectorXd m;
-                std::tie(m, s) = _gp_models[i]->query(x);
+                std::tie(m, s) = _gp_models[i]->query(x);//(x.array() - _means.array()) / _sigmas.array());
                 ms(i) = m(0);
                 ss(i) = s;
             });
@@ -185,6 +211,7 @@ namespace medrops {
 
         std::vector<std::shared_ptr<GP>> _gp_models;
         bool _initialized = false;
+        Eigen::VectorXd _means, _sigmas, _limits;
     };
 }
 

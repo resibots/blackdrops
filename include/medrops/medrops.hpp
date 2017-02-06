@@ -72,7 +72,7 @@ namespace medrops {
             }
             if (Params::verbose())
                 std::cout << _opt_iters << "(" << _max_reward << ", " << _max_simu_reward << ", " << _max_real_reward << ") " << std::endl;
-            std::cout << _opt_iters << "(" << _max_reward << ") " << std::endl;
+            // std::cout << _opt_iters << "(" << _max_reward << ") " << std::endl;
             std::cout << "Optimization iterations: " << _opt_iters << std::endl;
             // std::cout << "Max parameters: " << _max_params.transpose() << std::endl;
 
@@ -86,16 +86,16 @@ namespace medrops {
             // std::cout << "Best parameters: " << _policy.params().transpose() << std::endl;
             Eigen::write_binary("policy_params_" + std::to_string(i) + ".bin", _policy.params());
 
-            // #ifndef INTACT
-            //             std::vector<double> R;
-            //             RewardFunction world;
-            //             _robot.execute_dummy(_policy, _model, world, Params::medrops::rollout_steps(), R);
-            //             std::cout << "Dummy reward: " << std::accumulate(R.begin(), R.end(), 0.0) << std::endl;
-            //
-            //             for (auto r : R)
-            //                 _ofs << r << " ";
-            //             _ofs << std::endl;
-            // #endif
+#ifndef INTACT
+            std::vector<double> R;
+            RewardFunction world;
+            _robot.execute_dummy(_policy, _model, world, Params::medrops::rollout_steps(), R);
+            std::cout << "Dummy reward: " << std::accumulate(R.begin(), R.end(), 0.0) << std::endl;
+
+            for (auto r : R)
+                _ofs << r << " ";
+            _ofs << std::endl;
+#endif
         }
 
         void learn(size_t init, size_t iterations)
@@ -106,7 +106,7 @@ namespace medrops {
             _ofs_model.open("times_model.dat");
             _policy.set_random_policy();
             // Eigen::VectorXd pp = limbo::tools::random_vector(_policy.params().size()).array() * 2.0 * _boundary - _boundary;
-            // Eigen::read_binary("policy_params_1_20hz.bin", pp);
+            // Eigen::read_binary("policy_params_1.bin", pp);
             // _policy.set_params(pp);
 
             std::cout << "Executing random actions..." << std::endl;
@@ -121,12 +121,32 @@ namespace medrops {
                           << "Learning iteration #" << (i + 1) << std::endl;
 
                 time_start = std::chrono::steady_clock::now();
-                // learn_model();
+                learn_model();
                 double learn_model_ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - time_start).count();
                 _ofs_model << learn_model_ms << std::endl;
 
                 _policy.normalize(_model);
+                std::cout << "Limits: " << _policy._limits.transpose() << std::endl;
                 std::cout << "Learned model..." << std::endl;
+
+                int eval = 10000;
+                Eigen::VectorXd limits = _model._limits; //(Params::model_input_dim() + Params::action_dim());
+                // limits.head(Params::model_input_dim()) = _policy._limits;
+                // limits.tail(Params::action_dim()) = Eigen::VectorXd::Constant(Params::action_dim(), Params::nn_policy::max_u());
+                std::vector<Eigen::VectorXd> rvs = random_vectors(Params::model_input_dim() + Params::action_dim(), eval, limits);
+
+                Eigen::VectorXd sigmas(Params::model_pred_dim());
+                for (size_t i = 0; i < rvs.size(); i++) {
+                    Eigen::VectorXd s;
+                    Eigen::VectorXd m;
+                    std::tie(m, s) = _model.predictm(rvs[i]);
+
+                    // errors.array() += (m - cm).array().abs();
+                    sigmas.array() += s.array();
+                }
+
+                sigmas.array() = sigmas.array() / (eval * 1.0);
+                std::cout << "SIGMAS: " << sigmas.transpose() << std::endl;
 
                 // if (Params::verbose()) {
                 //     Eigen::VectorXd errors;
@@ -177,10 +197,11 @@ namespace medrops {
             policy.set_params(params.array());
             policy.normalize(_model);
 
-            std::vector<double> R;
-            _robot.execute(policy, world, Params::medrops::rollout_steps(), R, false);
-
-            double r = std::accumulate(R.begin(), R.end(), 0.0);
+            // std::vector<double> R;
+            // _robot.execute(policy, world, Params::medrops::rollout_steps(), R, false);
+            //
+            // double r = std::accumulate(R.begin(), R.end(), 0.0);
+            double r = _robot.predict_policy(policy, _model, world, Params::medrops::rollout_steps());
 
             _opt_iters++;
             if (_max_reward < r) {
@@ -199,8 +220,8 @@ namespace medrops {
                 // Eigen::write_binary("max_params.bin", policy.params());
             }
 
-            if (_opt_iters % 500 == 0)
-                std::cout << _opt_iters << "(" << _max_reward << ") " << std::flush;
+            // if (_opt_iters % 500 == 0)
+            //     std::cout << _opt_iters << "(" << _max_reward << ") " << std::flush;
 
             if (Params::verbose() && _opt_iters % 1000 == 0) {
                 std::cout << _opt_iters << "(" << _max_reward << ", " << _max_simu_reward << ", " << _max_real_reward << ") " << std::flush;
@@ -209,22 +230,22 @@ namespace medrops {
             return limbo::opt::no_grad(r);
         }
 
-        // Eigen::VectorXd get_random_vector(size_t dim, Eigen::VectorXd bounds) const
-        // {
-        //     Eigen::VectorXd rv = (limbo::tools::random_vector(dim).array() * 2 - 1);
-        //     // rv(0) *= 3; rv(1) *= 5; rv(2) *= 6; rv(3) *= M_PI; rv(4) *= 10;
-        //     return rv.cwiseProduct(bounds);
-        // }
-        //
-        // std::vector<Eigen::VectorXd> random_vectors(size_t dim, size_t q, Eigen::VectorXd bounds) const
-        // {
-        //     std::vector<Eigen::VectorXd> result(q);
-        //     for (size_t i = 0; i < q; i++) {
-        //         result[i] = get_random_vector(dim, bounds);
-        //     }
-        //     return result;
-        // }
-        //
+        Eigen::VectorXd get_random_vector(size_t dim, Eigen::VectorXd bounds) const
+        {
+            Eigen::VectorXd rv = (limbo::tools::random_vector(dim).array() * 2 - 1);
+            // rv(0) *= 3; rv(1) *= 5; rv(2) *= 6; rv(3) *= M_PI; rv(4) *= 10;
+            return rv.cwiseProduct(bounds);
+        }
+
+        std::vector<Eigen::VectorXd> random_vectors(size_t dim, size_t q, Eigen::VectorXd bounds) const
+        {
+            std::vector<Eigen::VectorXd> result(q);
+            for (size_t i = 0; i < q; i++) {
+                result[i] = get_random_vector(dim, bounds);
+            }
+            return result;
+        }
+
         // std::tuple<Eigen::VectorXd, Eigen::VectorXd> get_accuracy(int evaluations = 100000) const
         // {
         //     Eigen::VectorXd bounds(5);
