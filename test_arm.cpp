@@ -394,14 +394,14 @@ struct Omnigrasper {
             // Eigen::VectorXd init = states[j - 1].head(Params::model_input_dim());
             // Eigen::VectorXd u = states[j - 1].segment(Params::model_input_dim(), Params::action_dim());
             // Eigen::VectorXd final = states[j].head(Params::model_input_dim());
-            if (display) {
-                std::cout << "state: " << init.transpose() << std::endl;
-                std::cout << "command: " << u.transpose() << std::endl;
-                // std::cout << poses[id].transpose() << " to " << poses[id + 1].transpose() << std::endl;
-                // std::cout << "vel: " << vels[id].transpose() << std::endl;
-                // std::cout << "vel: " << vels[id + 1].transpose() << std::endl;
-                // std::cout << "my_vel: " << ((poses[id + 1] - poses[id]).array() / 0.05).transpose() << std::endl;
-            }
+            // if (display) {
+            //     std::cout << "state: " << init.transpose() << std::endl;
+            //     std::cout << "command: " << u.transpose() << std::endl;
+            //     // std::cout << poses[id].transpose() << " to " << poses[id + 1].transpose() << std::endl;
+            //     // std::cout << "vel: " << vels[id].transpose() << std::endl;
+            //     // std::cout << "vel: " << vels[id + 1].transpose() << std::endl;
+            //     // std::cout << "my_vel: " << ((poses[id + 1] - poses[id]).array() / 0.05).transpose() << std::endl;
+            // }
             // std::cout << "next state: " << final.transpose() << std::endl;
             double r = actual_reward(final.tail(3)); //world(init, u, final);
             global::reward_gp.add_sample(final, limbo::tools::make_vector(r), 0.001);
@@ -484,17 +484,13 @@ struct Omnigrasper {
                 Eigen::VectorXd sigma;
                 std::tie(mu, sigma) = model.predictm(query_vec);
 
-                // if (Params::opt_cmaes::handle_uncertainty()) {
-                //     sigma = sigma.array();
-                // }
-                // else {
+                if (Params::parallel_evaluations() > 1 || Params::opt_cmaes::handle_uncertainty()) {
                     sigma = sigma.array().sqrt();
-                // }
-
-                for (int i = 0; i < mu.size(); i++) {
-                    double s = gaussian_rand(mu(i), sigma(i));
-                    mu(i) = std::max(mu(i) - sigma(i),
-                        std::min(s, mu(i) + sigma(i)));
+                  for (int i = 0; i < mu.size(); i++) {
+                      double s = gaussian_rand(mu(i), sigma(i));
+                      mu(i) = std::max(mu(i) - sigma(i),
+                          std::min(s, mu(i) + sigma(i)));
+                  }
                 }
 
                 Eigen::VectorXd final = init + mu;
@@ -707,11 +703,12 @@ int main(int argc, char** argv)
     std::cout << "  tbb threads = " << threads << std::endl;
     std::cout << std::endl;
 
-    // global::goal << 2, 1, -1;
-    // global::goal << 1, 1, 1;
-
-    // init_simu("/home/kchatzil/Workspaces/ResiBots/robots/robot_simu/robot_dart/res/models/omnigrasper_3dof.urdf");
-    init_simu(std::string(std::getenv("RESIBOTS_DIR")) + "/share/arm_models/URDF/omnigrasper_3dof.urdf");
+    const char* env_p = std::getenv("RESIBOTS_DIR");
+    // initilisation of the simulation and the simulated robot
+    if (env_p) //if the environment variable exists
+        init_simu(std::string(std::getenv("RESIBOTS_DIR")) + "/share/arm_models/URDF/omnigrasper_3dof.urdf");
+    else //if it does not exist, we might be running this on the cluster
+        init_simu("/nfs/hal01/kchatzil/Workspaces/ResiBots/share/arm_models/URDF/omnigrasper_3dof.urdf");
 
     using policy_opt_t = limbo::opt::CustomCmaes<Params>;
 //using policy_opt_t = limbo::opt::NLOptGrad<Params>;
