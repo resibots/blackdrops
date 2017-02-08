@@ -18,7 +18,6 @@
 #include <medrops/kernel_lf_opt.hpp>
 #include <medrops/linear_policy.hpp>
 #include <medrops/medrops.hpp>
-#define MULTI_LIMITS
 #include <medrops/sf_nn_policy.hpp>
 
 template <typename T>
@@ -69,21 +68,17 @@ struct Params {
 
     struct linear_policy {
         BO_PARAM(int, state_dim, 9);
-        BO_PARAM(double, max_u, 6.0);
+        BO_PARAM_ARRAY(double, max_u, 2.5, 44.7, 14.0);
     };
 
     struct nn_policy {
         BO_PARAM(int, state_dim, 9);
-#ifndef MULTI_LIMITS
-        BO_PARAM(double, max_u, 6.0);
-#else
         BO_PARAM_ARRAY(double, max_u, 2.5, 44.7, 14.0);
-#endif
         BO_DYN_PARAM(int, hidden_neurons);
     };
 
-    struct gp_policy { //: public medrops::defaults::gp_policy_defaults{
-        BO_PARAM(double, max_u, 6.0); //max action
+    struct gp_policy {
+        BO_PARAM_ARRAY(double, max_u, 2.5, 44.7, 14.0);
         BO_PARAM(double, pseudo_samples, 10);
         BO_PARAM(double, noise, 0.01);
         BO_PARAM(int, state_dim, 9);
@@ -114,9 +109,6 @@ struct Params {
         BO_DYN_PARAM(double, ubound);
         BO_DYN_PARAM(double, lbound);
         BO_DYN_PARAM(int, lambda);
-
-        BO_PARAM(double, a, -32.0);
-        BO_PARAM(double, b, 0.0);
     };
 
     struct opt_nloptnograd : public limbo::defaults::opt_nloptnograd {
@@ -133,36 +125,6 @@ inline double angle_dist(double a, double b)
         theta -= 2 * M_PI;
     return theta;
 }
-
-struct RobotTraj : public robot_dart::descriptors::DescriptorBase {
-public:
-    RobotTraj() {}
-
-    template <typename Simu, typename robot>
-    void operator()(Simu& simu, std::shared_ptr<robot> rob)
-    {
-        Eigen::VectorXd pos = rob->skeleton()->getPositions();
-        Eigen::VectorXd vel = rob->skeleton()->getVelocities();
-        Eigen::VectorXd coms = rob->skeleton()->getCommands();
-        Eigen::VectorXd state(vel.size() + pos.size() + coms.size());
-        state.head(vel.size()) = vel;
-        state.segment(vel.size(), pos.size()) = pos;
-        state.tail(coms.size()) = coms;
-        // std::cout << vel.transpose() << std::endl;
-        // std::cout << pos.transpose() << std::endl;
-        // std::cout << coms.transpose() << std::endl;
-        // std::cout << state.transpose() << std::endl;
-        _traj.push_back(state);
-    }
-
-    void get(std::vector<Eigen::VectorXd>& results)
-    {
-        results = _traj;
-    }
-
-protected:
-    std::vector<Eigen::VectorXd> _traj;
-};
 
 namespace data {
     std::vector<Eigen::VectorXd> vels, poses, coms;
@@ -235,6 +197,12 @@ namespace global {
     // #endif
 
     Eigen::VectorXd goal(3);
+
+    using kernel_t = medrops::SquaredExpARD<Params>; //limbo::kernel::Exp<Params>;
+    using mean_t = limbo::mean::Constant<Params>;
+
+    using GP_t = limbo::model::GP<Params, kernel_t, mean_t, medrops::KernelLFOpt<Params, limbo::opt::NLOptGrad<Params, nlopt::LD_SLSQP>>>;
+    GP_t reward_gp(6, 1);
 }
 
 Eigen::VectorXd get_robot_state(const std::shared_ptr<robot_dart::Robot>& robot, bool full = false)
@@ -269,6 +237,30 @@ Eigen::VectorXd get_robot_state(const std::shared_ptr<robot_dart::Robot>& robot,
     }
     return state;
 }
+
+struct ActualReward {
+    double operator()(const Eigen::VectorXd& to_state) const
+    {
+        using robot_simu_t = robot_dart::RobotDARTSimu<robot_dart::robot_control<robot_dart::PositionControl>>;
+
+        std::shared_ptr<robot_dart::Robot> simulated_robot = global::global_robot->clone();
+        simulated_robot->fix_to_world();
+        simulated_robot->set_position_enforced(true);
+
+        std::vector<double> params(3, 1.0);
+        for (int i = 0; i < to_state.size(); i++)
+            params[i] = to_state(i);
+        robot_simu_t simu(params, simulated_robot);
+        simu.run(2);
+
+        auto bd = simulated_robot->skeleton()->getBodyNode("arm_3_sub");
+        Eigen::VectorXd eef = bd->getCOM();
+        double s_c_sq = 0.1 * 0.1;
+        double de = (eef - global::goal).squaredNorm();
+
+        return std::exp(-0.5 / s_c_sq * de);
+    }
+};
 
 struct Omnigrasper {
     template <typename Policy, typename Reward>
@@ -358,8 +350,8 @@ struct Omnigrasper {
 
         robot_simu_t simu(params, simulated_robot);
         simu.set_step(dt);
-        size_t total_steps = size_t(t / dt);
-        simu.set_desc_dump(total_steps / steps);
+        // size_t total_steps = size_t(t / dt);
+        // simu.set_desc_dump(total_steps / steps);
         // if (policy.random())
         //     simu.controller().set_random_policy();
         simu.controller()._policy = policy;
@@ -371,6 +363,8 @@ struct Omnigrasper {
         R = std::vector<double>();
 
         simu.run(t);
+
+        ActualReward actual_reward;
 
         // std::vector<Eigen::VectorXd> states;
         // simu.get_descriptor<RobotTraj>(states);
@@ -409,10 +403,13 @@ struct Omnigrasper {
                 // std::cout << "my_vel: " << ((poses[id + 1] - poses[id]).array() / 0.05).transpose() << std::endl;
             }
             // std::cout << "next state: " << final.transpose() << std::endl;
-            double r = world(init, u, final);
+            double r = actual_reward(final.tail(3)); //world(init, u, final);
+            global::reward_gp.add_sample(final, limbo::tools::make_vector(r), 0.001);
             R.push_back(r);
             res.push_back(std::make_tuple(init_full, u, final - init));
         }
+        global::reward_gp.recompute();
+        global::reward_gp.optimize_hyperparams();
 
         if (!policy.random() && display) {
             double rr = std::accumulate(R.begin(), R.end(), 0.0);
@@ -487,12 +484,12 @@ struct Omnigrasper {
                 Eigen::VectorXd sigma;
                 std::tie(mu, sigma) = model.predictm(query_vec);
 
-                if (Params::opt_cmaes::handle_uncertainty()) {
-                    sigma = sigma.array();
-                }
-                else {
+                // if (Params::opt_cmaes::handle_uncertainty()) {
+                //     sigma = sigma.array();
+                // }
+                // else {
                     sigma = sigma.array().sqrt();
-                }
+                // }
 
                 for (int i = 0; i < mu.size(); i++) {
                     double s = gaussian_rand(mu(i), sigma(i));
@@ -528,15 +525,16 @@ struct Omnigrasper {
 struct RewardFunction {
     double operator()(const Eigen::VectorXd& from_state, const Eigen::VectorXd& action, const Eigen::VectorXd& to_state) const
     {
-        double s_c_sq = 0.25 * 0.25;
+        // double s_c_sq = 0.25 * 0.25;
         // double de = (to_state.segment(3, 3) - global::goal).squaredNorm();
-        double de = 0.0;
-        for (size_t i = 0; i < 3; i++) {
-            double dx = angle_dist(to_state(3 + i), global::goal(i));
-            de += dx * dx;
-        }
+        // double de = 0.0;
+        // for (size_t i = 0; i < 3; i++) {
+        //     double dx = angle_dist(to_state(3 + i), global::goal(i));
+        //     de += dx * dx;
+        // }
 
-        return std::exp(-0.5 / s_c_sq * de);
+        // return std::exp(-0.5 / s_c_sq * de);
+        return global::reward_gp.mu(to_state)[0];
     }
 };
 
@@ -549,22 +547,24 @@ void init_simu(const std::string& robot_file)
     simulated_robot->fix_to_world();
     simulated_robot->set_position_enforced(true);
 
-    // // using robot_simu_t = robot_dart::RobotDARTSimu<robot_dart::robot_control<robot_dart::PositionControl>>;
+    using robot_simu_t = robot_dart::RobotDARTSimu<robot_dart::robot_control<robot_dart::PositionControl>>;
     // #ifdef GRAPHIC
     //     using robot_simu_t = robot_dart::RobotDARTSimu<robot_dart::robot_control<robot_dart::PositionControl>, robot_dart::graphics<robot_dart::Graphics<Params>>>;
     // #else
     //     using robot_simu_t = robot_dart::RobotDARTSimu<robot_dart::robot_control<robot_dart::PositionControl>>;
     // #endif
-    //     std::vector<double> params(3, 1.0);
-    //     // params[0] = -2.5;
-    //     // params[2] = 1.0;
-    //
-    //     robot_simu_t simu(params, simulated_robot);
-    //     simu.run(2);
-    //     global::goal = get_robot_state(simulated_robot).segment(3, 3);
-    //     std::cout << "Goal is: " << global::goal.transpose() << std::endl;
-    global::goal = Eigen::VectorXd(3);
-    global::goal << 1, 1, 1;
+    std::vector<double> params(3, 1.0);
+    // params[0] = -2.5;
+    // params[2] = 1.0;
+
+    robot_simu_t simu(params, simulated_robot);
+    simu.run(2);
+    auto bd = simulated_robot->skeleton()->getBodyNode("arm_3_sub");
+    global::goal = bd->getCOM();
+    // global::goal = get_robot_state(simulated_robot).segment(3, 3);
+    std::cout << "Goal is: " << global::goal.transpose() << std::endl;
+    // global::goal = Eigen::VectorXd(3);
+    // global::goal << 1, 1, 1;
 }
 
 using kernel_t = medrops::SquaredExpARD<Params>;
@@ -728,7 +728,7 @@ int main(int argc, char** argv)
     medrops::Medrops<Params, MGP_t, Omnigrasper, medrops::GPPolicy<Params>, policy_opt_t, RewardFunction> cp_system;
 #endif
 
-    cp_system.learn(1, 15);
+    cp_system.learn(3, 15);
 
     return 0;
 }

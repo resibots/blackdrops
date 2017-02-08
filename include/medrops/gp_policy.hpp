@@ -52,7 +52,11 @@ namespace medrops {
             policy_params = _params;
 
             if (_random || policy_params.size() == 0) {
-                return Params::gp_policy::max_u() * (limbo::tools::random_vector(Params::action_dim()).array() * 2 - 1); //return random action
+                Eigen::VectorXd act = (limbo::tools::random_vector(Params::action_dim()).array() * 2 - 1.0);
+                for (int i = 0; i < act.size(); i++) {
+                    act(i) = act(i) * Params::gp_policy::max_u(i);
+                }
+                return act;
             }
 
             //---extract pseudo samples from parameters
@@ -91,7 +95,9 @@ namespace medrops {
             //--- Query the GP with state
             Eigen::VectorXd nstate = state.array() / _limits.array();
             Eigen::VectorXd action = gp_policy_obj.mu(nstate);
-            action = action.unaryExpr([](double x) {return Params::gp_policy::max_u() * (9 * std::sin(x) / 8.0 + std::sin(3 * x) / 8.0); });
+            for (int i = 0; i < action.size(); i++) {
+                action(i) = Params::gp_policy::max_u(i) * (9 * std::sin(action(i)) / 8.0 + std::sin(3 * action(i)) / 8.0);
+            }
 
             return action;
         }

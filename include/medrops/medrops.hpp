@@ -126,42 +126,7 @@ namespace medrops {
                 _ofs_model << learn_model_ms << std::endl;
 
                 _policy.normalize(_model);
-                std::cout << "Limits: " << _policy._limits.transpose() << std::endl;
                 std::cout << "Learned model..." << std::endl;
-
-                int eval = 10000;
-                Eigen::VectorXd limits = _model._limits; //(Params::model_input_dim() + Params::action_dim());
-                // limits.head(Params::model_input_dim()) = _policy._limits;
-                // limits.tail(Params::action_dim()) = Eigen::VectorXd::Constant(Params::action_dim(), Params::nn_policy::max_u());
-                std::vector<Eigen::VectorXd> rvs = random_vectors(Params::model_input_dim() + Params::action_dim(), eval, limits);
-
-                Eigen::VectorXd sigmas(Params::model_pred_dim());
-                for (size_t i = 0; i < rvs.size(); i++) {
-                    Eigen::VectorXd s;
-                    Eigen::VectorXd m;
-                    std::tie(m, s) = _model.predictm(rvs[i]);
-
-                    // errors.array() += (m - cm).array().abs();
-                    sigmas.array() += s.array();
-                }
-
-                sigmas.array() = sigmas.array() / (eval * 1.0);
-                std::cout << "SIGMAS: " << sigmas.transpose() << std::endl;
-
-                // if (Params::verbose()) {
-                //     Eigen::VectorXd errors;
-                //     Eigen::VectorXd errors_sigma;
-                //     std::tie(errors, errors_sigma) = get_accuracy();
-                //     std::cout << "Average on errors: " << errors.transpose() << std::endl;
-                //     std::cout << "Average on sigmas: " << errors_sigma.transpose() << std::endl;
-                //
-                //     for (int j = 0; j < errors.size(); j++) {
-                //         if (errors(j) > 1000) {
-                //             std::cout << "Detected big difference between the approximation and the model, terminating..." << std::endl;
-                //             exit(-1);
-                //         }
-                //     }
-                // }
 
                 time_start = std::chrono::steady_clock::now();
                 optimize_policy(i + 1);
@@ -230,22 +195,22 @@ namespace medrops {
             return limbo::opt::no_grad(r);
         }
 
-        Eigen::VectorXd get_random_vector(size_t dim, Eigen::VectorXd bounds) const
-        {
-            Eigen::VectorXd rv = (limbo::tools::random_vector(dim).array() * 2 - 1);
-            // rv(0) *= 3; rv(1) *= 5; rv(2) *= 6; rv(3) *= M_PI; rv(4) *= 10;
-            return rv.cwiseProduct(bounds);
-        }
-
-        std::vector<Eigen::VectorXd> random_vectors(size_t dim, size_t q, Eigen::VectorXd bounds) const
-        {
-            std::vector<Eigen::VectorXd> result(q);
-            for (size_t i = 0; i < q; i++) {
-                result[i] = get_random_vector(dim, bounds);
-            }
-            return result;
-        }
-
+        // Eigen::VectorXd get_random_vector(size_t dim, Eigen::VectorXd bounds) const
+        // {
+        //     Eigen::VectorXd rv = (limbo::tools::random_vector(dim).array() * 2 - 1);
+        //     // rv(0) *= 3; rv(1) *= 5; rv(2) *= 6; rv(3) *= M_PI; rv(4) *= 10;
+        //     return rv.cwiseProduct(bounds);
+        // }
+        //
+        // std::vector<Eigen::VectorXd> random_vectors(size_t dim, size_t q, Eigen::VectorXd bounds) const
+        // {
+        //     std::vector<Eigen::VectorXd> result(q);
+        //     for (size_t i = 0; i < q; i++) {
+        //         result[i] = get_random_vector(dim, bounds);
+        //     }
+        //     return result;
+        // }
+        //
         // std::tuple<Eigen::VectorXd, Eigen::VectorXd> get_accuracy(int evaluations = 100000) const
         // {
         //     Eigen::VectorXd bounds(5);

@@ -50,15 +50,11 @@ namespace medrops {
         Eigen::VectorXd next(const Eigen::VectorXd& state) const
         {
             if (_random || _params.size() == 0) {
-#ifndef MULTI_LIMITS
-                return Params::nn_policy::max_u() * (limbo::tools::random_vector(Params::action_dim()).array() * 2 - 1.0);
-#else
                 Eigen::VectorXd act = (limbo::tools::random_vector(Params::action_dim()).array() * 2 - 1.0);
                 for (int i = 0; i < act.size(); i++) {
                     act(i) = act(i) * Params::nn_policy::max_u(i);
                 }
                 return act;
-#endif
             }
 
             Eigen::VectorXd nstate = state.array() / _limits.array(); //((state - _means).array() / (_sigmas * 3).array()); //state.array() / _limits.array();
@@ -72,15 +68,9 @@ namespace medrops {
             std::vector<double> outputs = _nn->get_outf();
             Eigen::VectorXd act = Eigen::VectorXd::Map(outputs.data(), outputs.size());
 
-#ifndef MULTI_LIMITS
-            act = act.unaryExpr([](double x) {
-                return Params::nn_policy::max_u() * x;//(9 * std::sin(x) / 8.0 + std::sin(3 * x) / 8.0);
-            });
-#else
             for (int i = 0; i < act.size(); i++) {
                 act(i) = act(i) * Params::nn_policy::max_u(i);
             }
-#endif
             return act;
         }
 

@@ -132,17 +132,17 @@ struct Params {
 
     struct linear_policy {
         BO_PARAM(int, state_dim, 3);
-        BO_PARAM(double, max_u, 2.5);
+        BO_PARAM_ARRAY(double, max_u, 2.5);
     };
 
     struct nn_policy {
         BO_PARAM(int, state_dim, 3);
-        BO_PARAM(double, max_u, 2.5);
+        BO_PARAM_ARRAY(double, max_u, 2.5);
         BO_DYN_PARAM(int, hidden_neurons);
     };
 
-    struct gp_policy { //: public medrops::defaults::gp_policy_defaults{
-        BO_PARAM(double, max_u, 2.5); //max action
+    struct gp_policy {
+        BO_PARAM_ARRAY(double, max_u, 2.5); //max action
         BO_PARAM(double, pseudo_samples, 20);
         BO_PARAM(double, noise, 1e-5);
         BO_PARAM(int, state_dim, 3);
