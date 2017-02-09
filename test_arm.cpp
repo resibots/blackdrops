@@ -95,6 +95,9 @@ struct Params {
     struct kernel_squared_exp_ard : public limbo::defaults::kernel_squared_exp_ard {
     };
 
+    struct kernel_exp : public limbo::defaults::kernel_exp {
+    };
+
     struct opt_cmaes : public limbo::defaults::opt_cmaes {
         BO_DYN_PARAM(double, max_fun_evals);
         BO_DYN_PARAM(double, fun_tolerance);
@@ -198,11 +201,11 @@ namespace global {
 
     Eigen::VectorXd goal(3);
 
-    using kernel_t = medrops::SquaredExpARD<Params>; //limbo::kernel::Exp<Params>;
+    using kernel_t = limbo::kernel::Exp<Params>; //medrops::SquaredExpARD<Params>; //limbo::kernel::Exp<Params>;
     using mean_t = limbo::mean::Constant<Params>;
 
-    using GP_t = limbo::model::GP<Params, kernel_t, mean_t, medrops::KernelLFOpt<Params, limbo::opt::NLOptGrad<Params, nlopt::LD_SLSQP>>>;
-    GP_t reward_gp(6, 1);
+    using GP_t = limbo::model::GP<Params, kernel_t, mean_t>; //, medrops::KernelLFOpt<Params, limbo::opt::NLOptGrad<Params, nlopt::LD_SLSQP>>>;
+    GP_t reward_gp(3, 1);
 }
 
 Eigen::VectorXd get_robot_state(const std::shared_ptr<robot_dart::Robot>& robot, bool full = false)
@@ -404,12 +407,12 @@ struct Omnigrasper {
             // }
             // std::cout << "next state: " << final.transpose() << std::endl;
             double r = actual_reward(final.tail(3)); //world(init, u, final);
-            global::reward_gp.add_sample(final, limbo::tools::make_vector(r), 0.001);
+            global::reward_gp.add_sample(final.tail(3), limbo::tools::make_vector(r), 0.001);
             R.push_back(r);
             res.push_back(std::make_tuple(init_full, u, final - init));
         }
-        global::reward_gp.recompute();
-        global::reward_gp.optimize_hyperparams();
+        // global::reward_gp.recompute();
+        // global::reward_gp.optimize_hyperparams();
 
         if (!policy.random() && display) {
             double rr = std::accumulate(R.begin(), R.end(), 0.0);
@@ -486,11 +489,11 @@ struct Omnigrasper {
 
                 if (Params::parallel_evaluations() > 1 || Params::opt_cmaes::handle_uncertainty()) {
                     sigma = sigma.array().sqrt();
-                  for (int i = 0; i < mu.size(); i++) {
-                      double s = gaussian_rand(mu(i), sigma(i));
-                      mu(i) = std::max(mu(i) - sigma(i),
-                          std::min(s, mu(i) + sigma(i)));
-                  }
+                    for (int i = 0; i < mu.size(); i++) {
+                        double s = gaussian_rand(mu(i), sigma(i));
+                        mu(i) = std::max(mu(i) - sigma(i),
+                            std::min(s, mu(i) + sigma(i)));
+                    }
                 }
 
                 Eigen::VectorXd final = init + mu;
@@ -530,7 +533,7 @@ struct RewardFunction {
         // }
 
         // return std::exp(-0.5 / s_c_sq * de);
-        return global::reward_gp.mu(to_state)[0];
+        return global::reward_gp.mu(to_state.tail(3))[0];
     }
 };
 
