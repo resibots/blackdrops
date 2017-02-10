@@ -4,6 +4,7 @@
 #include "binary_matrix.hpp"
 #include <chrono>
 #include <fstream>
+#include <limits>
 #include <limbo/opt/optimizer.hpp>
 
 namespace medrops {
@@ -20,7 +21,7 @@ namespace medrops {
         Eigen::VectorXd old_params;
         Eigen::VectorXd old_starting;
 
-        Medrops() {}
+        Medrops() : _best(std::numeric_limits<double>::min()) {}
         ~Medrops() {}
 
         void execute_and_record_data()
@@ -29,6 +30,14 @@ namespace medrops {
             RewardFunction world;
             // Execute best policy so far on robot
             auto obs_new = _robot.execute(_policy, world, Params::medrops::rollout_steps(), R);
+
+            // Check if it is better than the previous best
+            double r_new = std::accumulate(R.begin(), R.end(), 0.0);
+            if (r_new > _best) {
+                _best = r_new;
+                _params_starting = _policy.params();
+            }
+
             // Append recorded data
             _observations.insert(_observations.end(), obs_new.begin(), obs_new.end());
 
@@ -49,7 +58,7 @@ namespace medrops {
 
             // For now optimize policy without gradients
             Eigen::VectorXd params_star;
-            Eigen::VectorXd params_starting = _policy.params();
+            Eigen::VectorXd params_starting = _params_starting;
             Eigen::write_binary("policy_params_starting_" + std::to_string(i) + ".bin", params_starting);
 
             _opt_iters = 0;
@@ -150,6 +159,8 @@ namespace medrops {
         Policy _policy;
         Model _model;
         std::ofstream _ofs, _ofs_opt, _ofs_model;
+        Eigen::VectorXd _params_starting;
+        double _best;
 
         // state, action, prediction
         std::vector<std::tuple<Eigen::VectorXd, Eigen::VectorXd, Eigen::VectorXd>> _observations;
