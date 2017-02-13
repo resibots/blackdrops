@@ -46,7 +46,6 @@ def check_robot_dart(conf):
     	res = res and conf.find_file('robot_dart/robot_control.hpp', includes_check)
     	res = res and conf.find_file('robot_dart/robot_dart_simu.hpp', includes_check)
     	res = res and conf.find_file('robot_dart/descriptors.hpp', includes_check)
-        res = res and conf.find_file('robot_dart/visualizations.hpp', includes_check)
     	conf.end_msg('ok')
     	conf.env.INCLUDES_ROBOT_DART = includes_check
     except:
