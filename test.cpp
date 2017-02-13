@@ -473,10 +473,14 @@ struct RewardFunction {
     double operator()(const Eigen::VectorXd& from_state, const Eigen::VectorXd& action, const Eigen::VectorXd& to_state) const
     {
         double s_c_sq = 0.5 * 0.5;
-        double dx = angle_dist(to_state(1), Params::goal_pos());
-        // double dy = to_state(0) - Params::goal_vel();
 
-        return std::exp(-0.5 / s_c_sq * (dx * dx)); // + dy * dy));
+        double dcos = std::cos(to_state(1)) - std::cos(Params::goal_pos());
+        double dsin = std::sin(to_state(1)) - std::sin(Params::goal_pos());
+        double derr = dcos * dcos + dsin * dsin;
+
+        return std::exp(-0.5 / s_c_sq * derr);
+
+        // return std::exp(-0.5 / s_c_sq * (dx * dx)); // + dy * dy));
     }
 };
 
