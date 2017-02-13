@@ -21,6 +21,7 @@ def check_libdynamixel(conf, **kw):
 
     if 'RESIBOTS_DIR' in os.environ:
         includes_check = [os.environ['RESIBOTS_DIR'] + '/include'] + includes_check
+        resibots_dir = os.environ['RESIBOTS_DIR'] + '/include'
 
     if conf.options.libdynamixel:
         includes_check = [conf.options.libdynamixel + '/include'] + includes_check
