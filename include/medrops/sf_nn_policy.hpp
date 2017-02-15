@@ -28,6 +28,7 @@ namespace medrops {
             // // _limits << 9.36686, 19.3844, 38.1972, 3.15046, 1.81577, 1.86595;
             // // _limits << 10.1127, 24.3294, 42.2179, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0;
             // _limits << 1.0, 1.0, 1.0, 1.0, 1.0, 1.0;
+            _limits = Eigen::VectorXd::Constant(Params::nn_policy::state_dim(), 1.0);
         }
 
         template <typename Model>

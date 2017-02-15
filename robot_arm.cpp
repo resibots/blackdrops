@@ -43,6 +43,8 @@ struct Params {
     BO_PARAM(size_t, model_input_dim, 9);
     BO_PARAM(size_t, model_pred_dim, 6);
 
+    BO_PARAM(double, min_height, 0.0);
+
     BO_DYN_PARAM(size_t, parallel_evaluations);
     BO_DYN_PARAM(bool, verbose);
 
@@ -75,7 +77,7 @@ struct Params {
 
     struct nn_policy {
         BO_PARAM(int, state_dim, 9);
-        BO_PARAM_ARRAY(double, max_u, 0.5, 0.5, 0.5);
+        BO_PARAM_ARRAY(double, max_u, 0.7, 0.7, 0.7);
         BO_DYN_PARAM(int, hidden_neurons);
     };
 
@@ -210,23 +212,27 @@ struct ActualReward {
         double s_c = 0.25 * 0.25;
         double de = (eef - global::goal).squaredNorm();
 
-        // std::map<dynamixel::SafeTorqueControl::id_t, double> min_angles = {{1, 1.57}, {2, 2.09}, {3, 2.09}, {4, 2.09}};
-        // std::map<dynamixel::SafeTorqueControl::id_t, double> max_angles = {{1, 4.71}, {2, 4.19}, {3, 4.19}, {4, 4.19}};
-        // // double p1 = 0.0, p2 = 0.0;
-        // for (int i = 0; i < 3; i++) {
-        //     double ll = min_angles[i + 1] - M_PI;
-        //     double ul = max_angles[i + 1] - M_PI;
-        //     if ((to_state(i) - ll) < 0.1) {
-        //         return -10.0;
-        //     }
-        //     if ((ul - to_state(i)) < 0.1) {
-        //         return -10.0;
-        //     }
-        //     // double el = to_state(i) + M_PI - min_angles[i + 1];
-        //     // double eu = max_angles[i + 1] - to_state(i) - M_PI;
-        //     // p1 -= std::exp(-0.5 / s_c_a * el * el);
-        //     // p2 -= std::exp(-0.5 / s_c_a * eu * eu);
-        // }
+        std::map<dynamixel::SafeTorqueControl::id_t, double> min_angles = {{1, 1.57}, {2, 2.09}, {3, 1.57}, {4, 1.57}};
+        std::map<dynamixel::SafeTorqueControl::id_t, double> max_angles = {{1, 4.71}, {2, 4.19}, {3, 4.71}, {4, 4.3}};
+        // double p1 = 0.0, p2 = 0.0;
+        for (int i = 0; i < 3; i++) {
+            double ll = min_angles[i + 1] - M_PI;
+            double ul = max_angles[i + 1] - M_PI;
+            if ((to_state(i) - ll) < 0.1) {
+                return -10.0;
+            }
+            if ((ul - to_state(i)) < 0.1) {
+                return -10.0;
+            }
+            // double el = to_state(i) + M_PI - min_angles[i + 1];
+            // double eu = max_angles[i + 1] - to_state(i) - M_PI;
+            // p1 -= std::exp(-0.5 / s_c_a * el * el);
+            // p2 -= std::exp(-0.5 / s_c_a * eu * eu);
+        }
+
+        double z = 0.252 * std::cos(to_state(1) + to_state(2) + 2 * M_PI) - 0.264 * std::cos(to_state(1) + M_PI);
+        if (z <= Params::min_height())
+            return -10.0;
 
         return std::exp(-0.5 / s_c_sq * de); // + p1 + p2;
     }
@@ -360,10 +366,13 @@ struct Omnigrasper {
             double r = world(init, u, final); //actual_reward(final.tail(3)); //world(init, u, final);
             // if (limit_reached && j == vels.size() - 2)
             //     r = -10;
-            std::cout << final.tail(3).transpose() << ": " << r << std::endl;
-            // global::reward_gp.add_sample(final.tail(3), limbo::tools::make_vector(r), 0.001);
+            std::cout << final.transpose() << ": " << r << std::endl;
+            std::cout << u.transpose() << std::endl;
+            global::reward_gp.add_sample(final.tail(3), limbo::tools::make_vector(r), 0.001);
             R.push_back(r);
             res.push_back(std::make_tuple(init_full, u, final - init));
+            if (r < 0)
+                break;
         }
 
         //         std::shared_ptr<robot_dart::Robot> simulated_robot = global::global_robot->clone();
@@ -496,30 +505,30 @@ struct Omnigrasper {
 struct RewardFunction {
     double operator()(const Eigen::VectorXd& from_state, const Eigen::VectorXd& action, const Eigen::VectorXd& to_state) const
     {
-        double s_c_sq = 0.25 * 0.25;
-        // double de = (to_state.tail(3) - global::goal).squaredNorm();
-        double de = 0.0;
-        for (size_t i = 0; i < 3; i++) {
-            double dx = angle_dist(to_state(3 + i), global::goal(i));
-            de += dx * dx;
-        }
-
-        std::map<dynamixel::SafeTorqueControl::id_t, double> min_angles = {{1, 1.57}, {2, 2.09}, {3, 2.09}, {4, 2.09}};
-        std::map<dynamixel::SafeTorqueControl::id_t, double> max_angles = {{1, 4.71}, {2, 4.19}, {3, 4.19}, {4, 4.19}};
-        // double p1 = 0.0, p2 = 0.0;
-        for (int i = 0; i < 3; i++) {
-            double ll = min_angles[i + 1] - M_PI;
-            double ul = max_angles[i + 1] - M_PI;
-            if (to_state(3 + i) < ll) {
-                return -10.0;
-            }
-            if (to_state(3 + i) > ul) {
-                return -10.0;
-            }
-        }
-
-        return std::exp(-0.5 / s_c_sq * de);
-        // return global::reward_gp.mu(to_state.tail(3))[0];
+        // double s_c_sq = 0.25 * 0.25;
+        // // double de = (to_state.tail(3) - global::goal).squaredNorm();
+        // double de = 0.0;
+        // for (size_t i = 0; i < 3; i++) {
+        //     double dx = angle_dist(to_state(3 + i), global::goal(i));
+        //     de += dx * dx;
+        // }
+        //
+        // std::map<dynamixel::SafeTorqueControl::id_t, double> min_angles = {{1, 1.57}, {2, 2.09}, {3, 1.57}, {4, 1.57}};
+        // std::map<dynamixel::SafeTorqueControl::id_t, double> max_angles = {{1, 4.71}, {2, 4.19}, {3, 4.71}, {4, 4.3}};
+        // // double p1 = 0.0, p2 = 0.0;
+        // for (int i = 0; i < 3; i++) {
+        //     double ll = min_angles[i + 1] - M_PI;
+        //     double ul = max_angles[i + 1] - M_PI;
+        //     if (to_state(3 + i) < ll) {
+        //         return -10.0;
+        //     }
+        //     if (to_state(3 + i) > ul) {
+        //         return -10.0;
+        //     }
+        // }
+        //
+        // return std::exp(-0.5 / s_c_sq * de);
+        return global::reward_gp.mu(to_state.tail(3))[0];
     }
 };
 
@@ -552,15 +561,15 @@ void init_simu(const std::string& robot_file)
 
 bool init_robot(const std::string& usb_port)
 {
-    std::map<dynamixel::SafeTorqueControl::id_t, double> min_angles = {{1, 1.57}, {2, 2.09}, {3, 2.09}, {4, 2.09}};
-    std::map<dynamixel::SafeTorqueControl::id_t, double> max_angles = {{1, 4.71}, {2, 4.19}, {3, 4.19}, {4, 4.19}};
+    std::map<dynamixel::SafeTorqueControl::id_t, double> min_angles = {{1, 1.57}, {2, 2.09}, {3, 1.57}, {4, 1.57}};
+    std::map<dynamixel::SafeTorqueControl::id_t, double> max_angles = {{1, 4.71}, {2, 4.19}, {3, 4.71}, {4, 4.3}};
     // conservative torque limits
     std::map<dynamixel::SafeTorqueControl::id_t, double> max_torques = {{1, 100}, {2, 120}, {3, 120}, {4, 100}};
 
     std::unordered_set<dynamixel::protocols::Protocol2::id_t> selected_servos = {1, 2, 3};
 
     try {
-        global::robot_control = std::make_shared<dynamixel::SafeTorqueControl>(usb_port, selected_servos, min_angles, max_angles, max_torques);
+        global::robot_control = std::make_shared<dynamixel::SafeTorqueControl>(usb_port, selected_servos, min_angles, max_angles, max_torques, Params::min_height());
     }
     catch (errors::Error e) {
         std::cerr << "Dynamixel error:\n\t" << e.msg() << std::endl;

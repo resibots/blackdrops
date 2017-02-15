@@ -120,8 +120,8 @@ namespace medrops {
 
             std::cout << "Executing random actions..." << std::endl;
             for (size_t i = 0; i < init; i++) {
-                // Eigen::VectorXd pp = limbo::tools::random_vector(_policy.params().size()).array() * 2.0 * _boundary - _boundary;
-                // _policy.set_params(pp);
+                Eigen::VectorXd pp = limbo::tools::random_vector(_policy.params().size()).array() * 2.0 * _boundary - _boundary;
+                _policy.set_params(pp);
                 execute_and_record_data();
             }
 
