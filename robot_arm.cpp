@@ -363,7 +363,7 @@ struct Omnigrasper {
             // std::cout << "my_vel: " << ((poses[id + 1] - poses[id]).array() / 0.05).transpose() << std::endl;
             // }
             // std::cout << "next state: " << final.transpose() << std::endl;
-            double r = world(init, u, final); //actual_reward(final.tail(3)); //world(init, u, final);
+            double r = actual_reward(final.tail(3)); //world(init, u, final);
             // if (limit_reached && j == vels.size() - 2)
             //     r = -10;
             std::cout << final.transpose() << ": " << r << std::endl;
@@ -543,16 +543,16 @@ void init_simu(const std::string& robot_file)
 
     using robot_simu_t = robot_dart::RobotDARTSimu<robot_dart::robot_control<robot_dart::PositionControl>>;
 
-    // std::vector<double> params(3, 0.7);
-    // // params[2] = -0.5;
-    // // params[0] = -2.5;
-    // // params[2] = 1.0;
-    //
-    // robot_simu_t simu(params, simulated_robot);
-    // simu.run(2);
-    // auto bd = simulated_robot->skeleton()->getBodyNode("arm_3_sub");
-    // global::goal = bd->getCOM();
-    global::goal << 0.3, 0.3, 0.3;
+    std::vector<double> params(3, 0.5);
+    // params[2] = -0.5;
+    // params[0] = -2.5;
+    // params[2] = 1.0;
+
+    robot_simu_t simu(params, simulated_robot);
+    simu.run(2);
+    auto bd = simulated_robot->skeleton()->getBodyNode("arm_3_sub");
+    global::goal = bd->getCOM();
+    // global::goal << 0.3, 0.3, 0.3;
     // global::goal = get_robot_state(simulated_robot).segment(3, 3);
     std::cout << "Goal is: " << global::goal.transpose() << std::endl;
     // global::goal = Eigen::VectorXd(3);
