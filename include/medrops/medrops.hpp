@@ -58,7 +58,7 @@ namespace medrops {
 
             // For now optimize policy without gradients
             Eigen::VectorXd params_star;
-            Eigen::VectorXd params_starting = _policy.params(); //_params_starting;
+            Eigen::VectorXd params_starting = _params_starting; //_policy.params(); //_params_starting;
             Eigen::write_binary("policy_params_starting_" + std::to_string(i) + ".bin", params_starting);
 
             _opt_iters = 0;

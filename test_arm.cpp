@@ -259,9 +259,29 @@ struct ActualReward {
         auto bd = simulated_robot->skeleton()->getBodyNode("arm_3_sub");
         Eigen::VectorXd eef = bd->getCOM();
         double s_c_sq = 0.1 * 0.1;
-        double de = (eef - global::goal).squaredNorm();
+        double s_c = 0.25 * 0.25;
+        double dee = (eef - global::goal).squaredNorm();
+        // Eigen::VectorXd ll(3);
+        // ll << -M_PI, -1.80159265359, -1.82159265359;
+        // Eigen::VectorXd ul(3);
+        // ul << M_PI, 1.79840734641, 1.65840734641;
+        Eigen::VectorXd ll(3);
+        ll << -M_PI, -1.2, -1.2;
+        Eigen::VectorXd ul(3);
+        ul << M_PI, 1.2, 1.2;
+        // double de = (ll - to_state).squaredNorm() + (ul - to_state).squaredNorm();
 
-        return std::exp(-0.5 / s_c_sq * de);
+        for (size_t j = 0; j < 3; j++) {
+            if (to_state[j] < ll[j]) {
+                return -1.0;
+            }
+            if (to_state[j] > ul[j]) {
+                return -1.0;
+            }
+        }
+
+        // return 1.0 - std::exp(-0.5 / s_c * de) + std::exp(-0.5 / s_c_sq * dee);
+        return std::exp(-0.5 / s_c_sq * dee); // - std::exp(-0.5 / s_c * de);
     }
 };
 
@@ -410,6 +430,27 @@ struct Omnigrasper {
             global::reward_gp.add_sample(final.tail(3), limbo::tools::make_vector(r), 0.001);
             R.push_back(r);
             res.push_back(std::make_tuple(init_full, u, final - init));
+            std::cout << final.tail(3).transpose() << ": " << r << std::endl;
+            if (r < 0)
+                break;
+
+            // Eigen::VectorXd ll(3);
+            // ll << -M_PI, -1.2, -1.2;
+            // Eigen::VectorXd ul(3);
+            // ul << M_PI, 1.2, 1.2;
+            // bool br = false;
+            // for (size_t j = 0; j < 3; j++) {
+            //     if (poses[id + 1][j] < ll[j]) {
+            //         br = true;
+            //         break;
+            //     }
+            //     if (poses[id + 1][j] > ul[j]) {
+            //         br = true;
+            //         break;
+            //     }
+            // }
+            // if (br)
+            //     break;
         }
         // global::reward_gp.recompute();
         // global::reward_gp.optimize_hyperparams();
@@ -728,7 +769,7 @@ int main(int argc, char** argv)
     medrops::Medrops<Params, MGP_t, Omnigrasper, medrops::GPPolicy<Params>, policy_opt_t, RewardFunction> cp_system;
 #endif
 
-    cp_system.learn(3, 15);
+    cp_system.learn(20, 20);
 
     return 0;
 }

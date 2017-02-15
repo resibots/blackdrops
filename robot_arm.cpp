@@ -778,7 +778,7 @@ int main(int argc, char** argv)
     medrops::Medrops<Params, MGP_t, Omnigrasper, medrops::GPPolicy<Params>, policy_opt_t, RewardFunction> cp_system;
 #endif
 
-    cp_system.learn(6, 30);
+    cp_system.learn(20, 30);
 
     return 0;
 }
