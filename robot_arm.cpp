@@ -156,6 +156,26 @@ namespace global {
     std::shared_ptr<dynamixel::SafeTorqueControl> robot_control;
 }
 
+bool init_robot(const std::string& usb_port)
+{
+    std::map<dynamixel::SafeTorqueControl::id_t, double> min_angles = {{1, 1.57}, {2, 2.09}, {3, 1.98}, {4, 1.57}};
+    std::map<dynamixel::SafeTorqueControl::id_t, double> max_angles = {{1, 4.71}, {2, 4.19}, {3, 4.3}, {4, 4.3}};
+    // conservative torque limits
+    std::map<dynamixel::SafeTorqueControl::id_t, double> max_torques = {{1, 100}, {2, 120}, {3, 120}, {4, 100}};
+
+    std::unordered_set<dynamixel::protocols::Protocol2::id_t> selected_servos = {1, 2, 3};
+
+    try {
+        global::robot_control = std::make_shared<dynamixel::SafeTorqueControl>(usb_port, selected_servos, min_angles, max_angles, max_torques, Params::min_height());
+    }
+    catch (dynamixel::errors::Error e) {
+        std::cerr << "Dynamixel error:\n\t" << e.msg() << std::endl;
+        return false;
+    }
+
+    return true;
+}
+
 void reset_robot()
 {
     bool reset = true;
@@ -212,8 +232,8 @@ struct ActualReward {
         double s_c = 0.25 * 0.25;
         double de = (eef - global::goal).squaredNorm();
 
-        std::map<dynamixel::SafeTorqueControl::id_t, double> min_angles = {{1, 1.57}, {2, 2.09}, {3, 1.57}, {4, 1.57}};
-        std::map<dynamixel::SafeTorqueControl::id_t, double> max_angles = {{1, 4.71}, {2, 4.19}, {3, 4.71}, {4, 4.3}};
+        std::map<dynamixel::SafeTorqueControl::id_t, double> min_angles = {{1, 1.57}, {2, 2.09}, {3, 1.98}, {4, 1.57}};
+        std::map<dynamixel::SafeTorqueControl::id_t, double> max_angles = {{1, 4.71}, {2, 4.19}, {3, 4.3}, {4, 4.3}};
         // double p1 = 0.0, p2 = 0.0;
         for (int i = 0; i < 3; i++) {
             double ll = min_angles[i + 1] - M_PI;
@@ -249,84 +269,97 @@ struct Omnigrasper {
         // Recording data
         std::vector<Eigen::VectorXd> vels, poses, coms;
 
-        // Set robot to initial state
-        reset_robot();
-
         // map for torques --- defaults to zero
         std::map<dynamixel::protocols::Protocol2::id_t, double> torques;
         torques[1] = 0.0;
         torques[2] = 0.0;
         torques[3] = 0.0;
 
-        // used for timing
-        auto prev_time = std::chrono::steady_clock::now();
-        auto start_time = prev_time;
-        std::chrono::duration<double> total_elapsed = std::chrono::steady_clock::now() - start_time;
         bool limit_reached = false;
+        bool movement_fail = true;
 
-        do {
-            std::chrono::duration<double> elapsed_time = std::chrono::steady_clock::now() - prev_time;
-            if (elapsed_time.count() <= 1e-5 || elapsed_time.count() >= dt) {
-                // Update time
-                prev_time = std::chrono::steady_clock::now();
-                // read latest joint values (angular position and speed)
-                auto actuators_state = global::robot_control->concatenated_joint_state();
-                // Substract pi [physical joint angles are not centered around 0 but pi]
-                for (size_t i = 3; i < 6; i++)
-                    actuators_state[i] = actuators_state[i] - M_PI;
+        while(movement_fail)
+        {
+            try {
+                // reset robot
+                reset_robot();
+                // used for timing
+                auto prev_time = std::chrono::steady_clock::now();
+                auto start_time = prev_time;
+                std::chrono::duration<double> total_elapsed = std::chrono::steady_clock::now() - start_time;
+                do {
+                    std::chrono::duration<double> elapsed_time = std::chrono::steady_clock::now() - prev_time;
+                    if (elapsed_time.count() <= 1e-5 || elapsed_time.count() >= dt) {
+                        // Update time
+                        prev_time = std::chrono::steady_clock::now();
+                        // read latest joint values (angular position and speed)
+                        auto actuators_state = global::robot_control->concatenated_joint_state();
+                        // Substract pi [physical joint angles are not centered around 0 but pi]
+                        for (size_t i = 3; i < 6; i++)
+                            actuators_state[i] = actuators_state[i] - M_PI;
 
-                // convert to Eigen vectors
-                Eigen::VectorXd full_state = get_robot_state(actuators_state, true);
-                Eigen::VectorXd state = get_robot_state(actuators_state);
+                        // convert to Eigen vectors
+                        Eigen::VectorXd full_state = get_robot_state(actuators_state, true);
+                        Eigen::VectorXd state = get_robot_state(actuators_state);
 
-                // Query policy for next commands
-                Eigen::VectorXd commands = policy.next(full_state);
-                for (size_t i = 0; i < commands.size(); i++) {
-                    torques[i + 1] = commands(i);
-                }
+                        // Query policy for next commands
+                        Eigen::VectorXd commands = policy.next(full_state);
+                        for (size_t i = 0; i < commands.size(); i++) {
+                            torques[i + 1] = commands(i);
+                        }
 
-                // std::cout << "st: " << state.transpose() << " com: " << commands.transpose() << std::endl;
+                        // std::cout << "st: " << state.transpose() << " com: " << commands.transpose() << std::endl;
 
-                // Update statistics
-                Eigen::VectorXd vel = state.head(3);
-                Eigen::VectorXd pos = state.tail(3);
-                vels.push_back(vel);
-                poses.push_back(pos);
-                coms.push_back(commands);
+                        // Update statistics
+                        Eigen::VectorXd vel = state.head(3);
+                        Eigen::VectorXd pos = state.tail(3);
+                        vels.push_back(vel);
+                        poses.push_back(pos);
+                        coms.push_back(commands);
 
-                // Send commands
-                global::robot_control->torque_command(torques);
+                        // Send commands
+                        global::robot_control->torque_command(torques);
+                    }
+                    if (global::robot_control->enforce_joint_limits()) {
+                        std::cout << "Reached joint limits!" << std::endl;
+                        limit_reached = true;
+
+                        auto actuators_state = global::robot_control->concatenated_joint_state();
+                        // Substract pi [physical joint angles are not centered around 0 but pi]
+                        for (size_t i = 3; i < 6; i++)
+                            actuators_state[i] = actuators_state[i] - M_PI;
+
+                        // convert to Eigen vectors
+                        Eigen::VectorXd full_state = get_robot_state(actuators_state, true);
+                        Eigen::VectorXd state = get_robot_state(actuators_state);
+                        // Query policy for next commands
+                        Eigen::VectorXd commands = policy.next(full_state);
+                        for (size_t i = 0; i < commands.size(); i++) {
+                            torques[i + 1] = commands(i);
+                        }
+                        // Update statistics
+                        Eigen::VectorXd vel = state.head(3);
+                        Eigen::VectorXd pos = state.tail(3);
+                        vels.push_back(vel);
+                        poses.push_back(pos);
+                        coms.push_back(commands);
+
+                        break;
+                    }
+                    total_elapsed = std::chrono::steady_clock::now() - start_time;
+                    // std::cout << "Elasped: " << total_elapsed.count() << std::endl;
+                } while (total_elapsed.count() <= t);
+                total_elapsed = std::chrono::steady_clock::now() - start_time;
+                movement_fail = false;
+            } catch (dynamixel::errors::Error e) {
+                movement_fail = true;
+                std::cerr << "Dynamixel error:\n\t" << e.msg() << std::endl;
+                std::cout<<"Did you reset the power? Just press any key..."<<std::endl;
+                char c;
+                std::cin>>c;
+                init_robot("/dev/ttyUSB0");
             }
-            if (global::robot_control->enforce_joint_limits()) {
-                std::cout << "Reached joint limits!" << std::endl;
-                limit_reached = true;
-
-                auto actuators_state = global::robot_control->concatenated_joint_state();
-                // Substract pi [physical joint angles are not centered around 0 but pi]
-                for (size_t i = 3; i < 6; i++)
-                    actuators_state[i] = actuators_state[i] - M_PI;
-
-                // convert to Eigen vectors
-                Eigen::VectorXd full_state = get_robot_state(actuators_state, true);
-                Eigen::VectorXd state = get_robot_state(actuators_state);
-                // Query policy for next commands
-                Eigen::VectorXd commands = policy.next(full_state);
-                for (size_t i = 0; i < commands.size(); i++) {
-                    torques[i + 1] = commands(i);
-                }
-                // Update statistics
-                Eigen::VectorXd vel = state.head(3);
-                Eigen::VectorXd pos = state.tail(3);
-                vels.push_back(vel);
-                poses.push_back(pos);
-                coms.push_back(commands);
-
-                break;
-            }
-            total_elapsed = std::chrono::steady_clock::now() - start_time;
-            // std::cout << "Elasped: " << total_elapsed.count() << std::endl;
-        } while (total_elapsed.count() <= t);
-        total_elapsed = std::chrono::steady_clock::now() - start_time;
+        }
 
         if (!limit_reached)
             global::robot_control->reset_to_position_control();
@@ -513,8 +546,8 @@ struct RewardFunction {
         //     de += dx * dx;
         // }
         //
-        // std::map<dynamixel::SafeTorqueControl::id_t, double> min_angles = {{1, 1.57}, {2, 2.09}, {3, 1.57}, {4, 1.57}};
-        // std::map<dynamixel::SafeTorqueControl::id_t, double> max_angles = {{1, 4.71}, {2, 4.19}, {3, 4.71}, {4, 4.3}};
+        // std::map<dynamixel::SafeTorqueControl::id_t, double> min_angles = {{1, 1.57}, {2, 2.09}, {3, 1.98}, {4, 1.57}};
+        // std::map<dynamixel::SafeTorqueControl::id_t, double> max_angles = {{1, 4.71}, {2, 4.19}, {3, 4.3}, {4, 4.3}};
         // // double p1 = 0.0, p2 = 0.0;
         // for (int i = 0; i < 3; i++) {
         //     double ll = min_angles[i + 1] - M_PI;
@@ -557,26 +590,6 @@ void init_simu(const std::string& robot_file)
     std::cout << "Goal is: " << global::goal.transpose() << std::endl;
     // global::goal = Eigen::VectorXd(3);
     // global::goal << 1, 1, 1;
-}
-
-bool init_robot(const std::string& usb_port)
-{
-    std::map<dynamixel::SafeTorqueControl::id_t, double> min_angles = {{1, 1.57}, {2, 2.09}, {3, 1.57}, {4, 1.57}};
-    std::map<dynamixel::SafeTorqueControl::id_t, double> max_angles = {{1, 4.71}, {2, 4.19}, {3, 4.71}, {4, 4.3}};
-    // conservative torque limits
-    std::map<dynamixel::SafeTorqueControl::id_t, double> max_torques = {{1, 100}, {2, 120}, {3, 120}, {4, 100}};
-
-    std::unordered_set<dynamixel::protocols::Protocol2::id_t> selected_servos = {1, 2, 3};
-
-    try {
-        global::robot_control = std::make_shared<dynamixel::SafeTorqueControl>(usb_port, selected_servos, min_angles, max_angles, max_torques, Params::min_height());
-    }
-    catch (errors::Error e) {
-        std::cerr << "Dynamixel error:\n\t" << e.msg() << std::endl;
-        return false;
-    }
-
-    return true;
 }
 
 using kernel_t = medrops::SquaredExpARD<Params>;
@@ -765,7 +778,7 @@ int main(int argc, char** argv)
     medrops::Medrops<Params, MGP_t, Omnigrasper, medrops::GPPolicy<Params>, policy_opt_t, RewardFunction> cp_system;
 #endif
 
-    cp_system.learn(6, 15);
+    cp_system.learn(6, 30);
 
     return 0;
 }
