@@ -278,8 +278,7 @@ struct Omnigrasper {
         bool limit_reached = false;
         bool movement_fail = true;
 
-        while(movement_fail)
-        {
+        while (movement_fail) {
             try {
                 // reset robot
                 reset_robot();
@@ -351,12 +350,13 @@ struct Omnigrasper {
                 } while (total_elapsed.count() <= t);
                 total_elapsed = std::chrono::steady_clock::now() - start_time;
                 movement_fail = false;
-            } catch (dynamixel::errors::Error e) {
+            }
+            catch (dynamixel::errors::Error e) {
                 movement_fail = true;
                 std::cerr << "Dynamixel error:\n\t" << e.msg() << std::endl;
-                std::cout<<"Did you reset the power? Just press any key..."<<std::endl;
+                std::cout << "Did you reset the power? Just press any key..." << std::endl;
                 char c;
-                std::cin>>c;
+                std::cin >> c;
                 init_robot("/dev/ttyUSB0");
             }
         }
