@@ -24,8 +24,7 @@ def build(bld):
     libs = 'TBB EIGEN BOOST LIMBO LIBCMAES NLOPT SFERES2 BOOST_CHRONO RT SDL '
     arm_libs = 'TBB EIGEN BOOST LIMBO LIBCMAES NLOPT SFERES2 BOOST_CHRONO RT ROBOT_DART DART BOOST_DART '
     arm_libs_graphic = arm_libs + 'DART_GRAPHIC'
-    if bld.get_env()['BUILD_ROBOT'] == True:
-        arm_libs = arm_libs + 'LIBDYNAMIXEL'
+    robot_libs = libs + 'LIBDYNAMIXEL'
     cxxflags = bld.get_env()['CXXFLAGS']
     cxxflags += ['-D NODSP']
 
@@ -58,7 +57,7 @@ def build(bld):
                           source='robot_arm.cpp',
                           includes='. ../../src ../ ./include',
                           target='robot_arm',
-                          uselib=arm_libs,
+                          uselib=robot_libs,
                           uselib_local='limbo',
                           variants = ['SIMU'])
 
@@ -70,14 +69,6 @@ def build(bld):
                           uselib=arm_libs_graphic,
                           uselib_local='limbo',
                           variants = ['GRAPHIC', 'GRAPHIC GPPOLICY'])
-        if bld.get_env()['BUILD_ROBOT'] == True:
-            limbo.create_variants(bld,
-                              source='robot_arm.cpp',
-                              includes='. ../../src ../ ./include',
-                              target='robot_arm',
-                              uselib=arm_libs_graphic,
-                              uselib_local='limbo',
-                              variants = ['GRAPHIC'])
 
     limbo.create_variants(bld,
                       source='test.cpp',

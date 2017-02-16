@@ -2,13 +2,7 @@
 #include <limbo/limbo.hpp>
 #include <limbo/mean/constant.hpp>
 
-#include <medrops/safe_torque_control.hpp>
-
-#include <robot_dart/robot_dart_simu.hpp>
-#include <robot_dart/position_control.hpp>
-#ifdef GRAPHIC
-#include <robot_dart/graphics.hpp>
-#endif
+#include <medrops/safe_velocity_control.hpp>
 
 #include <boost/program_options.hpp>
 
@@ -34,10 +28,6 @@ inline T gaussian_rand(T m = 0.0, T v = 1.0)
 }
 
 struct Params {
-#ifdef GRAPHIC
-    struct graphics : robot_dart::defaults::graphics {
-    };
-#endif
     BO_PARAM(size_t, action_dim, 3);
     BO_PARAM(size_t, state_full_dim, 12);
     BO_PARAM(size_t, model_input_dim, 9);
@@ -133,12 +123,7 @@ inline double angle_dist(double a, double b)
     return theta;
 }
 
-namespace data {
-    std::vector<Eigen::VectorXd> vels, poses, coms;
-}
-
 namespace global {
-    std::shared_ptr<robot_dart::Robot> global_robot;
 #ifndef GPPOLICY
     using policy_t = medrops::SFNNPolicy<Params>;
 #else
@@ -153,25 +138,40 @@ namespace global {
     using GP_t = limbo::model::GP<Params, kernel_t, mean_t>; //, medrops::KernelLFOpt<Params, limbo::opt::NLOptGrad<Params, nlopt::LD_SLSQP>>>;
     GP_t reward_gp(3, 1);
 
-    std::shared_ptr<dynamixel::SafeTorqueControl> robot_control;
+    std::shared_ptr<dynamixel::SafeVelocityControl> robot_control;
+}
+
+Eigen::VectorXd get_eef(const Eigen::VectorXd& q)
+{
+    std::vector<double> tmp_q(q.size());
+    Eigen::VectorXd::Map(tmp_q.data(), tmp_q.size()) = q;
+    std::vector<double> tmp_eef = global::robot_control->get_eef(tmp_q);
+
+    return Eigen::VectorXd::Map(tmp_eef.data(), tmp_eef.size());
 }
 
 bool init_robot(const std::string& usb_port)
 {
-    std::map<dynamixel::SafeTorqueControl::id_t, double> min_angles = {{1, 1.57}, {2, 2.09}, {3, 1.98}, {4, 1.57}};
-    std::map<dynamixel::SafeTorqueControl::id_t, double> max_angles = {{1, 4.71}, {2, 4.19}, {3, 4.3}, {4, 4.3}};
+    // TO-DO: Fix limits
+    std::map<dynamixel::SafeVelocityControl::id_t, double> min_angles = {{1, 1.57}, {2, 2.09}, {3, 1.98}, {4, 1.57}};
+    std::map<dynamixel::SafeVelocityControl::id_t, double> max_angles = {{1, 4.71}, {2, 4.19}, {3, 4.3}, {4, 4.3}};
     // conservative torque limits
-    std::map<dynamixel::SafeTorqueControl::id_t, double> max_torques = {{1, 100}, {2, 120}, {3, 120}, {4, 100}};
+    std::map<dynamixel::SafeVelocityControl::id_t, double> max_torques = {{1, 100}, {2, 120}, {3, 120}, {4, 100}};
 
-    std::unordered_set<dynamixel::protocols::Protocol2::id_t> selected_servos = {1, 2, 3};
+    std::unordered_set<dynamixel::protocols::Protocol1::id_t> selected_servos = {1, 2, 3};
 
     try {
-        global::robot_control = std::make_shared<dynamixel::SafeTorqueControl>(usb_port, selected_servos, min_angles, max_angles, max_torques, Params::min_height());
+        global::robot_control = std::make_shared<dynamixel::SafeVelocityControl>(usb_port, selected_servos, min_angles, max_angles, max_torques, Params::min_height());
     }
     catch (dynamixel::errors::Error e) {
         std::cerr << "Dynamixel error:\n\t" << e.msg() << std::endl;
         return false;
     }
+
+    Eigen::VectorXd q(4);
+    q << M_PI / 4.0, M_PI / 8.0, M_PI / 8.0, M_PI / 8.0;
+    global::goal = get_eef(q);
+    std::cout << "Goal is: " << global::goal.transpose() << std::endl;
 
     return true;
 }
@@ -186,26 +186,20 @@ void reset_robot()
         std::cout << "Reset again? " << std::endl;
         std::cin >> reset;
     }
-    // move to torque control
-    global::robot_control->set_torque_control_mode();
 }
 
 Eigen::VectorXd get_robot_state(const std::vector<double>& vec, bool full = false)
 {
     size_t size = vec.size();
     if (full)
-        size += 3;
+        size = size * 2;
     Eigen::VectorXd state(size);
-    for (size_t i = 0; i < 3; i++)
+    for (size_t i = 0; i < 4; i++)
         state(i) = vec[i];
-    if (!full) {
-        for (size_t i = 3; i < 6; i++)
-            state(i) = vec[i];
-    }
-    else {
-        for (int i = 0; i < 3; i++) {
-            state(3 + 2 * i) = std::cos(vec[3 + i]);
-            state(3 + 2 * i + 1) = std::sin(vec[3 + i]);
+    if (full) {
+        for (int i = 0; i < 4; i++) {
+            state(2 * i) = std::cos(vec[i]);
+            state(2 * i + 1) = std::sin(vec[i]);
         }
     }
     return state;
@@ -214,47 +208,11 @@ Eigen::VectorXd get_robot_state(const std::vector<double>& vec, bool full = fals
 struct ActualReward {
     double operator()(const Eigen::VectorXd& to_state) const
     {
-        using robot_simu_t = robot_dart::RobotDARTSimu<robot_dart::robot_control<robot_dart::PositionControl>>;
-
-        std::shared_ptr<robot_dart::Robot> simulated_robot = global::global_robot->clone();
-        simulated_robot->fix_to_world();
-        simulated_robot->set_position_enforced(true);
-
-        std::vector<double> params(3, 1.0);
-        for (int i = 0; i < to_state.size(); i++)
-            params[i] = to_state(i);
-        robot_simu_t simu(params, simulated_robot);
-        simu.run(2);
-
-        auto bd = simulated_robot->skeleton()->getBodyNode("arm_3_sub");
-        Eigen::VectorXd eef = bd->getCOM();
-        double s_c_sq = 0.1 * 0.1; //0.1 * 0.1; //, s_c_a = 0.1 * 0.1;
-        double s_c = 0.25 * 0.25;
+        Eigen::VectorXd eef = get_eef(to_state);
+        double s_c_sq = 0.1 * 0.1;
         double de = (eef - global::goal).squaredNorm();
 
-        std::map<dynamixel::SafeTorqueControl::id_t, double> min_angles = {{1, 1.57}, {2, 2.09}, {3, 1.98}, {4, 1.57}};
-        std::map<dynamixel::SafeTorqueControl::id_t, double> max_angles = {{1, 4.71}, {2, 4.19}, {3, 4.3}, {4, 4.3}};
-        // double p1 = 0.0, p2 = 0.0;
-        for (int i = 0; i < 3; i++) {
-            double ll = min_angles[i + 1] - M_PI;
-            double ul = max_angles[i + 1] - M_PI;
-            if ((to_state(i) - ll) < 0.1) {
-                return -10.0;
-            }
-            if ((ul - to_state(i)) < 0.1) {
-                return -10.0;
-            }
-            // double el = to_state(i) + M_PI - min_angles[i + 1];
-            // double eu = max_angles[i + 1] - to_state(i) - M_PI;
-            // p1 -= std::exp(-0.5 / s_c_a * el * el);
-            // p2 -= std::exp(-0.5 / s_c_a * eu * eu);
-        }
-
-        double z = 0.252 * std::cos(to_state(1) + to_state(2) + 2 * M_PI) - 0.264 * std::cos(to_state(1) + M_PI);
-        if (z <= Params::min_height())
-            return -10.0;
-
-        return std::exp(-0.5 / s_c_sq * de); // + p1 + p2;
+        return std::exp(-0.5 / s_c_sq * de);
     }
 };
 
@@ -267,92 +225,26 @@ struct Omnigrasper {
         double t = 2.0, dt = 0.05;
 
         // Recording data
-        std::vector<Eigen::VectorXd> vels, poses, coms;
+        std::vector<Eigen::VectorXd> q, coms;
 
-        // map for torques --- defaults to zero
-        std::map<dynamixel::protocols::Protocol2::id_t, double> torques;
-        torques[1] = 0.0;
-        torques[2] = 0.0;
-        torques[3] = 0.0;
+        // map for velocities --- defaults to zero
+        std::map<dynamixel::protocols::Protocol1::id_t, double> velocities;
+        velocities[1] = 0.0;
+        velocities[2] = 0.0;
+        velocities[3] = 0.0;
+        velocities[4] = 0.0;
 
         bool limit_reached = false;
-        bool movement_fail = true;
 
-        while (movement_fail) {
+        bool reset_fail = true;
+        while (reset_fail) {
             try {
                 // reset robot
                 reset_robot();
-                // used for timing
-                auto prev_time = std::chrono::steady_clock::now();
-                auto start_time = prev_time;
-                std::chrono::duration<double> total_elapsed = std::chrono::steady_clock::now() - start_time;
-                do {
-                    std::chrono::duration<double> elapsed_time = std::chrono::steady_clock::now() - prev_time;
-                    if (elapsed_time.count() <= 1e-5 || elapsed_time.count() >= dt) {
-                        // Update time
-                        prev_time = std::chrono::steady_clock::now();
-                        // read latest joint values (angular position and speed)
-                        auto actuators_state = global::robot_control->concatenated_joint_state();
-                        // Substract pi [physical joint angles are not centered around 0 but pi]
-                        for (size_t i = 3; i < 6; i++)
-                            actuators_state[i] = actuators_state[i] - M_PI;
-
-                        // convert to Eigen vectors
-                        Eigen::VectorXd full_state = get_robot_state(actuators_state, true);
-                        Eigen::VectorXd state = get_robot_state(actuators_state);
-
-                        // Query policy for next commands
-                        Eigen::VectorXd commands = policy.next(full_state);
-                        for (size_t i = 0; i < commands.size(); i++) {
-                            torques[i + 1] = commands(i);
-                        }
-
-                        // std::cout << "st: " << state.transpose() << " com: " << commands.transpose() << std::endl;
-
-                        // Update statistics
-                        Eigen::VectorXd vel = state.head(3);
-                        Eigen::VectorXd pos = state.tail(3);
-                        vels.push_back(vel);
-                        poses.push_back(pos);
-                        coms.push_back(commands);
-
-                        // Send commands
-                        global::robot_control->torque_command(torques);
-                    }
-                    if (global::robot_control->enforce_joint_limits()) {
-                        std::cout << "Reached joint limits!" << std::endl;
-                        limit_reached = true;
-
-                        auto actuators_state = global::robot_control->concatenated_joint_state();
-                        // Substract pi [physical joint angles are not centered around 0 but pi]
-                        for (size_t i = 3; i < 6; i++)
-                            actuators_state[i] = actuators_state[i] - M_PI;
-
-                        // convert to Eigen vectors
-                        Eigen::VectorXd full_state = get_robot_state(actuators_state, true);
-                        Eigen::VectorXd state = get_robot_state(actuators_state);
-                        // Query policy for next commands
-                        Eigen::VectorXd commands = policy.next(full_state);
-                        for (size_t i = 0; i < commands.size(); i++) {
-                            torques[i + 1] = commands(i);
-                        }
-                        // Update statistics
-                        Eigen::VectorXd vel = state.head(3);
-                        Eigen::VectorXd pos = state.tail(3);
-                        vels.push_back(vel);
-                        poses.push_back(pos);
-                        coms.push_back(commands);
-
-                        break;
-                    }
-                    total_elapsed = std::chrono::steady_clock::now() - start_time;
-                    // std::cout << "Elasped: " << total_elapsed.count() << std::endl;
-                } while (total_elapsed.count() <= t);
-                total_elapsed = std::chrono::steady_clock::now() - start_time;
-                movement_fail = false;
+                reset_fail = false;
             }
             catch (dynamixel::errors::Error e) {
-                movement_fail = true;
+                reset_fail = true;
                 std::cerr << "Dynamixel error:\n\t" << e.msg() << std::endl;
                 std::cout << "Did you reset the power? Just press any key..." << std::endl;
                 char c;
@@ -360,32 +252,78 @@ struct Omnigrasper {
                 init_robot("/dev/ttyUSB0");
             }
         }
+        // used for timing
+        auto prev_time = std::chrono::steady_clock::now();
+        auto start_time = prev_time;
+        std::chrono::duration<double> total_elapsed = std::chrono::steady_clock::now() - start_time;
+        do {
+            std::chrono::duration<double> elapsed_time = std::chrono::steady_clock::now() - prev_time;
+            if (elapsed_time.count() <= 1e-5 || elapsed_time.count() >= dt) {
+                // Update time
+                prev_time = std::chrono::steady_clock::now();
+                // read latest joint values (angular position and speed)
+                auto actuators_state = global::robot_control->joint_angles();
 
-        if (!limit_reached)
-            global::robot_control->reset_to_position_control();
+                // convert to Eigen vectors
+                Eigen::VectorXd full_state = get_robot_state(actuators_state, true);
+                Eigen::VectorXd state = get_robot_state(actuators_state);
+
+                // Query policy for next commands
+                Eigen::VectorXd commands = policy.next(full_state);
+                for (size_t i = 0; i < commands.size(); i++) {
+                    velocities[i + 1] = commands(i);
+                }
+
+                // std::cout << "st: " << state.transpose() << " com: " << commands.transpose() << std::endl;
+
+                // Update statistics
+                q.push_back(state);
+                coms.push_back(commands);
+
+                // Send commands
+                global::robot_control->velocity_command(velocities);
+            }
+            if (global::robot_control->enforce_joint_limits()) {
+                std::cout << "Reached joint limits!" << std::endl;
+                limit_reached = true;
+
+                auto actuators_state = global::robot_control->joint_angles();
+
+                // convert to Eigen vectors
+                Eigen::VectorXd full_state = get_robot_state(actuators_state, true);
+                Eigen::VectorXd state = get_robot_state(actuators_state);
+
+                // Query policy for next commands
+                Eigen::VectorXd commands = policy.next(full_state);
+
+                // Update statistics
+                q.push_back(state);
+                coms.push_back(commands);
+
+                break;
+            }
+            total_elapsed = std::chrono::steady_clock::now() - start_time;
+            // std::cout << "Elasped: " << total_elapsed.count() << std::endl;
+        } while (total_elapsed.count() <= t);
+        total_elapsed = std::chrono::steady_clock::now() - start_time;
 
         R = std::vector<double>();
 
         ActualReward actual_reward;
 
         // if (display)
-        std::cout << "#: " << vels.size() << std::endl;
-        for (size_t j = 0; j < vels.size() - 1; j++) {
-            size_t id = j; // * step;
+        std::cout << "#: " << q.size() << std::endl;
+        for (size_t id = 0; id < q.size() - 1; id++) {
             Eigen::VectorXd init(Params::model_pred_dim());
-            init.head(3) = vels[id];
-            // init.segment(3, 3) = poses[id];
-            init.tail(3) = poses[id]; //qs[id];
+            init = q[id];
             Eigen::VectorXd init_full(Params::model_input_dim());
-            init_full.head(3) = init.head(3);
-            for (int i = 0; i < 3; i++) {
-                init_full(3 + 2 * i) = std::cos(init(3 + i));
-                init_full(3 + 2 * i + 1) = std::sin(init(3 + i));
+            for (int i = 0; i < 4; i++) {
+                init_full(2 * i) = std::cos(init(i));
+                init_full(2 * i + 1) = std::sin(init(i));
             }
             Eigen::VectorXd u = coms[id];
             Eigen::VectorXd final(Params::model_pred_dim());
-            final.head(3) = vels[id + 1];
-            final.tail(3) = poses[id + 1]; //qs[id + 1];
+            final.tail(3) = q[id + 1];
 
             // if (display) {
             // std::cout << "state: " << init.transpose() << std::endl;
@@ -396,35 +334,17 @@ struct Omnigrasper {
             // std::cout << "my_vel: " << ((poses[id + 1] - poses[id]).array() / 0.05).transpose() << std::endl;
             // }
             // std::cout << "next state: " << final.transpose() << std::endl;
-            double r = actual_reward(final.tail(3)); //world(init, u, final);
+            double r = actual_reward(final); //world(init, u, final);
             // if (limit_reached && j == vels.size() - 2)
             //     r = -10;
             std::cout << final.transpose() << ": " << r << std::endl;
             std::cout << u.transpose() << std::endl;
-            global::reward_gp.add_sample(final.tail(3), limbo::tools::make_vector(r), 0.001);
+            global::reward_gp.add_sample(final, limbo::tools::make_vector(r), 0.001);
             R.push_back(r);
             res.push_back(std::make_tuple(init_full, u, final - init));
             if (r < 0)
                 break;
         }
-
-        //         std::shared_ptr<robot_dart::Robot> simulated_robot = global::global_robot->clone();
-        //         simulated_robot->fix_to_world();
-        //         simulated_robot->set_position_enforced(true);
-        //
-        // #ifdef GRAPHIC
-        //         using robot_simu_t = robot_dart::RobotDARTSimu<robot_dart::robot_control<robot_dart::PositionControl>, robot_dart::graphics<robot_dart::Graphics<Params>>>;
-        // #else
-        //         using robot_simu_t = robot_dart::RobotDARTSimu<robot_dart::robot_control<robot_dart::PositionControl>>;
-        // #endif
-        //         // using robot_simu_t = robot_dart::RobotDARTSimu<robot_dart::robot_control<robot_dart::PositionControl>>;
-        //
-        //         std::vector<double> params(3, 0.0);
-        //         for (size_t ii = 0; ii < 3; ii++)
-        //             params[ii] = poses[vels.size() - 1][ii];
-        //
-        //         robot_simu_t simu(params, simulated_robot);
-        //         simu.run(5);
         // global::reward_gp.recompute();
         // global::reward_gp.optimize_hyperparams();
 
@@ -442,14 +362,12 @@ struct Omnigrasper {
         R = std::vector<double>();
         // init state
         Eigen::VectorXd init = Eigen::VectorXd::Zero(Params::model_pred_dim());
-        // init(5) = 0.58;
         for (size_t j = 0; j < steps; j++) {
             Eigen::VectorXd query_vec(Params::model_input_dim() + Params::action_dim());
             Eigen::VectorXd init_full(Params::model_input_dim());
-            init_full.head(3) = init.head(3);
-            for (int i = 0; i < 3; i++) {
-                init_full(3 + 2 * i) = std::cos(init(3 + i));
-                init_full(3 + 2 * i + 1) = std::sin(init(3 + i));
+            for (int i = 0; i < 4; i++) {
+                init_full(2 * i) = std::cos(init(i));
+                init_full(2 * i + 1) = std::sin(init(i));
             }
             // init.tail(Params::model_input_dim()) = init.tail(Params::model_input_dim()).unaryExpr([](double x) { return angle_dist(0,x); });
             Eigen::VectorXd u = policy.next(init_full);
@@ -461,10 +379,6 @@ struct Omnigrasper {
             std::tie(mu, sigma) = model.predictm(query_vec);
 
             Eigen::VectorXd final = init + mu;
-            // std::cout << init.transpose() << " to " << final.transpose() << " dx: " << mu.transpose() << std::endl;
-            // std::cout << "state: " << init.transpose() << std::endl;
-            // std::cout << "command: " << u.transpose() << std::endl;
-            // final.tail(Params::model_input_dim()) = final.tail(Params::model_input_dim()).unaryExpr([](double x) { return angle_dist(0,x); });
 
             double r = world(init, mu, final);
             R.push_back(r);
@@ -488,10 +402,9 @@ struct Omnigrasper {
             for (size_t j = 0; j < steps; j++) {
                 Eigen::VectorXd query_vec(Params::model_input_dim() + Params::action_dim());
                 Eigen::VectorXd init_full(Params::model_input_dim());
-                init_full.head(3) = init.head(3);
-                for (int i = 0; i < 3; i++) {
-                    init_full(3 + 2 * i) = std::cos(init(3 + i));
-                    init_full(3 + 2 * i + 1) = std::sin(init(3 + i));
+                for (int i = 0; i < 4; i++) {
+                    init_full(2 * i) = std::cos(init(i));
+                    init_full(2 * i + 1) = std::sin(init(i));
                 }
                 Eigen::VectorXd u = policy.next(init_full);
                 query_vec.head(Params::model_input_dim()) = init_full;
@@ -538,59 +451,9 @@ struct Omnigrasper {
 struct RewardFunction {
     double operator()(const Eigen::VectorXd& from_state, const Eigen::VectorXd& action, const Eigen::VectorXd& to_state) const
     {
-        // double s_c_sq = 0.25 * 0.25;
-        // // double de = (to_state.tail(3) - global::goal).squaredNorm();
-        // double de = 0.0;
-        // for (size_t i = 0; i < 3; i++) {
-        //     double dx = angle_dist(to_state(3 + i), global::goal(i));
-        //     de += dx * dx;
-        // }
-        //
-        // std::map<dynamixel::SafeTorqueControl::id_t, double> min_angles = {{1, 1.57}, {2, 2.09}, {3, 1.98}, {4, 1.57}};
-        // std::map<dynamixel::SafeTorqueControl::id_t, double> max_angles = {{1, 4.71}, {2, 4.19}, {3, 4.3}, {4, 4.3}};
-        // // double p1 = 0.0, p2 = 0.0;
-        // for (int i = 0; i < 3; i++) {
-        //     double ll = min_angles[i + 1] - M_PI;
-        //     double ul = max_angles[i + 1] - M_PI;
-        //     if (to_state(3 + i) < ll) {
-        //         return -10.0;
-        //     }
-        //     if (to_state(3 + i) > ul) {
-        //         return -10.0;
-        //     }
-        // }
-        //
-        // return std::exp(-0.5 / s_c_sq * de);
         return global::reward_gp.mu(to_state.tail(3))[0];
     }
 };
-
-void init_simu(const std::string& robot_file)
-{
-    global::global_robot = std::make_shared<robot_dart::Robot>(robot_dart::Robot(robot_file, {}, "arm", true));
-
-    // get goal position
-    std::shared_ptr<robot_dart::Robot> simulated_robot = global::global_robot->clone();
-    simulated_robot->fix_to_world();
-    simulated_robot->set_position_enforced(true);
-
-    using robot_simu_t = robot_dart::RobotDARTSimu<robot_dart::robot_control<robot_dart::PositionControl>>;
-
-    std::vector<double> params(3, 0.5);
-    // params[2] = -0.5;
-    // params[0] = -2.5;
-    // params[2] = 1.0;
-
-    robot_simu_t simu(params, simulated_robot);
-    simu.run(2);
-    auto bd = simulated_robot->skeleton()->getBodyNode("arm_3_sub");
-    global::goal = bd->getCOM();
-    // global::goal << 0.3, 0.3, 0.3;
-    // global::goal = get_robot_state(simulated_robot).segment(3, 3);
-    std::cout << "Goal is: " << global::goal.transpose() << std::endl;
-    // global::goal = Eigen::VectorXd(3);
-    // global::goal << 1, 1, 1;
-}
 
 using kernel_t = medrops::SquaredExpARD<Params>;
 using mean_t = limbo::mean::Constant<Params>;
@@ -755,13 +618,6 @@ int main(int argc, char** argv)
         std::cerr << "Could not connect to the robot! Exiting...";
         exit(1);
     }
-
-    const char* env_p = std::getenv("RESIBOTS_DIR");
-    // initilisation of the simulation and the simulated robot
-    if (env_p) //if the environment variable exists
-        init_simu(std::string(std::getenv("RESIBOTS_DIR")) + "/share/arm_models/URDF/omnigrasper_3dof.urdf");
-    else //if it does not exist, we might be running this on the cluster
-        init_simu("/nfs/hal01/kchatzil/Workspaces/ResiBots/share/arm_models/URDF/omnigrasper_3dof.urdf");
 
     using policy_opt_t = limbo::opt::CustomCmaes<Params>;
 //using policy_opt_t = limbo::opt::NLOptGrad<Params>;
