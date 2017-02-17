@@ -57,13 +57,10 @@ namespace dynamixel {
             }
         }
 
-        void init_position()
+        void go_to_target(const std::vector<double>& target, double threshold = 1e-3)
         {
-            // move to zero position
-            double threshold = 1e-3;
+            // move to target position
             double time_step = 0.05;
-            // std::vector<double> p = {50, 50, 50, 50};
-            std::vector<double> target = {0, 0, 0, 0};
 
             std::map<dynamixel::protocols::Protocol1::id_t, double> velocities;
             velocities[1] = 0.0;
@@ -118,7 +115,7 @@ namespace dynamixel {
                     }
 
                     // Send commands
-                    velocity_command(velocities);
+                    velocity_command(velocities, true);
                 }
             }
 
@@ -129,6 +126,12 @@ namespace dynamixel {
             velocities[4] = 0.0;
 
             velocity_command(velocities);
+        }
+
+        void init_position()
+        {
+            std::vector<double> zero_pos = {0, 0, 0, 0};
+            go_to_target(zero_pos);
         }
 
         /**
@@ -151,26 +154,26 @@ namespace dynamixel {
                 return false;
         }
 
-        /** Send a random velocity to each actuator
-        **/
-        void random_velocity_command()
-        {
-            StatusPacket<Protocol1> status;
-            for (auto servo : _servos) {
-                double rand_vel
-                    = (std::rand() * 2.0 / RAND_MAX - 1) * _max_velocities.at(servo.first);
-                std::cout << (int)servo.first << " -> " << rand_vel << "\t";
-                _serial_interface.send((servo.second)->reg_goal_speed_angle(rand_vel, servos::cst::wheel));
-                _serial_interface.recv(status);
-            }
-            std::cout << std::endl;
-            _serial_interface.send(Action<Protocol1>(Protocol1::broadcast_id));
-        }
+        // /** Send a random velocity to each actuator
+        // **/
+        // void random_velocity_command()
+        // {
+        //     StatusPacket<Protocol1> status;
+        //     for (auto servo : _servos) {
+        //         double rand_vel
+        //             = (std::rand() * 2.0 / RAND_MAX - 1) * _max_velocities.at(servo.first);
+        //         std::cout << (int)servo.first << " -> " << rand_vel << "\t";
+        //         _serial_interface.send((servo.second)->reg_goal_speed_angle(rand_vel, servos::cst::wheel));
+        //         _serial_interface.recv(status);
+        //     }
+        //     std::cout << std::endl;
+        //     _serial_interface.send(Action<Protocol1>(Protocol1::broadcast_id));
+        // }
 
         /** Send velocity orders to all the actuators.
             @param vector of velocities, in ascending order of actuator ID;
         **/
-        void velocity_command(const std::map<id_t, double>& velocities)
+        void velocity_command(const std::map<id_t, double>& velocities, bool ignore_height = false)
         {
             // check that we get the right number of torques
             if (velocities.size() != _servos.size()) {
@@ -179,13 +182,44 @@ namespace dynamixel {
                         << " velocities and recieving " << velocities.size() << " instead.";
                 throw errors::Error(message.str());
             }
-            StatusPacket<Protocol1> status;
+            std::map<id_t, double> angles = joint_angles_map();
+            std::map<id_t, double> vels;
+
             for (auto servo : _servos) {
                 // if (-1 > velocities.at(servo.first) || velocities.at(servo.first) > 1)
                 //     throw errors::Error("velocity_command: Velocity has to be between -1 and 1.");
                 double vel = velocities.at(servo.first);
-                // std::cout << (int)servo.first << " -> " << torque << "\t";
-                _serial_interface.send((servo.second)->reg_goal_speed_angle(vel, servos::cst::wheel));
+                if (_min_angles[servo.first] >= angles[servo.first])
+                    vel = std::max(0.0, vel);
+                // above max angle
+                if (angles[servo.first] >= _max_angles[servo.first])
+                    vel = std::min(0.0, vel);
+
+                vels[servo.first] = vel;
+            }
+
+            // Lookahead
+            double h_prev = height_reached(angles);
+
+            if (h_prev <= _min_height && !ignore_height) {
+                double dt = 0.05;
+                for(auto angle : angles)
+                {
+                    angles.at(angle.first) = angle.second + vels[angle.first]*dt;
+                }
+
+                double h = height_reached(angles);
+                if ((h-h_prev) <= 0.0)
+                {
+                    for (auto servo : _servos)
+                      vels[servo.first] = 0.0;
+                }
+            }
+
+
+            StatusPacket<Protocol1> status;
+            for (auto servo : _servos) {
+                _serial_interface.send((servo.second)->reg_goal_speed_angle(vels[servo.first], servos::cst::wheel));
                 _serial_interface.recv(status);
             }
             _serial_interface.send(Action<Protocol1>(Protocol1::broadcast_id));
@@ -333,6 +367,16 @@ namespace dynamixel {
             // get only z-position of the end-effector
             double z = get_eef(q)[2];
             return (z <= _min_height);
+        }
+
+        double height_reached(const std::map<id_t, double>& angles)
+        {
+            std::vector<double> q;
+            for (int i = 0; i < 4; i++)
+                q.push_back(angles.at(i + 1) - M_PI);
+            // get only z-position of the end-effector
+            double z = get_eef(q)[2];
+            return z;
         }
 
         Usb2Dynamixel _serial_interface;
