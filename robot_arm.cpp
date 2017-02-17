@@ -33,7 +33,7 @@ struct Params {
     BO_PARAM(size_t, model_input_dim, 8);
     BO_PARAM(size_t, model_pred_dim, 4);
 
-    BO_PARAM(double, min_height, 0.05);
+    BO_PARAM(double, min_height, 0.1);
 
     BO_DYN_PARAM(size_t, parallel_evaluations);
     BO_DYN_PARAM(bool, verbose);
@@ -87,11 +87,12 @@ struct Params {
     };
 
     struct kernel_squared_exp_ard : public limbo::defaults::kernel_squared_exp_ard {
+        BO_PARAM(double, sigma_sq, 0.2);
     };
 
     struct kernel_exp : public limbo::defaults::kernel_exp {
         BO_PARAM(double, sigma_sq, 1);
-        BO_PARAM(double, l, 0.2);
+        BO_PARAM(double, l, 1);
     };
 
     struct opt_cmaes : public limbo::defaults::opt_cmaes {
@@ -117,7 +118,10 @@ struct Params {
 
 struct GPParams {
     struct mean_constant {
-        BO_PARAM(double, constant, -1.0);
+        BO_PARAM(double, constant, 0.0);
+    };
+
+    struct kernel_squared_exp_ard : public limbo::defaults::kernel_squared_exp_ard {
     };
 };
 
@@ -140,10 +144,10 @@ namespace global {
 
     Eigen::VectorXd goal(3);
 
-    using kernel_t = limbo::kernel::Exp<Params>; //medrops::SquaredExpARD<Params>; //limbo::kernel::Exp<Params>;
-    using mean_t = limbo::mean::Constant<GPParams>;
+    using kernel_t = limbo::kernel::Exp<Params>; //limbo::kernel::SquaredExpARD<GPParams>; //limbo::kernel::Exp<Params>;
+    using mean_t = limbo::mean::Data<GPParams>;
 
-    using GP_t = limbo::model::GP<Params, kernel_t, mean_t>; //, medrops::KernelLFOpt<Params, limbo::opt::NLOptGrad<Params, nlopt::LD_SLSQP>>>;
+    using GP_t = limbo::model::GP<Params, kernel_t, mean_t>;//, medrops::KernelLFOpt<Params, limbo::opt::NLOptGrad<Params, nlopt::LD_SLSQP>>>;
     GP_t reward_gp(4, 1);
 
     std::shared_ptr<dynamixel::SafeVelocityControl> robot_control;
@@ -160,8 +164,8 @@ Eigen::VectorXd get_eef(const Eigen::VectorXd& q)
 
 bool init_robot(const std::string& usb_port)
 {
-    std::map<dynamixel::SafeVelocityControl::id_t, double> min_angles = {{1, 0.0}, {2, M_PI / 2.0}, {3, M_PI / 2.0}, {4, M_PI / 2.0}};
-    std::map<dynamixel::SafeVelocityControl::id_t, double> max_angles = {{1, 2 * M_PI}, {2, 3 * M_PI / 2.0}, {3, 3 * M_PI / 2.0}, {4, 3 * M_PI / 2.0}};
+    std::map<dynamixel::SafeVelocityControl::id_t, double> min_angles = {{1, 0.5}, {2, 1.3}, {3, 1.3}, {4, 1.3}};
+    std::map<dynamixel::SafeVelocityControl::id_t, double> max_angles = {{1, 2 * M_PI-0.5}, {2, M_PI+1.84}, {3, M_PI+1.84}, {4, M_PI+1.84}};
     // conservative velocity limits
     std::map<dynamixel::SafeVelocityControl::id_t, double> max_velocities = {{1, 3}, {2, 3}, {3, 3}, {4, 3}};
 
@@ -179,6 +183,13 @@ bool init_robot(const std::string& usb_port)
     q << M_PI / 4.0, M_PI / 8.0, M_PI / 8.0, M_PI / 8.0;
     global::goal = get_eef(q);
     std::cout << "Goal is: " << global::goal.transpose() << std::endl;
+
+    std::vector<double> qq(4, 0.0);
+    Eigen::VectorXd::Map(qq.data(), qq.size()) = q;
+    global::robot_control->go_to_target(qq, 1e-2);
+    std::cout << "This is the goal position..." << std::endl;
+    char c;
+    std::cin >> c;
 
     return true;
 }
@@ -215,32 +226,49 @@ struct ActualReward {
     double operator()(const Eigen::VectorXd& to_state) const
     {
         Eigen::VectorXd eef = get_eef(to_state);
-        double s_c_sq = 0.25 * 0.25;
+        double s_c_sq = 0.2 * 0.2;
         double de = (eef - global::goal).squaredNorm();
-        double pen = -1.0;
-
-        if (eef(2) < Params::min_height())
-            return pen;
-
-        std::map<dynamixel::SafeVelocityControl::id_t, double> min_angles = {{1, 0.0}, {2, M_PI / 2.0}, {3, M_PI / 2.0}, {4, M_PI / 2.0}};
-        std::map<dynamixel::SafeVelocityControl::id_t, double> max_angles = {{1, 2 * M_PI}, {2, 3 * M_PI / 2.0}, {3, 3 * M_PI / 2.0}, {4, 3 * M_PI / 2.0}};
-
-        for (size_t i = 0; i < 4; i++) {
-            if (to_state(i) < min_angles[i + 1] - M_PI)
-                return pen;
-            if (to_state(i) > max_angles[i + 1] - M_PI)
-                return pen;
-        }
+        // double pen = -1.0;
+        //
+        // if (eef(2) < Params::min_height())
+        //     return pen;
+        //
+        // std::map<dynamixel::SafeVelocityControl::id_t, double> min_angles = {{1, 0.0}, {2, M_PI / 2.0}, {3, M_PI / 2.0}, {4, M_PI / 2.0}};
+        // std::map<dynamixel::SafeVelocityControl::id_t, double> max_angles = {{1, 2 * M_PI}, {2, 3 * M_PI / 2.0}, {3, 3 * M_PI / 2.0}, {4, 3 * M_PI / 2.0}};
+        //
+        // for (size_t i = 0; i < 4; i++) {
+        //     if (to_state(i) < min_angles[i + 1] - M_PI)
+        //         return pen;
+        //     if (to_state(i) > max_angles[i + 1] - M_PI)
+        //         return pen;
+        // }
 
         // return -std::sqrt(de * de); //std::exp(-0.5 / s_c_sq * de);
         return std::exp(-0.5 / s_c_sq * de);
     }
 };
 
+Eigen::VectorXd get_random_vector(size_t dim, Eigen::VectorXd bounds)
+{
+    Eigen::VectorXd rv = (limbo::tools::random_vector(dim).array() * 2 - 1);
+    // rv(0) *= 3; rv(1) *= 5; rv(2) *= 6; rv(3) *= M_PI; rv(4) *= 10;
+    return rv.cwiseProduct(bounds);
+}
+
+std::vector<Eigen::VectorXd> random_vectors(size_t dim, size_t q, Eigen::VectorXd bounds)
+{
+    std::vector<Eigen::VectorXd> result(q);
+    for (size_t i = 0; i < q; i++) {
+        result[i] = get_random_vector(dim, bounds);
+    }
+    return result;
+}
+
 struct Omnigrasper {
     template <typename Policy, typename Reward>
     std::vector<std::tuple<Eigen::VectorXd, Eigen::VectorXd, Eigen::VectorXd>> execute(const Policy& policy, const Reward& world, size_t steps, std::vector<double>& R, bool display = true)
     {
+        static int n_iter = 0;
         std::vector<std::tuple<Eigen::VectorXd, Eigen::VectorXd, Eigen::VectorXd>> res;
         Eigen::VectorXd pp = policy.params();
         double t = 4.0, dt = 0.05;
@@ -304,51 +332,59 @@ struct Omnigrasper {
                 q.push_back(state);
                 coms.push_back(commands);
 
-                // Send commands
-                global::robot_control->velocity_command(velocities);
+                // // Send commands
+                // global::robot_control->velocity_command(velocities);
             }
-            if (global::robot_control->enforce_joint_limits()) {
-                std::cout << "Reached joint limits!" << std::endl;
-                limit_reached = true;
-
-                auto actuators_state = global::robot_control->joint_angles();
-                for (size_t i = 0; i < 4; i++)
-                    actuators_state[i] = actuators_state[i] - M_PI;
-
-                // convert to Eigen vectors
-                Eigen::VectorXd full_state = get_robot_state(actuators_state, true);
-                Eigen::VectorXd state = get_robot_state(actuators_state);
-
-                // Query policy for next commands
-                Eigen::VectorXd commands = policy.next(full_state);
-
-                // Update statistics
-                q.push_back(state);
-                coms.push_back(commands);
-
-                break;
-            }
+            // Send commands
+            global::robot_control->velocity_command(velocities);
+            // if (global::robot_control->enforce_joint_limits()) {
+            //     std::cout << "Reached joint limits!" << std::endl;
+            //     // limit_reached = true;
+            //     //
+            //     // auto actuators_state = global::robot_control->joint_angles();
+            //     // for (size_t i = 0; i < 4; i++)
+            //     //     actuators_state[i] = actuators_state[i] - M_PI;
+            //     //
+            //     // // convert to Eigen vectors
+            //     // Eigen::VectorXd full_state = get_robot_state(actuators_state, true);
+            //     // Eigen::VectorXd state = get_robot_state(actuators_state);
+            //     //
+            //     // // Query policy for next commands
+            //     // Eigen::VectorXd commands = policy.next(full_state);
+            //     //
+            //     // // Update statistics
+            //     // q.push_back(state);
+            //     // coms.push_back(commands);
+            //     //
+            //     // break;
+            // }
             total_elapsed = std::chrono::steady_clock::now() - start_time;
             // std::cout << "Elasped: " << total_elapsed.count() << std::endl;
         } while (total_elapsed.count() <= t);
         total_elapsed = std::chrono::steady_clock::now() - start_time;
 
-        reset_fail = true;
-        while (reset_fail) {
-            try {
-                // reset robot
-                reset_robot();
-                reset_fail = false;
-            }
-            catch (dynamixel::errors::Error e) {
-                reset_fail = true;
-                std::cerr << "Dynamixel error:\n\t" << e.msg() << std::endl;
-                std::cout << "Did you reset the power? Just press any key..." << std::endl;
-                char c;
-                std::cin >> c;
-                init_robot("/dev/ttyUSB0");
-            }
-        }
+        // reset_fail = true;
+        // while (reset_fail) {
+        //     try {
+        //         // reset robot
+        //         reset_robot();
+        //         reset_fail = false;
+        //     }
+        //     catch (dynamixel::errors::Error e) {
+        //         reset_fail = true;
+        //         std::cerr << "Dynamixel error:\n\t" << e.msg() << std::endl;
+        //         std::cout << "Did you reset the power? Just press any key..." << std::endl;
+        //         char c;
+        //         std::cin >> c;
+        //         init_robot("/dev/ttyUSB0");
+        //     }
+        // }
+
+        velocities[1] = 0.0;
+        velocities[2] = 0.0;
+        velocities[3] = 0.0;
+        velocities[4] = 0.0;
+        global::robot_control->velocity_command(velocities);
 
         R = std::vector<double>();
 
@@ -396,6 +432,27 @@ struct Omnigrasper {
             std::cout << "Reward: " << rr << std::endl;
         }
 
+        // Dump rewards
+        int eval = 10000;
+        Eigen::VectorXd limits(4);
+        limits << M_PI-0.5, 1.84, 1.84, 1.84;
+        std::vector<Eigen::VectorXd> rvs = random_vectors(limits.size(), eval, limits);
+        // std::vector<Eigen::VectorXd> rvs = global::reward_gp.samples();
+
+        std::ofstream ofs("reward_"+std::to_string(n_iter)+".dat");
+        for(size_t i=0;i<rvs.size();i++)
+        {
+            Eigen::VectorXd to_state = rvs[i];
+            Eigen::VectorXd eef = get_eef(to_state);
+            double de = (eef - global::goal).norm();
+            // ofs<<"0 0 0 ";
+            for(int j=0;j<to_state.size();j++)
+              ofs<<to_state[j]<<" ";
+            ofs<<de<<" "<<world(to_state, to_state, to_state, true)<<" "<<actual_reward(to_state)<<std::endl;
+        }
+        ofs.close();
+
+        n_iter++;
         return res;
     }
 
@@ -505,6 +562,8 @@ struct RewardFunction {
             return mu(0);
 
         return gaussian_rand(mu(0), s);
+        // ActualReward actual_reward;
+        // return actual_reward(to_state);
     }
 };
 
@@ -716,7 +775,21 @@ int main(int argc, char** argv)
     medrops::Medrops<Params, MGP_t, Omnigrasper, medrops::GPPolicy<Params>, policy_opt_t, RewardFunction> cp_system;
 #endif
 
-    cp_system.learn(5, 15);
+    cp_system.learn(3, 10);
+
+    ActualReward actual_reward;
+    std::ofstream ofs("reward_points.dat");
+    for(size_t i=0;i<global::reward_gp.samples().size();i++)
+    {
+        Eigen::VectorXd to_state = global::reward_gp.samples()[i];
+        for(int j=0;j<to_state.size();j++)
+          ofs<<to_state[j]<<" ";
+        Eigen::VectorXd mu = global::reward_gp.mu(to_state);
+        double r = actual_reward(to_state);
+        ofs<<mu(0)<<" "<<r;
+        ofs<<std::endl;
+    }
+    ofs.close();
 
     return 0;
 }
