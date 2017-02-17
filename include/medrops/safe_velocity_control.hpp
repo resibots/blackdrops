@@ -24,7 +24,7 @@ namespace dynamixel {
             const std::map<id_t, double>& max_angles,
             const std::map<id_t, double>& max_velocities,
             double min_height)
-            : _serial_interface(usb_serial_port, B115200, 0.02),
+            : _serial_interface(usb_serial_port, B1000000, 0.02),
               _min_angles(min_angles),
               _max_angles(max_angles),
               _max_velocities(max_velocities),
@@ -60,7 +60,7 @@ namespace dynamixel {
         void init_position()
         {
             // move to zero position
-            double threshold = 1e-6;
+            double threshold = 1e-3;
             double time_step = 0.05;
             // std::vector<double> p = {50, 50, 50, 50};
             std::vector<double> target = {0, 0, 0, 0};
@@ -72,26 +72,50 @@ namespace dynamixel {
             velocities[4] = 0.0;
 
             std::vector<double> q = joint_angles();
+            for (size_t i = 0; i < 4; i++)
+                q[i] = q[i] - M_PI;
             std::vector<double> q_err(4, 0.0);
             for (size_t i = 0; i < 4; i++)
                 q_err[i] = target[i] - q[i];
-            double derr = std::accumulate(q_err.begin(), q_err.end(), 0.0, [](double a, double b) { return a*a+b*b; });
+            double derr = -std::numeric_limits<double>::max();
+            for (size_t i = 0; i < 4; i++) {
+                if (std::abs(q_err[i]) > derr)
+                    derr = std::abs(q_err[i]);
+            }
+            //std::accumulate(q_err.begin(), q_err.end(), 0.0, [](double a, double b) { return a*a+b*b; });
 
             auto prev_time = std::chrono::steady_clock::now();
             while (derr > threshold) {
                 std::chrono::duration<double> elapsed_time = std::chrono::steady_clock::now() - prev_time;
                 if (elapsed_time.count() <= 1e-5 || elapsed_time.count() >= time_step) {
                     prev_time = std::chrono::steady_clock::now();
+
                     q = joint_angles();
+                    for (size_t i = 0; i < 4; i++)
+                        q[i] = q[i] - M_PI;
                     for (size_t i = 0; i < 4; i++)
                         q_err[i] = target[i] - q[i];
 
                     double gain = 1.0 / (M_PI * time_step);
 
-                    for (size_t i = 0; i < 4; i++)
-                        velocities[i + 1] = q_err[i] * gain;
+                    for (size_t i = 0; i < 4; i++) {
+                        if (std::abs(q_err[i]) > threshold) {
+                            velocities[i + 1] = q_err[i] * gain;
+                            if (velocities[i + 1] > 1.0)
+                                velocities[i + 1] = 1.0;
+                            if (velocities[i + 1] < -1.0)
+                                velocities[i + 1] = -1.0;
+                        }
+                        else
+                            velocities[i + 1] = 0.0;
+                    }
 
-                    derr = std::accumulate(q_err.begin(), q_err.end(), 0.0, [](double a, double b) { return a*a+b*b; });
+                    // derr = std::accumulate(q_err.begin(), q_err.end(), 0.0, [](double a, double b) { return a*a+b*b; });
+                    derr = -std::numeric_limits<double>::max();
+                    for (size_t i = 0; i < 4; i++) {
+                        if (std::abs(q_err[i]) > derr)
+                            derr = std::abs(q_err[i]);
+                    }
 
                     // Send commands
                     velocity_command(velocities);
@@ -136,7 +160,7 @@ namespace dynamixel {
                 double rand_vel
                     = (std::rand() * 2.0 / RAND_MAX - 1) * _max_velocities.at(servo.first);
                 std::cout << (int)servo.first << " -> " << rand_vel << "\t";
-                _serial_interface.send((servo.second)->reg_goal_speed_angle(rand_vel, servos::cst::joint));
+                _serial_interface.send((servo.second)->reg_goal_speed_angle(rand_vel, servos::cst::wheel));
                 _serial_interface.recv(status);
             }
             std::cout << std::endl;
@@ -157,11 +181,11 @@ namespace dynamixel {
             }
             StatusPacket<Protocol1> status;
             for (auto servo : _servos) {
-                if (-1 > velocities.at(servo.first) || velocities.at(servo.first) > 1)
-                    throw errors::Error("velocity_command: Velocity has to be between -1 and 1.");
+                // if (-1 > velocities.at(servo.first) || velocities.at(servo.first) > 1)
+                //     throw errors::Error("velocity_command: Velocity has to be between -1 and 1.");
                 double vel = velocities.at(servo.first);
                 // std::cout << (int)servo.first << " -> " << torque << "\t";
-                _serial_interface.send((servo.second)->reg_goal_speed_angle(vel, servos::cst::joint));
+                _serial_interface.send((servo.second)->reg_goal_speed_angle(vel, servos::cst::wheel));
                 _serial_interface.recv(status);
             }
             _serial_interface.send(Action<Protocol1>(Protocol1::broadcast_id));
@@ -282,20 +306,17 @@ namespace dynamixel {
                 std::cout << "Error: the size of the angles vector does not "
                           << "match with the number of servos.";
             } // throw an exception
-            bool reached_limit = false;
+
             for (auto angle : angles) {
                 // bellow min angle
-                if (_min_angles[angle.first] >= angle.second) {
-                    angles[angle.first] = _min_angles[angle.first];
-                    reached_limit = true;
-                }
+                if (_min_angles[angle.first] >= angle.second)
+                    return true;
                 // above max angle
-                else if (angle.second >= _max_angles[angle.first]) {
-                    angles[angle.first] = _max_angles[angle.first];
-                    reached_limit = true;
-                }
+                if (angle.second >= _max_angles[angle.first])
+                    return true;
             }
-            return reached_limit;
+
+            return false;
         }
 
         /** Check whether the end effector is lower than the given height.
@@ -308,7 +329,7 @@ namespace dynamixel {
         {
             std::vector<double> q;
             for (int i = 0; i < 4; i++)
-                q.push_back(angles.at(i + 1));
+                q.push_back(angles.at(i + 1) - M_PI);
             // get only z-position of the end-effector
             double z = get_eef(q)[2];
             return (z <= _min_height);

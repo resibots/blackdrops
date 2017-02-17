@@ -28,12 +28,12 @@ inline T gaussian_rand(T m = 0.0, T v = 1.0)
 }
 
 struct Params {
-    BO_PARAM(size_t, action_dim, 3);
+    BO_PARAM(size_t, action_dim, 4);
     BO_PARAM(size_t, state_full_dim, 12);
-    BO_PARAM(size_t, model_input_dim, 9);
-    BO_PARAM(size_t, model_pred_dim, 6);
+    BO_PARAM(size_t, model_input_dim, 8);
+    BO_PARAM(size_t, model_pred_dim, 4);
 
-    BO_PARAM(double, min_height, 0.0);
+    BO_PARAM(double, min_height, 0.05);
 
     BO_DYN_PARAM(size_t, parallel_evaluations);
     BO_DYN_PARAM(bool, verbose);
@@ -43,7 +43,7 @@ struct Params {
     };
 
     struct medrops {
-        BO_PARAM(size_t, rollout_steps, 36);
+        BO_PARAM(size_t, rollout_steps, 74);
         BO_DYN_PARAM(double, boundary);
     };
 
@@ -61,21 +61,21 @@ struct Params {
     };
 
     struct linear_policy {
-        BO_PARAM(int, state_dim, 9);
-        BO_PARAM_ARRAY(double, max_u, 0.5, 0.5, 0.5);
+        BO_PARAM(int, state_dim, 8);
+        BO_PARAM_ARRAY(double, max_u, 1.0, 1.0, 1.0, 1.0);
     };
 
     struct nn_policy {
-        BO_PARAM(int, state_dim, 9);
-        BO_PARAM_ARRAY(double, max_u, 0.7, 0.7, 0.7);
+        BO_PARAM(int, state_dim, 8);
+        BO_PARAM_ARRAY(double, max_u, 1.0, 1.0, 1.0, 1.0);
         BO_DYN_PARAM(int, hidden_neurons);
     };
 
     struct gp_policy {
-        BO_PARAM_ARRAY(double, max_u, 0.5, 0.5, 0.5);
+        BO_PARAM_ARRAY(double, max_u, 1.0, 1.0, 1.0, 1.0);
         BO_PARAM(double, pseudo_samples, 10);
         BO_PARAM(double, noise, 0.01);
-        BO_PARAM(int, state_dim, 9);
+        BO_PARAM(int, state_dim, 8);
     };
 
     struct mean_constant {
@@ -90,6 +90,8 @@ struct Params {
     };
 
     struct kernel_exp : public limbo::defaults::kernel_exp {
+        BO_PARAM(double, sigma_sq, 1);
+        BO_PARAM(double, l, 0.2);
     };
 
     struct opt_cmaes : public limbo::defaults::opt_cmaes {
@@ -113,6 +115,12 @@ struct Params {
     };
 };
 
+struct GPParams {
+    struct mean_constant {
+        BO_PARAM(double, constant, -1.0);
+    };
+};
+
 inline double angle_dist(double a, double b)
 {
     double theta = b - a;
@@ -133,10 +141,10 @@ namespace global {
     Eigen::VectorXd goal(3);
 
     using kernel_t = limbo::kernel::Exp<Params>; //medrops::SquaredExpARD<Params>; //limbo::kernel::Exp<Params>;
-    using mean_t = limbo::mean::Constant<Params>;
+    using mean_t = limbo::mean::Constant<GPParams>;
 
     using GP_t = limbo::model::GP<Params, kernel_t, mean_t>; //, medrops::KernelLFOpt<Params, limbo::opt::NLOptGrad<Params, nlopt::LD_SLSQP>>>;
-    GP_t reward_gp(3, 1);
+    GP_t reward_gp(4, 1);
 
     std::shared_ptr<dynamixel::SafeVelocityControl> robot_control;
 }
@@ -152,16 +160,15 @@ Eigen::VectorXd get_eef(const Eigen::VectorXd& q)
 
 bool init_robot(const std::string& usb_port)
 {
-    // TO-DO: Fix limits
-    std::map<dynamixel::SafeVelocityControl::id_t, double> min_angles = {{1, 1.57}, {2, 2.09}, {3, 1.98}, {4, 1.57}};
-    std::map<dynamixel::SafeVelocityControl::id_t, double> max_angles = {{1, 4.71}, {2, 4.19}, {3, 4.3}, {4, 4.3}};
-    // conservative torque limits
-    std::map<dynamixel::SafeVelocityControl::id_t, double> max_torques = {{1, 100}, {2, 120}, {3, 120}, {4, 100}};
+    std::map<dynamixel::SafeVelocityControl::id_t, double> min_angles = {{1, 0.0}, {2, M_PI / 2.0}, {3, M_PI / 2.0}, {4, M_PI / 2.0}};
+    std::map<dynamixel::SafeVelocityControl::id_t, double> max_angles = {{1, 2 * M_PI}, {2, 3 * M_PI / 2.0}, {3, 3 * M_PI / 2.0}, {4, 3 * M_PI / 2.0}};
+    // conservative velocity limits
+    std::map<dynamixel::SafeVelocityControl::id_t, double> max_velocities = {{1, 3}, {2, 3}, {3, 3}, {4, 3}};
 
-    std::unordered_set<dynamixel::protocols::Protocol1::id_t> selected_servos = {1, 2, 3};
+    std::unordered_set<dynamixel::protocols::Protocol1::id_t> selected_servos = {1, 2, 3, 4};
 
     try {
-        global::robot_control = std::make_shared<dynamixel::SafeVelocityControl>(usb_port, selected_servos, min_angles, max_angles, max_torques, Params::min_height());
+        global::robot_control = std::make_shared<dynamixel::SafeVelocityControl>(usb_port, selected_servos, min_angles, max_angles, max_velocities, Params::min_height());
     }
     catch (dynamixel::errors::Error e) {
         std::cerr << "Dynamixel error:\n\t" << e.msg() << std::endl;
@@ -182,7 +189,6 @@ void reset_robot()
     while (reset) {
         // move to initial position
         global::robot_control->init_position();
-        usleep(1.5 * 1e6);
         std::cout << "Reset again? " << std::endl;
         std::cin >> reset;
     }
@@ -209,9 +215,24 @@ struct ActualReward {
     double operator()(const Eigen::VectorXd& to_state) const
     {
         Eigen::VectorXd eef = get_eef(to_state);
-        double s_c_sq = 0.1 * 0.1;
+        double s_c_sq = 0.25 * 0.25;
         double de = (eef - global::goal).squaredNorm();
+        double pen = -1.0;
 
+        if (eef(2) < Params::min_height())
+            return pen;
+
+        std::map<dynamixel::SafeVelocityControl::id_t, double> min_angles = {{1, 0.0}, {2, M_PI / 2.0}, {3, M_PI / 2.0}, {4, M_PI / 2.0}};
+        std::map<dynamixel::SafeVelocityControl::id_t, double> max_angles = {{1, 2 * M_PI}, {2, 3 * M_PI / 2.0}, {3, 3 * M_PI / 2.0}, {4, 3 * M_PI / 2.0}};
+
+        for (size_t i = 0; i < 4; i++) {
+            if (to_state(i) < min_angles[i + 1] - M_PI)
+                return pen;
+            if (to_state(i) > max_angles[i + 1] - M_PI)
+                return pen;
+        }
+
+        // return -std::sqrt(de * de); //std::exp(-0.5 / s_c_sq * de);
         return std::exp(-0.5 / s_c_sq * de);
     }
 };
@@ -222,7 +243,7 @@ struct Omnigrasper {
     {
         std::vector<std::tuple<Eigen::VectorXd, Eigen::VectorXd, Eigen::VectorXd>> res;
         Eigen::VectorXd pp = policy.params();
-        double t = 2.0, dt = 0.05;
+        double t = 4.0, dt = 0.05;
 
         // Recording data
         std::vector<Eigen::VectorXd> q, coms;
@@ -263,9 +284,12 @@ struct Omnigrasper {
                 prev_time = std::chrono::steady_clock::now();
                 // read latest joint values (angular position and speed)
                 auto actuators_state = global::robot_control->joint_angles();
+                for (size_t i = 0; i < 4; i++)
+                    actuators_state[i] = actuators_state[i] - M_PI;
 
                 // convert to Eigen vectors
                 Eigen::VectorXd full_state = get_robot_state(actuators_state, true);
+                // std::cout << "f: " << full_state.transpose() << std::endl;
                 Eigen::VectorXd state = get_robot_state(actuators_state);
 
                 // Query policy for next commands
@@ -288,6 +312,8 @@ struct Omnigrasper {
                 limit_reached = true;
 
                 auto actuators_state = global::robot_control->joint_angles();
+                for (size_t i = 0; i < 4; i++)
+                    actuators_state[i] = actuators_state[i] - M_PI;
 
                 // convert to Eigen vectors
                 Eigen::VectorXd full_state = get_robot_state(actuators_state, true);
@@ -307,6 +333,23 @@ struct Omnigrasper {
         } while (total_elapsed.count() <= t);
         total_elapsed = std::chrono::steady_clock::now() - start_time;
 
+        reset_fail = true;
+        while (reset_fail) {
+            try {
+                // reset robot
+                reset_robot();
+                reset_fail = false;
+            }
+            catch (dynamixel::errors::Error e) {
+                reset_fail = true;
+                std::cerr << "Dynamixel error:\n\t" << e.msg() << std::endl;
+                std::cout << "Did you reset the power? Just press any key..." << std::endl;
+                char c;
+                std::cin >> c;
+                init_robot("/dev/ttyUSB0");
+            }
+        }
+
         R = std::vector<double>();
 
         ActualReward actual_reward;
@@ -323,7 +366,7 @@ struct Omnigrasper {
             }
             Eigen::VectorXd u = coms[id];
             Eigen::VectorXd final(Params::model_pred_dim());
-            final.tail(3) = q[id + 1];
+            final = q[id + 1];
 
             // if (display) {
             // std::cout << "state: " << init.transpose() << std::endl;
@@ -342,7 +385,7 @@ struct Omnigrasper {
             global::reward_gp.add_sample(final, limbo::tools::make_vector(r), 0.001);
             R.push_back(r);
             res.push_back(std::make_tuple(init_full, u, final - init));
-            if (r < 0)
+            if (r < -0.9)
                 break;
         }
         // global::reward_gp.recompute();
@@ -359,6 +402,8 @@ struct Omnigrasper {
     template <typename Policy, typename Model, typename Reward>
     void execute_dummy(const Policy& policy, const Model& model, const Reward& world, size_t steps, std::vector<double>& R, bool display = true) const
     {
+        std::cout << "Dummy" << std::endl;
+        ActualReward actual_reward;
         R = std::vector<double>();
         // init state
         Eigen::VectorXd init = Eigen::VectorXd::Zero(Params::model_pred_dim());
@@ -380,10 +425,12 @@ struct Omnigrasper {
 
             Eigen::VectorXd final = init + mu;
 
-            double r = world(init, mu, final);
+            double r = world(init, mu, final, true);
+            std::cout << final.transpose() << ": " << r << " -> " << actual_reward(final) << std::endl;
             R.push_back(r);
             init = final;
         }
+        std::cout << "----------------------" << std::endl;
     }
 
     template <typename Policy, typename Model, typename Reward>
@@ -449,9 +496,15 @@ struct Omnigrasper {
 };
 
 struct RewardFunction {
-    double operator()(const Eigen::VectorXd& from_state, const Eigen::VectorXd& action, const Eigen::VectorXd& to_state) const
+    double operator()(const Eigen::VectorXd& from_state, const Eigen::VectorXd& action, const Eigen::VectorXd& to_state, bool certain = false) const
     {
-        return global::reward_gp.mu(to_state.tail(3))[0];
+        Eigen::VectorXd mu;
+        double s;
+        std::tie(mu, s) = global::reward_gp.query(to_state);
+        if (certain)
+            return mu(0);
+
+        return gaussian_rand(mu(0), s);
     }
 };
 
@@ -619,6 +672,35 @@ int main(int argc, char** argv)
         exit(1);
     }
 
+    std::cout << "Connected!" << std::endl;
+
+    // try {
+    //     reset_robot();
+    // }
+    // catch (dynamixel::errors::Error e) {
+    //     std::cerr << "Dynamixel error:\n\t" << e.msg() << std::endl;
+    // }
+
+    // while (true) {
+    //     if (global::robot_control->enforce_joint_limits()) {
+    //         std::cout << "Reached joint limits!" << std::endl;
+    //         // break;
+    //     }
+    //
+    //     auto actuators_state = global::robot_control->joint_angles();
+    //     Eigen::VectorXd q(4);
+    //     for (auto& a : actuators_state)
+    //         a = a - M_PI;
+    //     q = Eigen::VectorXd::Map(actuators_state.data(), actuators_state.size());
+    //     Eigen::VectorXd eef = get_eef(q);
+    //     std::cout << eef.transpose() << std::endl;
+    //     // std::cout << "Angles: ";
+    //     // for (auto a : actuators_state)
+    //     //     std::cout << a - M_PI
+    //     //               << " ";
+    //     // std::cout << std::endl;
+    // }
+
     using policy_opt_t = limbo::opt::CustomCmaes<Params>;
 //using policy_opt_t = limbo::opt::NLOptGrad<Params>;
 #ifdef SPGPS
@@ -634,7 +716,7 @@ int main(int argc, char** argv)
     medrops::Medrops<Params, MGP_t, Omnigrasper, medrops::GPPolicy<Params>, policy_opt_t, RewardFunction> cp_system;
 #endif
 
-    cp_system.learn(20, 30);
+    cp_system.learn(5, 15);
 
     return 0;
 }
