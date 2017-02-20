@@ -7,7 +7,10 @@
 #include <boost/program_options.hpp>
 
 #include <medrops/cmaes.hpp>
-#include <medrops/exp_sq_ard.hpp>
+// #include <medrops/exp_sq_ard.hpp>
+#include <medrops/exp_ard_noise.hpp>
+#include <medrops/gp.hpp>
+#define MEDROPS_GP
 #include <medrops/gp_model.hpp>
 #include <medrops/gp_multi_model.hpp>
 #include <medrops/gp_policy.hpp>
@@ -147,7 +150,7 @@ namespace global {
     using kernel_t = limbo::kernel::Exp<Params>; //limbo::kernel::SquaredExpARD<GPParams>; //limbo::kernel::Exp<Params>;
     using mean_t = limbo::mean::Data<GPParams>;
 
-    using GP_t = limbo::model::GP<Params, kernel_t, mean_t>;//, medrops::KernelLFOpt<Params, limbo::opt::NLOptGrad<Params, nlopt::LD_SLSQP>>>;
+    using GP_t = limbo::model::GP<Params, kernel_t, mean_t>; //, medrops::KernelLFOpt<Params, limbo::opt::NLOptGrad<Params, nlopt::LD_SLSQP>>>;
     GP_t reward_gp(4, 1);
 
     std::shared_ptr<dynamixel::SafeVelocityControl> robot_control;
@@ -165,7 +168,7 @@ Eigen::VectorXd get_eef(const Eigen::VectorXd& q)
 bool init_robot(const std::string& usb_port)
 {
     std::map<dynamixel::SafeVelocityControl::id_t, double> min_angles = {{1, 0.5}, {2, 1.3}, {3, 1.3}, {4, 1.3}};
-    std::map<dynamixel::SafeVelocityControl::id_t, double> max_angles = {{1, 2 * M_PI-0.5}, {2, M_PI+1.84}, {3, M_PI+1.84}, {4, M_PI+1.84}};
+    std::map<dynamixel::SafeVelocityControl::id_t, double> max_angles = {{1, 2 * M_PI - 0.5}, {2, M_PI + 1.84}, {3, M_PI + 1.84}, {4, M_PI + 1.84}};
     // conservative velocity limits
     std::map<dynamixel::SafeVelocityControl::id_t, double> max_velocities = {{1, 3}, {2, 3}, {3, 3}, {4, 3}};
 
@@ -435,20 +438,19 @@ struct Omnigrasper {
         // Dump rewards
         int eval = 10000;
         Eigen::VectorXd limits(4);
-        limits << M_PI-0.5, 1.84, 1.84, 1.84;
+        limits << M_PI - 0.5, 1.84, 1.84, 1.84;
         std::vector<Eigen::VectorXd> rvs = random_vectors(limits.size(), eval, limits);
         // std::vector<Eigen::VectorXd> rvs = global::reward_gp.samples();
 
-        std::ofstream ofs("reward_"+std::to_string(n_iter)+".dat");
-        for(size_t i=0;i<rvs.size();i++)
-        {
+        std::ofstream ofs("reward_" + std::to_string(n_iter) + ".dat");
+        for (size_t i = 0; i < rvs.size(); i++) {
             Eigen::VectorXd to_state = rvs[i];
             Eigen::VectorXd eef = get_eef(to_state);
             double de = (eef - global::goal).norm();
             // ofs<<"0 0 0 ";
-            for(int j=0;j<to_state.size();j++)
-              ofs<<to_state[j]<<" ";
-            ofs<<de<<" "<<world(to_state, to_state, to_state, true)<<" "<<actual_reward(to_state)<<std::endl;
+            for (int j = 0; j < to_state.size(); j++)
+                ofs << to_state[j] << " ";
+            ofs << de << " " << world(to_state, to_state, to_state, true) << " " << actual_reward(to_state) << std::endl;
         }
         ofs.close();
 
@@ -567,10 +569,10 @@ struct RewardFunction {
     }
 };
 
-using kernel_t = medrops::SquaredExpARD<Params>;
+using kernel_t = medrops::SquaredExpARDNoise<Params>;
 using mean_t = limbo::mean::Constant<Params>;
 
-using GP_t = limbo::model::GP<Params, kernel_t, mean_t, medrops::KernelLFOpt<Params, limbo::opt::NLOptGrad<Params, nlopt::LD_SLSQP>>>;
+using GP_t = medrops::GP<Params, kernel_t, mean_t, medrops::KernelLFOpt<Params, limbo::opt::NLOptGrad<Params, nlopt::LD_SLSQP>>>;
 using SPGP_t = limbo::model::SPGP<Params, kernel_t, mean_t>;
 
 BO_DECLARE_DYN_PARAM(size_t, Params, parallel_evaluations);
@@ -779,15 +781,14 @@ int main(int argc, char** argv)
 
     ActualReward actual_reward;
     std::ofstream ofs("reward_points.dat");
-    for(size_t i=0;i<global::reward_gp.samples().size();i++)
-    {
+    for (size_t i = 0; i < global::reward_gp.samples().size(); i++) {
         Eigen::VectorXd to_state = global::reward_gp.samples()[i];
-        for(int j=0;j<to_state.size();j++)
-          ofs<<to_state[j]<<" ";
+        for (int j = 0; j < to_state.size(); j++)
+            ofs << to_state[j] << " ";
         Eigen::VectorXd mu = global::reward_gp.mu(to_state);
         double r = actual_reward(to_state);
-        ofs<<mu(0)<<" "<<r;
-        ofs<<std::endl;
+        ofs << mu(0) << " " << r;
+        ofs << std::endl;
     }
     ofs.close();
 

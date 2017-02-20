@@ -11,7 +11,10 @@
 #include <boost/program_options.hpp>
 
 #include <medrops/cmaes.hpp>
-#include <medrops/exp_sq_ard.hpp>
+// #include <medrops/exp_sq_ard.hpp>
+#include <medrops/exp_ard_noise.hpp>
+#include <medrops/gp.hpp>
+#define MEDROPS_GP
 #include <medrops/gp_model.hpp>
 #include <medrops/gp_multi_model.hpp>
 #include <medrops/gp_policy.hpp>
@@ -607,10 +610,10 @@ void init_simu(const std::string& robot_file)
     // global::goal << 1, 1, 1;
 }
 
-using kernel_t = medrops::SquaredExpARD<Params>;
+using kernel_t = medrops::SquaredExpARDNoise<Params>;
 using mean_t = limbo::mean::Constant<Params>;
 
-using GP_t = limbo::model::GP<Params, kernel_t, mean_t, medrops::KernelLFOpt<Params, limbo::opt::NLOptGrad<Params, nlopt::LD_SLSQP>>>;
+using GP_t = medrops::GP<Params, kernel_t, mean_t, medrops::KernelLFOpt<Params, limbo::opt::NLOptGrad<Params, nlopt::LD_SLSQP>>>;
 using SPGP_t = limbo::model::SPGP<Params, kernel_t, mean_t>;
 
 BO_DECLARE_DYN_PARAM(size_t, Params, parallel_evaluations);

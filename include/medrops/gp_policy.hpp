@@ -28,23 +28,13 @@ namespace medrops {
             _adim = Params::action_dim();
             _ps = Params::gp_policy::pseudo_samples();
             _params = Eigen::VectorXd::Zero(_ps * _sdim + _adim * (_ps + _sdim));
+            _limits = Eigen::VectorXd::Constant(Params::nn_policy::state_dim(), 1.0);
         }
 
         template <typename Model>
         void normalize(const Model& model)
         {
-            Eigen::MatrixXd data = model.samples();
-            Eigen::MatrixXd samples = data.block(0, 0, data.rows(), Params::model_input_dim());
-            _means = samples.colwise().mean().transpose();
-            _sigmas = Eigen::colwise_sig(samples).array().transpose();
-
-            Eigen::VectorXd pl = Eigen::percentile(samples.array().abs(), 5);
-            Eigen::VectorXd ph = Eigen::percentile(samples.array().abs(), 95);
-            _limits = pl.array().max(ph.array());
-
-#ifdef INTACT
-            _limits << 16.138, 9.88254, 14.7047, 0.996735, 0.993532;
-#endif
+            _limits = model.limits().head(Params::nn_policy::state_dim());
         }
 
         Eigen::VectorXd next(const Eigen::VectorXd& state) const

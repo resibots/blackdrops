@@ -42,7 +42,7 @@ def build(bld):
                       target='test_cp',
                       uselib=libs,
                       uselib_local='limbo',
-                      variants = ['SIMU', 'SIMU INTACT', 'SIMU MEDIAN', 'SIMU SPGPS', 'SIMU INTACT SPGPS', 'SIMU MEDIAN SPGPS', 'SIMU GPPOLICY', 'SIMU GPPOLICY INTACT', 'SIMU GPPOLICY MEDIAN', 'SIMU GPPOLICY SPGPS', 'SIMU GPPOLICY INTACT SPGPS', 'SIMU GPPOLICY MEDIAN SPGPS'])
+                      variants = ['SIMU', 'SIMU GPPOLICY'])
 
     limbo.create_variants(bld,
                       source='test_arm.cpp',
@@ -50,7 +50,7 @@ def build(bld):
                       target='test_arm',
                       uselib=arm_libs,
                       uselib_local='limbo',
-                      variants = ['SIMU', 'SIMU SPGPS', 'SIMU GPPOLICY', 'SIMU GPPOLICY SPGPS'])
+                      variants = ['SIMU', 'SIMU GPPOLICY'])
 
     if bld.get_env()['BUILD_ROBOT'] == True:
         limbo.create_variants(bld,
@@ -76,7 +76,7 @@ def build(bld):
                       target='test',
                       uselib=libs,
                       uselib_local='limbo',
-                      variants = ['SIMU', 'SIMU INTACT', 'SIMU GPPOLICY','SIMU GPPOLICY INTACT'])
+                      variants = ['SIMU', 'SIMU GPPOLICY'])
 
     # limbo.create_variants(bld,
     #                   source='ode_test.cpp',

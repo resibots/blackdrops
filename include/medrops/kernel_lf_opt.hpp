@@ -7,7 +7,6 @@
 
 namespace medrops {
 
-    ///@ingroup model_opt
     ///optimize the likelihood of the kernel only
     template <typename Params, typename Optimizer = limbo::opt::ParallelRepeater<Params, limbo::opt::Rprop<Params>>>
     struct KernelLFOpt : public limbo::model::gp::HPOpt<Params, Optimizer> {
@@ -18,10 +17,11 @@ namespace medrops {
             this->_called = true;
             KernelLFOptimization<GP> optimization(gp);
             Optimizer optimizer;
-            auto params = optimizer(optimization, gp.kernel_function().h_params(), false);
+            Eigen::VectorXd params = optimizer(optimization, gp.kernel_function().h_params(), false);
             gp.kernel_function().set_h_params(params);
             gp.set_lik(limbo::opt::eval(optimization, params));
             gp.recompute(false);
+            std::cout << "likelihood: " << gp.get_lik() << std::endl;
         }
 
     protected:
@@ -60,11 +60,9 @@ namespace medrops {
                 // std::cout<<" a: "<<a <<" det: "<< det<<std::endl;
                 double lik = -0.5 * a - 0.5 * det - 0.5 * n * log(2 * M_PI);
 
-#ifdef LLP
-                // TODO: Revisit this, it's not working yet
                 // sum(((ll - log(curb.std'))./log(curb.ls)).^p);
                 Eigen::VectorXd p = gp.kernel_function().h_params();
-                Eigen::VectorXd ll = p.segment(0, p.size() - 1); // length scales
+                Eigen::VectorXd ll = p.segment(0, p.size() - 2); // length scales
 
                 // Std calculation of samples in logspace
                 Eigen::MatrixXd samples = _to_matrix(gp.samples());
@@ -74,13 +72,12 @@ namespace medrops {
                 double ls = std::log(100); // length scales threshold
                 size_t pp = 30; // penalty power
 
-                lik += ((ll - samples_std.transpose()) / ls).array().pow(pp).sum();
+                lik -= ((ll - samples_std.transpose()) / ls).array().pow(pp).sum();
 
                 // f = f + sum(((lsf - lsn)/log(curb.snr)).^p); % signal to noise ratio
-                double lsf = p(p.size() - 1);
-                double lsn = std::log(0.01);
-                lik += std::pow((lsf - lsn) / snr, pp);
-#endif
+                double lsf = p(p.size() - 2);
+                double lsn = p(p.size() - 1); //std::log(0.01);
+                lik -= std::pow((lsf - lsn) / snr, pp);
 
                 if (!compute_grad)
                     return limbo::opt::no_grad(lik);
@@ -106,20 +103,18 @@ namespace medrops {
                     }
                 }
 
-#ifdef LLP
                 // Gradient update with penalties
                 /// df(li) += (p * ((ll - log(curb.std')).^(p-1))) / (log(curb.ls)^p);
-                Eigen::VectorXd grad_ll = pp * (ll - samples_std.transpose()).array().pow(pp - 1) / std::pow(ls, 2);
-                grad.segment(0, grad.size() - 1) = grad.segment(0, grad.size() - 1) + grad_ll;
+                Eigen::VectorXd grad_ll = pp * (ll - samples_std.transpose()).array().pow(pp - 1) / std::pow(ls, pp);
+                grad.segment(0, grad.size() - 2) = grad.segment(0, grad.size() - 2) - grad_ll;
 
                 /// df(sfi) = df(sfi) + p*(lsf - lsn).^(p-1)/log(curb.snr)^p;
                 double mgrad_v = pp * std::pow((lsf - lsn), pp - 1) / std::pow(snr, pp);
-                grad(grad.size() - 1) = grad(grad.size() - 1) + mgrad_v;
+                grad(grad.size() - 2) = grad(grad.size() - 2) - mgrad_v;
 
-// NOTE: This is for the noise calculation
-// df(end) = df(end) - p*sum((lsf - lsn).^(p-1)/log(curb.snr)^p);
-// grad(grad.size()-1) -= pp * std::pow((lsf - lsn), pp-1)/std::pow(snr, p);
-#endif
+                // NOTE: This is for the noise calculation
+                // df(end) = df(end) - p * sum((lsf - lsn).^ (p - 1) / log(curb.snr) ^ p);
+                grad(grad.size() - 1) += pp * std::pow((lsf - lsn), pp - 1) / std::pow(snr, pp);
 
                 return {lik, grad};
             }

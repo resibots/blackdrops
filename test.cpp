@@ -193,60 +193,10 @@ inline double angle_dist(double a, double b)
     return theta;
 }
 
-namespace global {
-    std::vector<Eigen::VectorXd> _tried_policies = std::vector<Eigen::VectorXd>();
-    std::vector<Eigen::VectorXd> _tried_rewards = std::vector<Eigen::VectorXd>();
-}
-
-template <typename Params>
-struct MeanIntact {
-    int id = -1;
-
-    MeanIntact(size_t dim_out = 1) {}
-
-    MeanIntact(const MeanIntact& other)
-    {
-        id = other.id;
-    }
-
-    void set_id(int id)
-    {
-        this->id = id;
-    }
-
-    template <typename GP>
-    Eigen::VectorXd operator()(const Eigen::VectorXd& v, const GP&) const
-    {
-        return eval(v);
-    }
-
-    Eigen::VectorXd eval(const Eigen::VectorXd& v) const
-    {
-        double dt = 0.1, t = 0.0;
-
-        boost::numeric::odeint::runge_kutta4<std::vector<double>> ode_stepper;
-        std::vector<double> pend_state(2);
-        pend_state[0] = v(0);
-        pend_state[1] = std::atan2(v(2), v(1));
-        Eigen::VectorXd old_state = Eigen::VectorXd::Map(pend_state.data(), pend_state.size());
-
-        boost::numeric::odeint::integrate_const(ode_stepper, std::bind(&MeanIntact::dynamics, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, v(3)), pend_state, t, dt, dt / 2.0);
-
-        Eigen::VectorXd new_state = Eigen::VectorXd::Map(pend_state.data(), pend_state.size());
-
-        Eigen::VectorXd result(1);
-        result << (new_state - old_state)(this->id);
-        return result;
-    }
-
-    void dynamics(const std::vector<double>& x, std::vector<double>& dx, double t, double u) const
-    {
-        double l = 1, m = 1, g = 9.82, b = 0.01;
-
-        dx[0] = (u - b * x[0] - m * g * l * std::sin(x[1]) / 2.0) / (m * std::pow(l, 2) / 3.0);
-        dx[1] = x[0];
-    }
-};
+// namespace global {
+//     std::vector<Eigen::VectorXd> _tried_policies = std::vector<Eigen::VectorXd>();
+//     std::vector<Eigen::VectorXd> _tried_rewards = std::vector<Eigen::VectorXd>();
+// }
 
 struct Pendulum {
     typedef std::vector<double> ode_state_type;
@@ -316,10 +266,10 @@ struct Pendulum {
         }
 
         if (!policy.random() && display) {
-            global::_tried_policies.push_back(policy.params());
+            // global::_tried_policies.push_back(policy.params());
             double rr = std::accumulate(R.begin(), R.end(), 0.0);
             std::cout << "Reward: " << rr << std::endl;
-            global::_tried_rewards.push_back(limbo::tools::make_vector(rr));
+            // global::_tried_rewards.push_back(limbo::tools::make_vector(rr));
         }
 
         return res;
@@ -414,7 +364,6 @@ struct Pendulum {
                 Eigen::VectorXd sigma;
                 std::tie(mu, sigma) = model.predictm(query_vec);
 
-#ifndef INTACT
                 if (Params::parallel_evaluations() > 1 || Params::opt_cmaes::handle_uncertainty()) {
                     // if (Params::opt_cmaes::handle_uncertainty()) {
                     //     sigma = sigma.array();
@@ -428,7 +377,6 @@ struct Pendulum {
                             std::min(s, mu(i) + sigma(i)));
                     }
                 }
-#endif
 
                 Eigen::VectorXd final = init_diff + mu;
                 // while (final(1) < -M_PI)
@@ -485,11 +433,7 @@ struct RewardFunction {
 };
 
 using kernel_t = medrops::SquaredExpARD<Params>;
-#ifdef INTACT
-using mean_t = MeanIntact<Params>;
-#else
 using mean_t = limbo::mean::Constant<Params>;
-#endif
 using GP_t = limbo::model::GP<Params, kernel_t, mean_t, medrops::KernelLFOpt<Params, limbo::opt::NLOptGrad<Params, nlopt::LD_SLSQP>>>;
 
 BO_DECLARE_DYN_PARAM(size_t, Params, parallel_evaluations);
@@ -631,15 +575,7 @@ int main(int argc, char** argv)
     medrops::Medrops<Params, MGP_t, Pendulum, medrops::GPPolicy<Params>, policy_opt_t, RewardFunction> pend_system;
 #endif
 
-#ifndef DATA
-#ifdef INTACT
-    pend_system.learn(1, 100);
-#else
     pend_system.learn(1, 15);
-#endif
-#else
-    pend_system.learn(0, 10);
-#endif
 
 #if defined(USE_SDL) && !defined(NODSP)
     sdl_clean();

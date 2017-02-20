@@ -58,7 +58,7 @@ namespace medrops {
 
             // For now optimize policy without gradients
             Eigen::VectorXd params_star;
-            Eigen::VectorXd params_starting = _params_starting; //_policy.params(); //_params_starting;
+            Eigen::VectorXd params_starting = _policy.params(); //_params_starting;
             Eigen::write_binary("policy_params_starting_" + std::to_string(i) + ".bin", params_starting);
 
             _opt_iters = 0;
@@ -80,7 +80,9 @@ namespace medrops {
                     true);
             }
             if (Params::verbose())
-                std::cout << _opt_iters << "(" << _max_reward << ", " << _max_simu_reward << ", " << _max_real_reward << ") " << std::endl;
+                std::cout << _opt_iters << "(" << _max_reward << ")" << std::endl; //", " << _max_simu_reward << ", " << _max_real_reward << ") " << std::endl;
+            else
+                std::cout << std::endl;
             // std::cout << _opt_iters << "(" << _max_reward << ") " << std::endl;
             std::cout << "Optimization iterations: " << _opt_iters << std::endl;
             // std::cout << "Max parameters: " << _max_params.transpose() << std::endl;
@@ -95,7 +97,6 @@ namespace medrops {
             // std::cout << "Best parameters: " << _policy.params().transpose() << std::endl;
             Eigen::write_binary("policy_params_" + std::to_string(i) + ".bin", _policy.params());
 
-#ifndef INTACT
             std::vector<double> R;
             RewardFunction world;
             _robot.execute_dummy(_policy, _model, world, Params::medrops::rollout_steps(), R);
@@ -104,7 +105,6 @@ namespace medrops {
             for (auto r : R)
                 _ofs << r << " ";
             _ofs << std::endl;
-#endif
         }
 
         void learn(size_t init, size_t iterations)
@@ -120,8 +120,8 @@ namespace medrops {
 
             std::cout << "Executing random actions..." << std::endl;
             for (size_t i = 0; i < init; i++) {
-                Eigen::VectorXd pp = limbo::tools::random_vector(_policy.params().size()).array() * 2.0 * _boundary - _boundary;
-                _policy.set_params(pp);
+                // Eigen::VectorXd pp = limbo::tools::random_vector(_policy.params().size()).array() * 2.0 * _boundary - _boundary;
+                // _policy.set_params(pp);
                 execute_and_record_data();
             }
 
@@ -135,25 +135,17 @@ namespace medrops {
                 learn_model();
                 double learn_model_ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - time_start).count();
                 _ofs_model << learn_model_ms << std::endl;
+                _model.save_data("gp_learn_" + std::to_string(i) + ".dat");
 
                 _policy.normalize(_model);
                 std::cout << "Learned model..." << std::endl;
 
-                int eval = 10000;
-                Eigen::VectorXd limits = _model._limits; //(Params::model_input_dim() + Params::action_dim());
-                // limits.head(Params::model_input_dim()) = _policy._limits;
-                // limits.tail(Params::action_dim()) = Eigen::VectorXd::Constant(Params::action_dim(), Params::nn_policy::max_u());
-                std::vector<Eigen::VectorXd> rvs = random_vectors(Params::model_input_dim() + Params::action_dim(), eval, limits);
-                Eigen::VectorXd sigmas(Params::model_pred_dim());
-                for (size_t i = 0; i < rvs.size(); i++) {
-                    Eigen::VectorXd s;
-                    Eigen::VectorXd m;
-                    std::tie(m, s) = _model.predictm(rvs[i]);
-                    // errors.array() += (m - cm).array().abs();
-                    sigmas.array() += s.array();
+                if (Params::verbose()) {
+                    Eigen::VectorXd errors, sigmas;
+                    std::tie(errors, sigmas) = get_accuracy();
+                    std::cout << "Errors: " << errors.transpose() << std::endl;
+                    std::cout << "Sigmas: " << sigmas.transpose() << std::endl;
                 }
-                sigmas.array() = sigmas.array() / (eval * 1.0);
-                std::cout << "SIGMAS: " << sigmas.transpose() << std::endl;
 
                 time_start = std::chrono::steady_clock::now();
                 optimize_policy(i + 1);
@@ -199,16 +191,16 @@ namespace medrops {
 
             _opt_iters++;
             if (_max_reward < r) {
-                if (Params::verbose()) {
-                    std::vector<double> R;
-                    _robot.execute_dummy(policy, _model, world, Params::medrops::rollout_steps(), R, false);
-                    double simu_reward = std::accumulate(R.begin(), R.end(), 0.0);
-                    _robot.execute(policy, world, Params::medrops::rollout_steps(), R, false);
-                    double real_reward = std::accumulate(R.begin(), R.end(), 0.0);
-
-                    _max_simu_reward = simu_reward;
-                    _max_real_reward = real_reward;
-                }
+                // if (Params::verbose()) {
+                //     std::vector<double> R;
+                //     _robot.execute_dummy(policy, _model, world, Params::medrops::rollout_steps(), R, false);
+                //     double simu_reward = std::accumulate(R.begin(), R.end(), 0.0);
+                //     _robot.execute(policy, world, Params::medrops::rollout_steps(), R, false);
+                //     double real_reward = std::accumulate(R.begin(), R.end(), 0.0);
+                //
+                //     _max_simu_reward = simu_reward;
+                //     _max_real_reward = real_reward;
+                // }
                 _max_reward = r;
                 _max_params = policy.params().array();
                 // Eigen::write_binary("max_params.bin", policy.params());
@@ -217,9 +209,9 @@ namespace medrops {
             // if (_opt_iters % 500 == 0)
             //     std::cout << _opt_iters << "(" << _max_reward << ") " << std::flush;
 
-            if (Params::verbose() && _opt_iters % 1000 == 0) {
-                std::cout << _opt_iters << "(" << _max_reward << ", " << _max_simu_reward << ", " << _max_real_reward << ") " << std::flush;
-            }
+            // if (Params::verbose() && _opt_iters % 1000 == 0) {
+            //     std::cout << _opt_iters << "(" << _max_reward << ", " << _max_simu_reward << ", " << _max_real_reward << ") " << std::flush;
+            // }
 
             return limbo::opt::no_grad(r);
         }
@@ -238,6 +230,55 @@ namespace medrops {
                 result[i] = get_random_vector(dim, bounds);
             }
             return result;
+        }
+
+        std::tuple<Eigen::VectorXd, Eigen::VectorXd> get_accuracy(double perc = 0.75) const
+        {
+            // get data
+            int sample_size = _observations.size();
+            int training_size = perc * sample_size;
+            int test_size = sample_size - training_size;
+            std::vector<std::tuple<Eigen::VectorXd, Eigen::VectorXd, Eigen::VectorXd>> observations = _observations;
+
+            // shuffle data
+            std::random_shuffle(observations.begin(), observations.end());
+
+            std::vector<std::tuple<Eigen::VectorXd, Eigen::VectorXd, Eigen::VectorXd>>::const_iterator first = observations.begin();
+            std::vector<std::tuple<Eigen::VectorXd, Eigen::VectorXd, Eigen::VectorXd>>::const_iterator last = observations.begin() + training_size;
+            std::vector<std::tuple<Eigen::VectorXd, Eigen::VectorXd, Eigen::VectorXd>> training_samples(first, last);
+
+            first = observations.begin() + training_size;
+            last = observations.end();
+            std::vector<std::tuple<Eigen::VectorXd, Eigen::VectorXd, Eigen::VectorXd>> test_samples(first, last);
+
+            // create model
+            Model model;
+            model.learn(training_samples);
+
+            // Get errors and sigmas
+            Eigen::VectorXd errors(Params::model_pred_dim());
+            Eigen::VectorXd sigmas(Params::model_pred_dim());
+
+            for (size_t i = 0; i < test_samples.size(); i++) {
+                Eigen::VectorXd st, act, pred;
+                st = std::get<0>(test_samples[i]);
+                act = std::get<1>(test_samples[i]);
+                pred = std::get<2>(test_samples[i]);
+
+                Eigen::VectorXd s(st.size() + act.size());
+                s.head(st.size()) = st;
+                s.tail(act.size()) = act;
+
+                Eigen::VectorXd mu, sigma;
+                std::tie(mu, sigma) = model.predictm(s);
+                errors.array() += (mu - pred).norm();
+                sigmas.array() += sigma.array();
+            }
+
+            errors.array() = errors.array() / double(test_size);
+            sigmas.array() = sigmas.array() / double(test_size);
+
+            return std::make_tuple(errors, sigmas);
         }
 
         // std::tuple<Eigen::VectorXd, Eigen::VectorXd> get_accuracy(int evaluations = 100000) const
