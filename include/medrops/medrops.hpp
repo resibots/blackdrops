@@ -126,6 +126,7 @@ namespace medrops {
                 if (_random_policies) {
                     Eigen::VectorXd pp = limbo::tools::random_vector(_policy.params().size()).array() * 2.0 * _boundary - _boundary;
                     _policy.set_params(pp);
+                    Eigen::write_binary("random_policy_params_" + std::to_string(i) + ".bin", pp);
                 }
                 execute_and_record_data();
             }
@@ -262,8 +263,8 @@ namespace medrops {
             model.learn(training_samples);
 
             // Get errors and sigmas
-            Eigen::VectorXd errors(Params::model_pred_dim());
-            Eigen::VectorXd sigmas(Params::model_pred_dim());
+            Eigen::VectorXd errors = Eigen::VectorXd::Zero(Params::model_pred_dim());
+            Eigen::VectorXd sigmas = Eigen::VectorXd::Zero(Params::model_pred_dim());
 
             for (size_t i = 0; i < test_samples.size(); i++) {
                 Eigen::VectorXd st, act, pred;

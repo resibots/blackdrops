@@ -98,6 +98,13 @@ struct Params {
         BO_PARAM(double, l, 1);
     };
 
+    struct opt_rprop : public limbo::defaults::opt_rprop {
+    };
+
+    struct opt_parallelrepeater : public limbo::defaults::opt_parallelrepeater {
+        BO_PARAM(int, repeats, 2);
+    };
+
     struct opt_cmaes : public limbo::defaults::opt_cmaes {
         BO_DYN_PARAM(double, max_fun_evals);
         BO_DYN_PARAM(double, fun_tolerance);
@@ -147,10 +154,10 @@ namespace global {
 
     Eigen::VectorXd goal(3);
 
-    using kernel_t = limbo::kernel::Exp<Params>; //limbo::kernel::SquaredExpARD<GPParams>; //limbo::kernel::Exp<Params>;
+    using kernel_t = medrops::SquaredExpARDNoise<GPParams>; //limbo::kernel::Exp<Params>;
     using mean_t = limbo::mean::Data<GPParams>;
 
-    using GP_t = limbo::model::GP<Params, kernel_t, mean_t>; //, medrops::KernelLFOpt<Params, limbo::opt::NLOptGrad<Params, nlopt::LD_SLSQP>>>;
+    using GP_t = medrops::GP<Params, kernel_t, mean_t, medrops::KernelLFOpt<Params>>; //, limbo::opt::NLOptGrad<Params, nlopt::LD_SLSQP>>>;
     GP_t reward_gp(4, 1);
 
     std::shared_ptr<dynamixel::SafeVelocityControl> robot_control;
@@ -395,6 +402,7 @@ struct Omnigrasper {
 
         // if (display)
         std::cout << "#: " << q.size() << std::endl;
+        std::cout << "init state: " << q[0].transpose() << std::endl;
         for (size_t id = 0; id < q.size() - 1; id++) {
             Eigen::VectorXd init(Params::model_pred_dim());
             init = q[id];
@@ -419,21 +427,21 @@ struct Omnigrasper {
             double r = actual_reward(final); //world(init, u, final);
             // if (limit_reached && j == vels.size() - 2)
             //     r = -10;
-            std::cout << final.transpose() << ": " << r << std::endl;
             std::cout << u.transpose() << std::endl;
-            global::reward_gp.add_sample(final, limbo::tools::make_vector(r), 0.001);
+            std::cout << final.transpose() << ": " << r << std::endl;
+            global::reward_gp.add_sample(final, limbo::tools::make_vector(r)); //, 0.001);
             R.push_back(r);
             res.push_back(std::make_tuple(init_full, u, final - init));
             if (r < -0.9)
                 break;
         }
-        // global::reward_gp.recompute();
-        // global::reward_gp.optimize_hyperparams();
 
         if (!policy.random() && display) {
             double rr = std::accumulate(R.begin(), R.end(), 0.0);
             std::cout << "Reward: " << rr << std::endl;
         }
+
+        global::reward_gp.optimize_hyperparams();
 
         // Dump rewards
         int eval = 10000;
@@ -461,11 +469,12 @@ struct Omnigrasper {
     template <typename Policy, typename Model, typename Reward>
     void execute_dummy(const Policy& policy, const Model& model, const Reward& world, size_t steps, std::vector<double>& R, bool display = true) const
     {
-        std::cout << "Dummy" << std::endl;
+        std::cout << "Dummy: " << std::endl;
         ActualReward actual_reward;
         R = std::vector<double>();
         // init state
         Eigen::VectorXd init = Eigen::VectorXd::Zero(Params::model_pred_dim());
+        std::cout << "init state: " << init.transpose() << std::endl;
         for (size_t j = 0; j < steps; j++) {
             Eigen::VectorXd query_vec(Params::model_input_dim() + Params::action_dim());
             Eigen::VectorXd init_full(Params::model_input_dim());
@@ -485,6 +494,7 @@ struct Omnigrasper {
             Eigen::VectorXd final = init + mu;
 
             double r = world(init, mu, final, true);
+            std::cout << u.transpose() << std::endl;
             std::cout << final.transpose() << ": " << r << " -> " << actual_reward(final) << std::endl;
             R.push_back(r);
             init = final;
@@ -563,7 +573,7 @@ struct RewardFunction {
         if (certain)
             return mu(0);
 
-        return gaussian_rand(mu(0), s);
+        return gaussian_rand(mu(0), std::sqrt(s));
         // ActualReward actual_reward;
         // return actual_reward(to_state);
     }
@@ -777,7 +787,7 @@ int main(int argc, char** argv)
     medrops::Medrops<Params, MGP_t, Omnigrasper, medrops::GPPolicy<Params>, policy_opt_t, RewardFunction> cp_system;
 #endif
 
-    cp_system.learn(3, 10, true);
+    cp_system.learn(3, 15, true);
 
     ActualReward actual_reward;
     std::ofstream ofs("reward_points.dat");

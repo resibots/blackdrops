@@ -31,6 +31,13 @@ namespace dynamixel {
               _min_height(min_height)
         {
             _servos = auto_detect_map<Protocol1>(_serial_interface);
+            if(_servos.size() < 4)
+            {
+                std::stringstream message;
+                message << "Detected only " << _servos.size()
+                        << " servos instead of 4.";
+                throw errors::Error(message.str());
+            }
             // List detected servos
             std::cout << "Servos detected (" << _servos.size() << "):" << std::endl;
             for (auto servo : _servos) {
