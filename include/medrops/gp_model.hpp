@@ -115,7 +115,7 @@ namespace medrops {
 
         void save_data(const std::string& filename) const
         {
-            const std::vector<Eigen::VectorXd>& samples = _gp_models[0].samples();
+            const std::vector<Eigen::VectorXd>& samples = _gp_models[0]->samples();
             Eigen::MatrixXd observations(samples.size(), _gp_models.size());
             for (size_t i = 0; i < _gp_models.size(); ++i) {
                 observations.col(i) = _gp_models[i]->observations().col(0);
