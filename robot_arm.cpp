@@ -777,7 +777,7 @@ int main(int argc, char** argv)
     medrops::Medrops<Params, MGP_t, Omnigrasper, medrops::GPPolicy<Params>, policy_opt_t, RewardFunction> cp_system;
 #endif
 
-    cp_system.learn(3, 10);
+    cp_system.learn(3, 10, true);
 
     ActualReward actual_reward;
     std::ofstream ofs("reward_points.dat");

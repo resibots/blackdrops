@@ -59,6 +59,8 @@ namespace medrops {
             // For now optimize policy without gradients
             Eigen::VectorXd params_star;
             Eigen::VectorXd params_starting = _policy.params(); //_params_starting;
+            if (_random_policies)
+                params_starting = _params_starting;
             Eigen::write_binary("policy_params_starting_" + std::to_string(i) + ".bin", params_starting);
 
             _opt_iters = 0;
@@ -107,9 +109,10 @@ namespace medrops {
             _ofs << std::endl;
         }
 
-        void learn(size_t init, size_t iterations)
+        void learn(size_t init, size_t iterations, bool random_policies = false)
         {
             _boundary = Params::medrops::boundary();
+            _random_policies = random_policies;
             _ofs.open("results.dat");
             _ofs_opt.open("times.dat");
             _ofs_model.open("times_model.dat");
@@ -120,8 +123,10 @@ namespace medrops {
 
             std::cout << "Executing random actions..." << std::endl;
             for (size_t i = 0; i < init; i++) {
-                // Eigen::VectorXd pp = limbo::tools::random_vector(_policy.params().size()).array() * 2.0 * _boundary - _boundary;
-                // _policy.set_params(pp);
+                if (_random_policies) {
+                    Eigen::VectorXd pp = limbo::tools::random_vector(_policy.params().size()).array() * 2.0 * _boundary - _boundary;
+                    _policy.set_params(pp);
+                }
                 execute_and_record_data();
             }
 
@@ -171,6 +176,7 @@ namespace medrops {
         std::ofstream _ofs, _ofs_opt, _ofs_model;
         Eigen::VectorXd _params_starting;
         double _best;
+        bool _random_policies;
 
         // state, action, prediction
         std::vector<std::tuple<Eigen::VectorXd, Eigen::VectorXd, Eigen::VectorXd>> _observations;
