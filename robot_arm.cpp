@@ -46,7 +46,7 @@ struct Params {
     };
 
     struct medrops {
-        BO_PARAM(size_t, rollout_steps, 74);
+        BO_PARAM(size_t, rollout_steps, 39);
         BO_DYN_PARAM(double, boundary);
     };
 
@@ -211,7 +211,9 @@ void reset_robot()
         // move to initial position
         global::robot_control->init_position();
         std::cout << "Reset again? " << std::endl;
-        std::cin >> reset;
+        // std::cin >> reset;
+        sleep(2);
+        reset = false;
     }
 }
 
@@ -281,7 +283,7 @@ struct Omnigrasper {
         static int n_iter = 0;
         std::vector<std::tuple<Eigen::VectorXd, Eigen::VectorXd, Eigen::VectorXd>> res;
         Eigen::VectorXd pp = policy.params();
-        double t = 4.0, dt = 0.05;
+        double t = 4.0, dt = 0.1;
 
         // Recording data
         std::vector<Eigen::VectorXd> q, coms;
@@ -570,7 +572,7 @@ struct RewardFunction {
         Eigen::VectorXd mu;
         double s;
         std::tie(mu, s) = global::reward_gp.query(to_state);
-        if (certain)
+        if (certain || !Params::opt_cmaes::handle_uncertainty())
             return mu(0);
 
         return gaussian_rand(mu(0), std::sqrt(s));
@@ -787,7 +789,7 @@ int main(int argc, char** argv)
     medrops::Medrops<Params, MGP_t, Omnigrasper, medrops::GPPolicy<Params>, policy_opt_t, RewardFunction> cp_system;
 #endif
 
-    cp_system.learn(3, 15, true);
+    cp_system.learn(1, 15, true);
 
     ActualReward actual_reward;
     std::ofstream ofs("reward_points.dat");
