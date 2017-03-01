@@ -21,7 +21,7 @@ namespace medrops {
             }
         }
 
-        void learn(const std::vector<std::tuple<Eigen::VectorXd, Eigen::VectorXd, Eigen::VectorXd>>& observations)
+        void learn(const std::vector<std::tuple<Eigen::VectorXd, Eigen::VectorXd, Eigen::VectorXd>>& observations, bool only_limits = false)
         {
             std::vector<Eigen::VectorXd> samples;
             Eigen::MatrixXd obs(observations.size(), std::get<2>(observations[0]).size());
@@ -49,6 +49,9 @@ namespace medrops {
             Eigen::VectorXd pl = Eigen::percentile(samp.array().abs(), 5);
             Eigen::VectorXd ph = Eigen::percentile(samp.array().abs(), 95);
             _limits = pl.array().max(ph.array());
+
+            if (only_limits)
+                return;
 
             Eigen::MatrixXd data2(samples.size(), samples[0].size() + obs.cols());
             for (size_t i = 0; i < samples.size(); i++) {
