@@ -425,9 +425,9 @@ int main(int argc, char** argv)
 
     std::cout << "Connected!" << std::endl;
 
-    std::string random_file = "random_policy_params_";
-    std::string policy_file = "policy_params_";
-    std::string gp_data = "gp_learn_";
+    std::string random_file = directory + "random_policy_params_";
+    std::string policy_file = directory + "policy_params_";
+    std::string gp_data = directory + "gp_learn_";
 
     size_t random_trials = 1;
     size_t learning_trials = 15;
@@ -458,7 +458,7 @@ int main(int argc, char** argv)
         std::cout << "Learning trial #" << (i + 1) << std::endl;
         // Load policy
         Eigen::VectorXd policy_params;
-        Eigen::read_binary(policy_file + std::to_string(i) + ".bin", policy_params);
+        Eigen::read_binary(policy_file + std::to_string(i + 1) + ".bin", policy_params);
         medrops::SFNNPolicy<Params> policy;
         policy.set_params(policy_params);
 
