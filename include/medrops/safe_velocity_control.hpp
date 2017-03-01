@@ -308,6 +308,22 @@ namespace dynamixel {
             return eef;
         }
 
+        std::vector<double> get_eef2(const std::vector<double>& q)
+        {
+            std::vector<double> eef(3, 0.0);
+
+            double a = 0.21, b = 0.208, /*c = 0.16,*/ h = 0.176;
+
+            // x-position
+            eef[0] = std::cos(q[0]) * (a * std::sin(q[1]) + b * std::sin(q[1] + q[2]));
+            // y-position
+            eef[1] = std::sin(q[0]) * (a * std::sin(q[1]) + b * std::sin(q[1] + q[2]));
+            // z-position (height of base[h] + eef)
+            eef[2] = h + a * std::cos(q[1]) + b * std::cos(q[1] + q[2]);
+
+            return eef;
+        }
+
         void set_min_angles(const std::map<id_t, double>& min_angles)
         {
             _min_angles = min_angles;
@@ -368,11 +384,7 @@ namespace dynamixel {
         **/
         bool height_limit_reached(const std::map<id_t, double>& angles)
         {
-            std::vector<double> q;
-            for (int i = 0; i < 4; i++)
-                q.push_back(angles.at(i + 1) - M_PI);
-            // get only z-position of the end-effector
-            double z = get_eef(q)[2];
+            double z = height_reached(angles);
             return (z <= _min_height);
         }
 
@@ -382,8 +394,9 @@ namespace dynamixel {
             for (int i = 0; i < 4; i++)
                 q.push_back(angles.at(i + 1) - M_PI);
             // get only z-position of the end-effector
-            double z = get_eef(q)[2];
-            return z;
+            double z1 = get_eef(q)[2];
+            double z2 = get_eef2(q)[2];
+            return std::min(z1, z2);
         }
 
         Usb2Dynamixel _serial_interface;
