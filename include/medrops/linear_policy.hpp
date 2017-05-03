@@ -13,13 +13,18 @@ namespace medrops {
         Eigen::VectorXd next(const Eigen::VectorXd& state) const
         {
             if (_random || _params.size() == 0) {
-                return Params::linear_policy::max_u() * (limbo::tools::random_vector(Params::action_dim()).array() * 2 - 1.0);
+                Eigen::VectorXd act = (limbo::tools::random_vector(Params::action_dim()).array() * 2 - 1.0);
+                for (int i = 0; i < act.size(); i++) {
+                    act(i) = act(i) * Params::linear_policy::max_u(i);
+                }
+                return act;
             }
 
             Eigen::VectorXd act = _alpha * state + _constant;
-            act = act.unaryExpr([](double x) {
-                return Params::linear_policy::max_u() * (9 * std::sin(x) / 8.0 + std::sin(3 * x) / 8.0);
-            });
+
+            for (int i = 0; i < act.size(); i++) {
+                act(i) = Params::linear_policy::max_u(i) * (9 * std::sin(act(i)) / 8.0 + std::sin(3 * act(i)) / 8.0);
+            }
 
             return act;
         }

@@ -112,7 +112,7 @@ struct Params {
     BO_PARAM(size_t, model_pred_dim, 2);
 
     BO_DYN_PARAM(size_t, parallel_evaluations);
-    BO_PARAM(bool, verbose, false);
+    BO_DYN_PARAM(bool, verbose);
 
     BO_PARAM(double, goal_pos, M_PI);
     BO_PARAM(double, goal_vel, 0.0);
@@ -132,17 +132,17 @@ struct Params {
 
     struct linear_policy {
         BO_PARAM(int, state_dim, 3);
-        BO_PARAM(double, max_u, 2.5);
+        BO_PARAM_ARRAY(double, max_u, 2.5);
     };
 
     struct nn_policy {
         BO_PARAM(int, state_dim, 3);
-        BO_PARAM(double, max_u, 2.5);
+        BO_PARAM_ARRAY(double, max_u, 2.5);
         BO_DYN_PARAM(int, hidden_neurons);
     };
 
-    struct gp_policy { //: public medrops::defaults::gp_policy_defaults{
-        BO_PARAM(double, max_u, 2.5); //max action
+    struct gp_policy {
+        BO_PARAM_ARRAY(double, max_u, 2.5); //max action
         BO_PARAM(double, pseudo_samples, 20);
         BO_PARAM(double, noise, 1e-5);
         BO_PARAM(int, state_dim, 3);
@@ -193,60 +193,10 @@ inline double angle_dist(double a, double b)
     return theta;
 }
 
-namespace global {
-    std::vector<Eigen::VectorXd> _tried_policies = std::vector<Eigen::VectorXd>();
-    std::vector<Eigen::VectorXd> _tried_rewards = std::vector<Eigen::VectorXd>();
-}
-
-template <typename Params>
-struct MeanIntact {
-    int id = -1;
-
-    MeanIntact(size_t dim_out = 1) {}
-
-    MeanIntact(const MeanIntact& other)
-    {
-        id = other.id;
-    }
-
-    void set_id(int id)
-    {
-        this->id = id;
-    }
-
-    template <typename GP>
-    Eigen::VectorXd operator()(const Eigen::VectorXd& v, const GP&) const
-    {
-        return eval(v);
-    }
-
-    Eigen::VectorXd eval(const Eigen::VectorXd& v) const
-    {
-        double dt = 0.1, t = 0.0;
-
-        boost::numeric::odeint::runge_kutta4<std::vector<double>> ode_stepper;
-        std::vector<double> pend_state(2);
-        pend_state[0] = v(0);
-        pend_state[1] = std::atan2(v(2), v(1));
-        Eigen::VectorXd old_state = Eigen::VectorXd::Map(pend_state.data(), pend_state.size());
-
-        boost::numeric::odeint::integrate_const(ode_stepper, std::bind(&MeanIntact::dynamics, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, v(3)), pend_state, t, dt, dt / 2.0);
-
-        Eigen::VectorXd new_state = Eigen::VectorXd::Map(pend_state.data(), pend_state.size());
-
-        Eigen::VectorXd result(1);
-        result << (new_state - old_state)(this->id);
-        return result;
-    }
-
-    void dynamics(const std::vector<double>& x, std::vector<double>& dx, double t, double u) const
-    {
-        double l = 1, m = 1, g = 9.82, b = 0.01;
-
-        dx[0] = (u - b * x[0] - m * g * l * std::sin(x[1]) / 2.0) / (m * std::pow(l, 2) / 3.0);
-        dx[1] = x[0];
-    }
-};
+// namespace global {
+//     std::vector<Eigen::VectorXd> _tried_policies = std::vector<Eigen::VectorXd>();
+//     std::vector<Eigen::VectorXd> _tried_rewards = std::vector<Eigen::VectorXd>();
+// }
 
 struct Pendulum {
     typedef std::vector<double> ode_state_type;
@@ -316,10 +266,10 @@ struct Pendulum {
         }
 
         if (!policy.random() && display) {
-            global::_tried_policies.push_back(policy.params());
+            // global::_tried_policies.push_back(policy.params());
             double rr = std::accumulate(R.begin(), R.end(), 0.0);
             std::cout << "Reward: " << rr << std::endl;
-            global::_tried_rewards.push_back(limbo::tools::make_vector(rr));
+            // global::_tried_rewards.push_back(limbo::tools::make_vector(rr));
         }
 
         return res;
@@ -414,7 +364,6 @@ struct Pendulum {
                 Eigen::VectorXd sigma;
                 std::tie(mu, sigma) = model.predictm(query_vec);
 
-#ifndef INTACT
                 if (Params::parallel_evaluations() > 1 || Params::opt_cmaes::handle_uncertainty()) {
                     // if (Params::opt_cmaes::handle_uncertainty()) {
                     //     sigma = sigma.array();
@@ -428,7 +377,6 @@ struct Pendulum {
                             std::min(s, mu(i) + sigma(i)));
                     }
                 }
-#endif
 
                 Eigen::VectorXd final = init_diff + mu;
                 // while (final(1) < -M_PI)
@@ -473,22 +421,23 @@ struct RewardFunction {
     double operator()(const Eigen::VectorXd& from_state, const Eigen::VectorXd& action, const Eigen::VectorXd& to_state) const
     {
         double s_c_sq = 0.5 * 0.5;
-        double dx = angle_dist(to_state(1), Params::goal_pos());
-        // double dy = to_state(0) - Params::goal_vel();
 
-        return std::exp(-0.5 / s_c_sq * (dx * dx)); // + dy * dy));
+        double dcos = std::cos(to_state(1)) - std::cos(Params::goal_pos());
+        double dsin = std::sin(to_state(1)) - std::sin(Params::goal_pos());
+        double derr = dcos * dcos + dsin * dsin;
+
+        return std::exp(-0.5 / s_c_sq * derr);
+
+        // return std::exp(-0.5 / s_c_sq * (dx * dx)); // + dy * dy));
     }
 };
 
 using kernel_t = medrops::SquaredExpARD<Params>;
-#ifdef INTACT
-using mean_t = MeanIntact<Params>;
-#else
 using mean_t = limbo::mean::Constant<Params>;
-#endif
 using GP_t = limbo::model::GP<Params, kernel_t, mean_t, medrops::KernelLFOpt<Params, limbo::opt::NLOptGrad<Params, nlopt::LD_SLSQP>>>;
 
 BO_DECLARE_DYN_PARAM(size_t, Params, parallel_evaluations);
+BO_DECLARE_DYN_PARAM(bool, Params, verbose);
 BO_DECLARE_DYN_PARAM(int, Params::nn_policy, hidden_neurons);
 BO_DECLARE_DYN_PARAM(double, Params::medrops, boundary);
 
@@ -503,9 +452,11 @@ BO_DECLARE_DYN_PARAM(bool, Params::opt_cmaes, handle_uncertainty);
 int main(int argc, char** argv)
 {
     bool uncertainty = false;
+    int threads = tbb::task_scheduler_init::automatic;
+    bool verbose = false;
     namespace po = boost::program_options;
     po::options_description desc("Command line arguments");
-    desc.add_options()("help,h", "Prints this help message")("parallel_evaluations,p", po::value<int>(), "Number of parallel monte carlo evaluations for policy reward estimation.")("hidden_neurons,n", po::value<int>(), "Number of hidden neurons in NN policy.")("boundary,b", po::value<double>(), "Boundary of the values during the optimization.")("max_evals,m", po::value<int>(), "Max function evaluations to optimize the policy.")("tolerance,t", po::value<double>(), "Maximum tolerance to continue optimizing the function.")("restarts,r", po::value<int>(), "Max number of restarts to use during optimization.")("elitism,e", po::value<int>(), "Elitism mode to use [0 to 3].")("uncertainty,u", po::bool_switch(&uncertainty)->default_value(false), "Enable uncertainty handling.");
+    desc.add_options()("help,h", "Prints this help message")("parallel_evaluations,p", po::value<int>(), "Number of parallel monte carlo evaluations for policy reward estimation.")("hidden_neurons,n", po::value<int>(), "Number of hidden neurons in NN policy.")("boundary,b", po::value<double>(), "Boundary of the values during the optimization.")("max_evals,m", po::value<int>(), "Max function evaluations to optimize the policy.")("tolerance,t", po::value<double>(), "Maximum tolerance to continue optimizing the function.")("restarts,r", po::value<int>(), "Max number of restarts to use during optimization.")("elitism,e", po::value<int>(), "Elitism mode to use [0 to 3].")("uncertainty,u", po::bool_switch(&uncertainty)->default_value(false), "Enable uncertainty handling.")("threads,d", po::value<int>(), "Max number of threads used by TBB")("verbose,v", po::bool_switch(&verbose)->default_value(false), "Enable verbose mode.");
 
     try {
         po::variables_map vm;
@@ -526,6 +477,8 @@ int main(int argc, char** argv)
         else {
             Params::set_parallel_evaluations(100);
         }
+        if (vm.count("threads"))
+            threads = vm["threads"].as<int>();
         if (vm.count("hidden_neurons")) {
             int c = vm["hidden_neurons"].as<int>();
             if (c < 1)
@@ -596,6 +549,11 @@ int main(int argc, char** argv)
     }
 #endif
 
+#ifdef USE_TBB
+    static tbb::task_scheduler_init init(threads);
+#endif
+
+    Params::set_verbose(verbose);
     Params::opt_cmaes::set_handle_uncertainty(uncertainty);
 
     std::cout << std::endl;
@@ -612,20 +570,12 @@ int main(int argc, char** argv)
     //using policy_opt_t = limbo::opt::NLOptGrad<Params>;
     using MGP_t = medrops::GPModel<Params, GP_t>;
 #ifndef GPPOLICY
-    medrops::Medrops<Params, MGP_t, Pendulum, medrops::SFNNPolicy<Params, MGP_t>, policy_opt_t, RewardFunction> pend_system;
+    medrops::Medrops<Params, MGP_t, Pendulum, medrops::SFNNPolicy<Params>, policy_opt_t, RewardFunction> pend_system;
 #else
-    medrops::Medrops<Params, MGP_t, Pendulum, medrops::GPPolicy<Params, MGP_t>, policy_opt_t, RewardFunction> pend_system;
+    medrops::Medrops<Params, MGP_t, Pendulum, medrops::GPPolicy<Params>, policy_opt_t, RewardFunction> pend_system;
 #endif
 
-#ifndef DATA
-#ifdef INTACT
-    pend_system.learn(1, 100);
-#else
     pend_system.learn(1, 15);
-#endif
-#else
-    pend_system.learn(0, 10);
-#endif
 
 #if defined(USE_SDL) && !defined(NODSP)
     sdl_clean();

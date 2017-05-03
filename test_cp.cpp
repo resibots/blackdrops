@@ -6,7 +6,10 @@
 #include <boost/program_options.hpp>
 
 #include <medrops/cmaes.hpp>
-#include <medrops/exp_sq_ard.hpp>
+// #include <medrops/exp_sq_ard.hpp>
+#include <medrops/exp_ard_noise.hpp>
+#include <medrops/gp.hpp>
+#define MEDROPS_GP
 #include <medrops/gp_model.hpp>
 #include <medrops/gp_multi_model.hpp>
 #include <medrops/gp_policy.hpp>
@@ -144,17 +147,17 @@ struct Params {
 
     struct linear_policy {
         BO_PARAM(int, state_dim, 5);
-        BO_PARAM(double, max_u, 10.0);
+        BO_PARAM_ARRAY(double, max_u, 10.0);
     };
 
     struct nn_policy {
         BO_PARAM(int, state_dim, 5);
-        BO_PARAM(double, max_u, 10.0);
+        BO_PARAM_ARRAY(double, max_u, 10.0);
         BO_DYN_PARAM(int, hidden_neurons);
     };
 
-    struct gp_policy { //: public medrops::defaults::gp_policy_defaults{
-        BO_PARAM(double, max_u, 10.0); //max action
+    struct gp_policy {
+        BO_PARAM_ARRAY(double, max_u, 10.0); //max action
         BO_PARAM(double, pseudo_samples, 10);
         BO_PARAM(double, noise, 0.01);
         BO_PARAM(int, state_dim, 5);
@@ -171,6 +174,13 @@ struct Params {
     struct kernel_squared_exp_ard : public limbo::defaults::kernel_squared_exp_ard {
     };
 
+    struct opt_rprop : public limbo::defaults::opt_rprop {
+    };
+
+    struct opt_parallelrepeater : public limbo::defaults::opt_parallelrepeater {
+        BO_PARAM(int, repeats, 2);
+    };
+
     struct opt_cmaes : public limbo::defaults::opt_cmaes {
         BO_DYN_PARAM(double, max_fun_evals);
         BO_DYN_PARAM(double, fun_tolerance);
@@ -179,15 +189,12 @@ struct Params {
         BO_DYN_PARAM(bool, handle_uncertainty);
 
         BO_PARAM(int, variant, aBIPOP_CMAES);
-        BO_PARAM(int, verbose, false);
+        BO_PARAM(bool, verbose, false);
         BO_PARAM(bool, fun_compute_initial, true);
         // BO_PARAM(double, fun_target, 30);
         BO_DYN_PARAM(double, ubound);
         BO_DYN_PARAM(double, lbound);
         BO_DYN_PARAM(int, lambda);
-
-        BO_PARAM(double, a, -32.0);
-        BO_PARAM(double, b, 0.0);
     };
 
     struct opt_nloptnograd : public limbo::defaults::opt_nloptnograd {
@@ -205,64 +212,10 @@ inline double angle_dist(double a, double b)
     return theta;
 }
 
-namespace global {
-    std::vector<Eigen::VectorXd> _tried_policies = std::vector<Eigen::VectorXd>();
-    std::vector<Eigen::VectorXd> _tried_rewards = std::vector<Eigen::VectorXd>();
-}
-
-template <typename Params>
-struct MeanIntact {
-    int id = -1;
-
-    MeanIntact(size_t dim_out = 1) {}
-
-    MeanIntact(const MeanIntact& other)
-    {
-        id = other.id;
-    }
-
-    void set_id(size_t id)
-    {
-        this->id = id;
-    }
-
-    template <typename GP>
-    Eigen::VectorXd operator()(const Eigen::VectorXd& v, const GP&) const
-    {
-        return eval(v);
-    }
-
-    Eigen::VectorXd eval(const Eigen::VectorXd& v) const
-    {
-        double dt = 0.1, t = 0.0;
-
-        boost::numeric::odeint::runge_kutta4<std::vector<double>> ode_stepper;
-        std::vector<double> pend_state(4);
-        pend_state[0] = v(0);
-        pend_state[1] = v(1);
-        pend_state[2] = v(2);
-        pend_state[3] = std::atan2(v(4), v(3));
-        Eigen::VectorXd old_state = Eigen::VectorXd::Map(pend_state.data(), pend_state.size());
-
-        boost::numeric::odeint::integrate_const(ode_stepper, std::bind(&MeanIntact::dynamics, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, v(5)), pend_state, t, dt, dt / 2.0);
-
-        Eigen::VectorXd new_state = Eigen::VectorXd::Map(pend_state.data(), pend_state.size());
-
-        Eigen::VectorXd result(1);
-        result << (new_state - old_state)(this->id);
-        return result;
-    }
-
-    void dynamics(const std::vector<double>& x, std::vector<double>& dx, double t, double u) const
-    {
-        double l = 0.5, m = 0.5, M = 0.5, g = 9.82, b = 0.1;
-
-        dx[0] = x[1];
-        dx[1] = (2 * m * l * std::pow(x[2], 2.0) * std::sin(x[3]) + 3 * m * g * std::sin(x[3]) * std::cos(x[3]) + 4 * u - 4 * b * x[1]) / (4 * (M + m) - 3 * m * std::pow(std::cos(x[3]), 2.0));
-        dx[2] = (-3 * m * l * std::pow(x[2], 2.0) * std::sin(x[3]) * std::cos(x[3]) - 6 * (M + m) * g * std::sin(x[3]) - 6 * (u - b * x[1]) * std::cos(x[3])) / (4 * l * (m + M) - 3 * m * l * std::pow(std::cos(x[3]), 2.0));
-        dx[3] = x[2];
-    }
-};
+// namespace global {
+//     std::vector<Eigen::VectorXd> _tried_policies = std::vector<Eigen::VectorXd>();
+//     std::vector<Eigen::VectorXd> _tried_rewards = std::vector<Eigen::VectorXd>();
+// }
 
 struct CartPole {
     typedef std::vector<double> ode_state_type;
@@ -314,7 +267,12 @@ struct CartPole {
             //     final(1) += 2 * M_PI;
             // while (final(1) > M_PI)
             //     final(1) -= 2 * M_PI;
-            res.push_back(std::make_tuple(init, limbo::tools::make_vector(_u), final - init_diff));
+            Eigen::VectorXd pred = final - init_diff;
+            while (final(3) < -M_PI)
+                final(3) += 2 * M_PI;
+            while (final(3) > M_PI)
+                final(3) -= 2 * M_PI;
+            res.push_back(std::make_tuple(init, limbo::tools::make_vector(_u), pred));
 
             // MeanIntact<Params> m;
             // Eigen::VectorXd q(6);
@@ -351,10 +309,10 @@ struct CartPole {
         }
 
         if (!policy.random() && display) {
-            global::_tried_policies.push_back(policy.params());
+            // global::_tried_policies.push_back(policy.params());
             double rr = std::accumulate(R.begin(), R.end(), 0.0);
             std::cout << "Reward: " << rr << std::endl;
-            global::_tried_rewards.push_back(limbo::tools::make_vector(rr));
+            // global::_tried_rewards.push_back(limbo::tools::make_vector(rr));
         }
 
         return res;
@@ -455,8 +413,7 @@ struct CartPole {
                 Eigen::VectorXd sigma;
                 std::tie(mu, sigma) = model.predictm(query_vec);
 
-#ifndef INTACT
-                // if (Params::parallel_evaluations() > 1 || Params::opt_cmaes::handle_uncertainty()) {
+                if (Params::parallel_evaluations() > 1 || Params::opt_cmaes::handle_uncertainty()) {
                     if (Params::opt_cmaes::handle_uncertainty()) {
                         sigma = sigma.array();
                     }
@@ -468,8 +425,7 @@ struct CartPole {
                         mu(i) = std::max(mu(i) - sigma(i),
                             std::min(s, mu(i) + sigma(i)));
                     }
-                // }
-#endif
+                }
 
                 Eigen::VectorXd final = init_diff + mu;
                 // if(final(0) < -2)
@@ -551,24 +507,25 @@ struct RewardFunction {
     double operator()(const Eigen::VectorXd& from_state, const Eigen::VectorXd& action, const Eigen::VectorXd& to_state) const
     {
         double s_c_sq = 0.25 * 0.25;
-        double dx = angle_dist(to_state(3), Params::goal_pos());
+        double da = angle_dist(to_state(3), Params::goal_pos());
+        // double dsin = std::sin(to_state(3)); // - std::sin(Params::goal_pos());
+        // double dcos = std::cos(to_state(3)); // - std::cos(Params::goal_pos());
         // double dy = to_state(2) - Params::goal_vel();
         // double dz = to_state(1) - Params::goal_vel_x();
-        double dw = to_state(0) - Params::goal_pos_x();
+        double dx = to_state(0); // - Params::goal_pos_x();
+        // exp(-0.5/sigma*(Δcos^2/4 + Δx*(Δsin/2 + Δx) + Δsin*(Δsin/4 + Δx/2))
+        // double derr = (dcos * dcos) / 4.0 + dsin * (dsin / 4.0 + dx / 2.0) + dx * (dsin / 2.0 + dx);
+        // double derr = dx * dx + 2 * dx * 0.5 * dsin + 2 * 0.5 * 0.5 + 2 * 0.5 * 0.5 * dcos;
+        // return std::exp(-0.5 / s_c_sq * derr);
 
-        // return std::exp(-0.5 / s_c_sq * (dx * dx + dy * dy + dz * dz + dw * dw));
-        return std::exp(-0.5 / s_c_sq * (dx * dx /*+ dy * dy + dz * dz*/ + dw * dw));
+        return std::exp(-0.5 / s_c_sq * (dx * dx + da * da));
     }
 };
 
-using kernel_t = medrops::SquaredExpARD<Params>;
-#ifdef INTACT
-using mean_t = MeanIntact<Params>;
-#else
+using kernel_t = medrops::SquaredExpARDNoise<Params>;
 using mean_t = limbo::mean::Constant<Params>;
-#endif
 
-using GP_t = limbo::model::GP<Params, kernel_t, mean_t, medrops::KernelLFOpt<Params, limbo::opt::NLOptGrad<Params, nlopt::LD_SLSQP>>>;
+using GP_t = medrops::GP<Params, kernel_t, mean_t, medrops::KernelLFOpt<Params>>; //, limbo::opt::NLOptGrad<Params, nlopt::LD_SLSQP>>>;
 using SPGP_t = limbo::model::SPGP<Params, kernel_t, mean_t>;
 
 BO_DECLARE_DYN_PARAM(size_t, Params, parallel_evaluations);
@@ -721,20 +678,12 @@ int main(int argc, char** argv)
 #endif
 
 #ifndef GPPOLICY
-    medrops::Medrops<Params, MGP_t, CartPole, medrops::SFNNPolicy<Params, MGP_t>, policy_opt_t, RewardFunction> cp_system;
+    medrops::Medrops<Params, MGP_t, CartPole, medrops::SFNNPolicy<Params>, policy_opt_t, RewardFunction> cp_system;
 #else
-    medrops::Medrops<Params, MGP_t, CartPole, medrops::GPPolicy<Params, MGP_t>, policy_opt_t, RewardFunction> cp_system;
+    medrops::Medrops<Params, MGP_t, CartPole, medrops::GPPolicy<Params>, policy_opt_t, RewardFunction> cp_system;
 #endif
 
-#ifndef DATA
-#ifdef INTACT
-    cp_system.learn(1, 100);
-#else
     cp_system.learn(1, 15);
-#endif
-#else
-    cp_system.learn(0, 10);
-#endif
 
 #if defined(USE_SDL) && !defined(NODSP)
     sdl_clean();
