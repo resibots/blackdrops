@@ -11,7 +11,7 @@
 #include <medrops/kernel_lf_opt.hpp>
 #include <medrops/medrops.hpp>
 
-#include <medrops/sf_nn_policy.hpp>
+#include <medrops/nn_policy.hpp>
 
 #include <sstream>
 
@@ -83,7 +83,7 @@ struct PolicyParams {
 };
 
 namespace global {
-    using policy_t = medrops::SFNNPolicy<PolicyParams>;
+    using policy_t = medrops::NNPolicy<PolicyParams>;
 
     Eigen::VectorXd goal(3);
     std::shared_ptr<dynamixel::SafeVelocityControl> robot_control;
@@ -442,13 +442,13 @@ int main(int argc, char** argv)
 
     double best_r = -std::numeric_limits<double>::max();
     size_t best = 0;
-    // medrops::Medrops<Params, MGP_t, Omnigrasper, medrops::SFNNPolicy<PolicyParams>, policy_opt_t, RewardFunction> cp_system;
+    // medrops::Medrops<Params, MGP_t, Omnigrasper, medrops::NNPolicy<PolicyParams>, policy_opt_t, RewardFunction> cp_system;
     for (size_t i = 0; i < random_trials; i++) {
         std::cout << "Random trial #" << (i + 1) << std::endl;
         // Load policy
         Eigen::VectorXd policy_params;
         Eigen::read_binary(random_file + std::to_string(i) + ".bin", policy_params);
-        medrops::SFNNPolicy<PolicyParams> policy;
+        medrops::NNPolicy<PolicyParams> policy;
         policy.set_params(policy_params);
         double r = execute_policy(policy);
         if (r > best_r) {
@@ -465,7 +465,7 @@ int main(int argc, char** argv)
         // Load policy
         Eigen::VectorXd policy_params;
         Eigen::read_binary(policy_file + std::to_string(i + 1) + ".bin", policy_params);
-        medrops::SFNNPolicy<PolicyParams> policy;
+        medrops::NNPolicy<PolicyParams> policy;
         policy.set_params(policy_params);
 
         // Load model points

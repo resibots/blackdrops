@@ -12,7 +12,7 @@
 #include <medrops/medrops.hpp>
 
 #include <medrops/gp_policy.hpp>
-#include <medrops/sf_nn_policy.hpp>
+#include <medrops/nn_policy.hpp>
 
 #if defined(USE_SDL) && !defined(NODSP)
 #include <SDL2/SDL.h>
@@ -679,7 +679,7 @@ int main(int argc, char** argv)
     using MGP_t = medrops::GPModel<Params, GP_t>;
 
 #ifndef GPPOLICY
-    medrops::Medrops<Params, MGP_t, CartPole, medrops::SFNNPolicy<PolicyParams>, policy_opt_t, RewardFunction> cp_system;
+    medrops::Medrops<Params, MGP_t, CartPole, medrops::NNPolicy<PolicyParams>, policy_opt_t, RewardFunction> cp_system;
 #else
     medrops::Medrops<Params, MGP_t, CartPole, medrops::GPPolicy<PolicyParams>, policy_opt_t, RewardFunction> cp_system;
 #endif

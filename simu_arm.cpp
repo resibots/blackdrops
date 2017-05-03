@@ -17,7 +17,7 @@
 #include <medrops/medrops.hpp>
 
 #include <medrops/gp_policy.hpp>
-#include <medrops/sf_nn_policy.hpp>
+#include <medrops/nn_policy.hpp>
 
 template <typename T>
 inline T gaussian_rand(T m = 0.0, T v = 1.0)
@@ -211,7 +211,7 @@ namespace data {
 namespace global {
     std::shared_ptr<robot_dart::Robot> global_robot;
 #ifndef GPPOLICY
-    using policy_t = medrops::SFNNPolicy<PolicyParams>;
+    using policy_t = medrops::NNPolicy<PolicyParams>;
 #else
     using policy_t = medrops::GPPolicy<PolicyParams>;
 #endif
@@ -281,26 +281,28 @@ struct ActualReward {
         auto bd = simulated_robot->skeleton()->getBodyNode("arm_3_sub");
         Eigen::VectorXd eef = bd->getCOM();
         double s_c_sq = 0.1 * 0.1;
-        double s_c = 0.25 * 0.25;
+        // double s_c = 0.25 * 0.25;
         double dee = (eef - global::goal).squaredNorm();
         // Eigen::VectorXd ll(3);
         // ll << -M_PI, -1.80159265359, -1.82159265359;
         // Eigen::VectorXd ul(3);
         // ul << M_PI, 1.79840734641, 1.65840734641;
-        Eigen::VectorXd ll(3);
-        ll << -M_PI, -1.2, -1.2;
-        Eigen::VectorXd ul(3);
-        ul << M_PI, 1.2, 1.2;
-        // double de = (ll - to_state).squaredNorm() + (ul - to_state).squaredNorm();
 
-        for (size_t j = 0; j < 3; j++) {
-            if (to_state[j] < ll[j]) {
-                return -1.0;
-            }
-            if (to_state[j] > ul[j]) {
-                return -1.0;
-            }
-        }
+        // // JOINT LIMITS
+        // Eigen::VectorXd ll(3);
+        // ll << -M_PI, -1.2, -1.2;
+        // Eigen::VectorXd ul(3);
+        // ul << M_PI, 1.2, 1.2;
+        // // double de = (ll - to_state).squaredNorm() + (ul - to_state).squaredNorm();
+        //
+        // for (size_t j = 0; j < 3; j++) {
+        //     if (to_state[j] < ll[j]) {
+        //         return -1.0;
+        //     }
+        //     if (to_state[j] > ul[j]) {
+        //         return -1.0;
+        //     }
+        // }
 
         // return 1.0 - std::exp(-0.5 / s_c * de) + std::exp(-0.5 / s_c_sq * dee);
         return std::exp(-0.5 / s_c_sq * dee); // - std::exp(-0.5 / s_c * de);
@@ -780,7 +782,7 @@ int main(int argc, char** argv)
     using MGP_t = medrops::GPModel<Params, GP_t>;
 
 #ifndef GPPOLICY
-    medrops::Medrops<Params, MGP_t, Omnigrasper, medrops::SFNNPolicy<PolicyParams>, policy_opt_t, RewardFunction> cp_system;
+    medrops::Medrops<Params, MGP_t, Omnigrasper, medrops::NNPolicy<PolicyParams>, policy_opt_t, RewardFunction> cp_system;
 #else
     medrops::Medrops<Params, MGP_t, Omnigrasper, medrops::GPPolicy<PolicyParams>, policy_opt_t, RewardFunction> cp_system;
 #endif

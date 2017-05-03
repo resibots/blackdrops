@@ -9,7 +9,7 @@
 #include <medrops/medrops.hpp>
 
 #include <medrops/linear_policy.hpp>
-#include <medrops/sf_nn_policy.hpp>
+#include <medrops/nn_policy.hpp>
 #include <medrops/gp_policy.hpp>
 
 #if defined(USE_SDL) && !defined(NODSP)
@@ -588,7 +588,7 @@ int main(int argc, char** argv)
 #elif defined(LINEAR)
     medrops::Medrops<Params, MGP_t, Pendulum, medrops::LinearPolicy<PolicyParams>, policy_opt_t, RewardFunction> pend_system;
 #else
-    medrops::Medrops<Params, MGP_t, Pendulum, medrops::SFNNPolicy<PolicyParams>, policy_opt_t, RewardFunction> pend_system;
+    medrops::Medrops<Params, MGP_t, Pendulum, medrops::NNPolicy<PolicyParams>, policy_opt_t, RewardFunction> pend_system;
 #endif
 
     pend_system.learn(1, 15);

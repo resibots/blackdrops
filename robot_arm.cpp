@@ -12,7 +12,7 @@
 #include <medrops/kernel_lf_opt.hpp>
 #include <medrops/medrops.hpp>
 
-#include <medrops/sf_nn_policy.hpp>
+#include <medrops/nn_policy.hpp>
 
 template <typename T>
 inline T gaussian_rand(T m = 0.0, T v = 1.0)
@@ -133,7 +133,7 @@ inline double angle_dist(double a, double b)
 }
 
 namespace global {
-    using policy_t = medrops::SFNNPolicy<PolicyParams>;
+    using policy_t = medrops::NNPolicy<PolicyParams>;
 
     Eigen::VectorXd goal(3);
 
@@ -757,7 +757,7 @@ int main(int argc, char** argv)
 
     using MGP_t = medrops::GPModel<Params, GP_t>;
 
-    medrops::Medrops<Params, MGP_t, Omnigrasper, medrops::SFNNPolicy<PolicyParams>, policy_opt_t, RewardFunction> cp_system;
+    medrops::Medrops<Params, MGP_t, Omnigrasper, medrops::NNPolicy<PolicyParams>, policy_opt_t, RewardFunction> cp_system;
 
     cp_system.learn(1, 15, true);
 
