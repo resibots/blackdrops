@@ -45,13 +45,13 @@ def build(bld):
                       variants = ['SIMU', 'SIMU GPPOLICY'])
 
     if bld.get_env()['BUILD_ROBOT'] == True:
-        # limbo.create_variants(bld,
-        #                   source='robot_arm.cpp',
-        #                   includes='. ../../src ../ ./include',
-        #                   target='robot_arm',
-        #                   uselib=robot_libs,
-        #                   uselib_local='limbo',
-        #                   variants = ['SIMU'])
+        limbo.create_variants(bld,
+                          source='robot_arm.cpp',
+                          includes='. ../../src ../ ./include',
+                          target='robot_arm',
+                          uselib=robot_libs,
+                          uselib_local='limbo',
+                          variants = ['SIMU'])
 
         limbo.create_variants(bld,
                           source='robot_replay.cpp',
