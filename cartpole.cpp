@@ -6,16 +6,12 @@
 #include <boost/program_options.hpp>
 
 #include <medrops/cmaes.hpp>
-// #include <medrops/exp_sq_ard.hpp>
-#include <medrops/exp_ard_noise.hpp>
-#include <medrops/gp.hpp>
-#define MEDROPS_GP
 #include <medrops/gp_model.hpp>
-#include <medrops/gp_multi_model.hpp>
-#include <medrops/gp_policy.hpp>
+// #include <medrops/gp_multi_model.hpp>
 #include <medrops/kernel_lf_opt.hpp>
-#include <medrops/linear_policy.hpp>
 #include <medrops/medrops.hpp>
+
+#include <medrops/gp_policy.hpp>
 #include <medrops/sf_nn_policy.hpp>
 
 #if defined(USE_SDL) && !defined(NODSP)
@@ -110,58 +106,40 @@ inline T gaussian_rand(T m = 0.0, T v = 1.0)
 }
 
 struct Params {
-    BO_PARAM(size_t, action_dim, 1);
-    BO_PARAM(size_t, state_full_dim, 6);
-    BO_PARAM(size_t, model_input_dim, 5);
-    BO_PARAM(size_t, model_pred_dim, 4);
-
     BO_DYN_PARAM(size_t, parallel_evaluations);
-    BO_DYN_PARAM(bool, verbose);
 
     BO_PARAM(double, goal_pos, M_PI);
     BO_PARAM(double, goal_vel, 0.0);
     BO_PARAM(double, goal_pos_x, 0.0);
     BO_PARAM(double, goal_vel_x, 0.0);
 
+    struct medrops {
+        BO_PARAM(size_t, action_dim, 1);
+        BO_PARAM(size_t, state_full_dim, 6);
+        BO_PARAM(size_t, model_input_dim, 5);
+        BO_PARAM(size_t, model_pred_dim, 4);
+        BO_PARAM(size_t, rollout_steps, 40);
+        BO_DYN_PARAM(double, boundary);
+        BO_DYN_PARAM(bool, verbose);
+    };
+
     struct options {
         BO_PARAM(bool, bounded, true);
     };
 
-    struct medrops {
-        BO_PARAM(size_t, rollout_steps, 40);
-        BO_DYN_PARAM(double, boundary);
-    };
-
     struct gp_model {
-        BO_PARAM(double, noise, 1e-5);
-    };
-    struct model_spgp : public limbo::defaults::model_spgp {
-        BO_PARAM(double, samples_percent, 10);
-        BO_PARAM(double, jitter, 1e-5);
-        BO_PARAM(int, min_m, 100);
-        BO_PARAM(double, sig, 0.001);
-    };
-    struct model_gpmm : public limbo::defaults::model_gpmm {
-        BO_PARAM(int, threshold, 300);
-    };
-
-    struct linear_policy {
-        BO_PARAM(int, state_dim, 5);
-        BO_PARAM_ARRAY(double, max_u, 10.0);
-    };
-
-    struct nn_policy {
-        BO_PARAM(int, state_dim, 5);
-        BO_PARAM_ARRAY(double, max_u, 10.0);
-        BO_DYN_PARAM(int, hidden_neurons);
-    };
-
-    struct gp_policy {
-        BO_PARAM_ARRAY(double, max_u, 10.0); //max action
-        BO_PARAM(double, pseudo_samples, 10);
         BO_PARAM(double, noise, 0.01);
-        BO_PARAM(int, state_dim, 5);
     };
+
+    // struct model_spgp : public limbo::defaults::model_spgp {
+    //     BO_PARAM(double, samples_percent, 10);
+    //     BO_PARAM(double, jitter, 1e-5);
+    //     BO_PARAM(int, min_m, 100);
+    //     BO_PARAM(double, sig, 0.001);
+    // };
+    // struct model_gpmm : public limbo::defaults::model_gpmm {
+    //     BO_PARAM(int, threshold, 300);
+    // };
 
     struct mean_constant {
         BO_PARAM(double, constant, 0.0);
@@ -169,6 +147,11 @@ struct Params {
 
     struct opt_nloptgrad : public limbo::defaults::opt_nloptgrad {
         BO_PARAM(int, iterations, 1000);
+    };
+
+    struct kernel : public limbo::defaults::kernel {
+        BO_PARAM(double, noise, gp_model::noise());
+        BO_PARAM(bool, optimize_noise, true);
     };
 
     struct kernel_squared_exp_ard : public limbo::defaults::kernel_squared_exp_ard {
@@ -191,14 +174,39 @@ struct Params {
         BO_PARAM(int, variant, aBIPOP_CMAES);
         BO_PARAM(bool, verbose, false);
         BO_PARAM(bool, fun_compute_initial, true);
-        // BO_PARAM(double, fun_target, 30);
         BO_DYN_PARAM(double, ubound);
         BO_DYN_PARAM(double, lbound);
-        BO_DYN_PARAM(int, lambda);
     };
 
     struct opt_nloptnograd : public limbo::defaults::opt_nloptnograd {
         BO_PARAM(int, iterations, 20000);
+    };
+};
+
+struct PolicyParams {
+    struct medrops : public Params::medrops {
+    };
+
+    struct nn_policy {
+        BO_PARAM(size_t, state_dim, Params::medrops::model_input_dim());
+        BO_PARAM(size_t, action_dim, Params::medrops::action_dim());
+        BO_PARAM_ARRAY(double, max_u, 10.0);
+        BO_DYN_PARAM(int, hidden_neurons);
+    };
+
+    struct gp_policy {
+        BO_PARAM(size_t, state_dim, Params::medrops::model_input_dim());
+        BO_PARAM(size_t, action_dim, Params::medrops::action_dim());
+        BO_PARAM_ARRAY(double, max_u, 10.0);
+        BO_PARAM(double, pseudo_samples, 10);
+        BO_PARAM(double, noise, 1e-5);
+    };
+
+    struct kernel : public limbo::defaults::kernel {
+        BO_PARAM(double, noise, gp_policy::noise());
+    };
+
+    struct kernel_squared_exp_ard : public limbo::defaults::kernel_squared_exp_ard {
     };
 };
 
@@ -237,7 +245,7 @@ struct CartPole {
         // policy.set_params(params);
 
         for (size_t i = 0; i < steps; i++) {
-            Eigen::VectorXd init(Params::model_input_dim());
+            Eigen::VectorXd init(Params::medrops::model_input_dim());
             init(0) = cp_state[0];
             init(1) = cp_state[1];
             init(2) = cp_state[2];
@@ -323,15 +331,15 @@ struct CartPole {
     {
         R = std::vector<double>();
         // init state
-        Eigen::VectorXd init_diff = Eigen::VectorXd::Zero(Params::model_pred_dim());
-        Eigen::VectorXd init = Eigen::VectorXd::Zero(Params::model_input_dim());
+        Eigen::VectorXd init_diff = Eigen::VectorXd::Zero(Params::medrops::model_pred_dim());
+        Eigen::VectorXd init = Eigen::VectorXd::Zero(Params::medrops::model_input_dim());
         init(3) = std::cos(0.0);
         init(4) = std::sin(0.0);
         for (size_t j = 0; j < steps; j++) {
-            Eigen::VectorXd query_vec(Params::model_input_dim() + Params::action_dim());
+            Eigen::VectorXd query_vec(Params::medrops::model_input_dim() + Params::medrops::action_dim());
             Eigen::VectorXd u = policy.next(init);
-            query_vec.head(Params::model_input_dim()) = init;
-            query_vec.tail(Params::action_dim()) = u;
+            query_vec.head(Params::medrops::model_input_dim()) = init;
+            query_vec.tail(Params::medrops::action_dim()) = u;
 
             Eigen::VectorXd mu;
             Eigen::VectorXd sigma;
@@ -399,15 +407,15 @@ struct CartPole {
 
             double reward = 0.0;
             // init state
-            Eigen::VectorXd init_diff = Eigen::VectorXd::Zero(Params::model_pred_dim());
-            Eigen::VectorXd init = Eigen::VectorXd::Zero(Params::model_input_dim());
+            Eigen::VectorXd init_diff = Eigen::VectorXd::Zero(Params::medrops::model_pred_dim());
+            Eigen::VectorXd init = Eigen::VectorXd::Zero(Params::medrops::model_input_dim());
             init(3) = std::cos(0.0);
             init(4) = std::sin(0.0);
             for (size_t j = 0; j < steps; j++) {
-                Eigen::VectorXd query_vec(Params::model_input_dim() + Params::action_dim());
+                Eigen::VectorXd query_vec(Params::medrops::model_input_dim() + Params::medrops::action_dim());
                 Eigen::VectorXd u = policy.next(init);
-                query_vec.head(Params::model_input_dim()) = init;
-                query_vec.tail(Params::action_dim()) = u;
+                query_vec.head(Params::medrops::model_input_dim()) = init;
+                query_vec.tail(Params::medrops::action_dim()) = u;
 
                 Eigen::VectorXd mu;
                 Eigen::VectorXd sigma;
@@ -522,22 +530,15 @@ struct RewardFunction {
     }
 };
 
-using kernel_t = medrops::SquaredExpARDNoise<Params>;
-using mean_t = limbo::mean::Constant<Params>;
-
-using GP_t = medrops::GP<Params, kernel_t, mean_t, medrops::KernelLFOpt<Params>>; //, limbo::opt::NLOptGrad<Params, nlopt::LD_SLSQP>>>;
-using SPGP_t = limbo::model::SPGP<Params, kernel_t, mean_t>;
-
 BO_DECLARE_DYN_PARAM(size_t, Params, parallel_evaluations);
-BO_DECLARE_DYN_PARAM(int, Params::nn_policy, hidden_neurons);
+BO_DECLARE_DYN_PARAM(int, PolicyParams::nn_policy, hidden_neurons);
 BO_DECLARE_DYN_PARAM(double, Params::medrops, boundary);
-BO_DECLARE_DYN_PARAM(bool, Params, verbose);
+BO_DECLARE_DYN_PARAM(bool, Params::medrops, verbose);
 
 BO_DECLARE_DYN_PARAM(double, Params::opt_cmaes, max_fun_evals);
 BO_DECLARE_DYN_PARAM(double, Params::opt_cmaes, fun_tolerance);
 BO_DECLARE_DYN_PARAM(double, Params::opt_cmaes, lbound);
 BO_DECLARE_DYN_PARAM(double, Params::opt_cmaes, ubound);
-BO_DECLARE_DYN_PARAM(int, Params::opt_cmaes, lambda);
 BO_DECLARE_DYN_PARAM(int, Params::opt_cmaes, restarts);
 BO_DECLARE_DYN_PARAM(int, Params::opt_cmaes, elitism);
 BO_DECLARE_DYN_PARAM(bool, Params::opt_cmaes, handle_uncertainty);
@@ -549,7 +550,7 @@ int main(int argc, char** argv)
     int threads = tbb::task_scheduler_init::automatic;
     namespace po = boost::program_options;
     po::options_description desc("Command line arguments");
-    desc.add_options()("help,h", "Prints this help message")("parallel_evaluations,p", po::value<int>(), "Number of parallel monte carlo evaluations for policy reward estimation.")("hidden_neurons,n", po::value<int>(), "Number of hidden neurons in NN policy.")("boundary,b", po::value<double>(), "Boundary of the values during the optimization.")("lambda,l", po::value<int>(), "Initial population in CMA-ES (-1 to default)")("max_evals,m", po::value<int>(), "Max function evaluations to optimize the policy.")("tolerance,t", po::value<double>(), "Maximum tolerance to continue optimizing the function.")("restarts,r", po::value<int>(), "Max number of restarts to use during optimization.")("elitism,e", po::value<int>(), "Elitism mode to use [0 to 3].")("uncertainty,u", po::bool_switch(&uncertainty)->default_value(false), "Enable uncertainty handling.")("threads,d", po::value<int>(), "Max number of threads used by TBB")("verbose,v", po::bool_switch(&verbose)->default_value(false), "Enable verbose mode.");
+    desc.add_options()("help,h", "Prints this help message")("parallel_evaluations,p", po::value<int>(), "Number of parallel monte carlo evaluations for policy reward estimation.")("hidden_neurons,n", po::value<int>(), "Number of hidden neurons in NN policy.")("boundary,b", po::value<double>(), "Boundary of the values during the optimization.")("max_evals,m", po::value<int>(), "Max function evaluations to optimize the policy.")("tolerance,t", po::value<double>(), "Maximum tolerance to continue optimizing the function.")("restarts,r", po::value<int>(), "Max number of restarts to use during optimization.")("elitism,e", po::value<int>(), "Elitism mode to use [0 to 3].")("uncertainty,u", po::bool_switch(&uncertainty)->default_value(false), "Enable uncertainty handling.")("threads,d", po::value<int>(), "Max number of threads used by TBB")("verbose,v", po::bool_switch(&verbose)->default_value(false), "Enable verbose mode.");
 
     try {
         po::variables_map vm;
@@ -577,10 +578,10 @@ int main(int argc, char** argv)
             int c = vm["hidden_neurons"].as<int>();
             if (c < 1)
                 c = 1;
-            Params::nn_policy::set_hidden_neurons(c);
+            PolicyParams::nn_policy::set_hidden_neurons(c);
         }
         else {
-            Params::nn_policy::set_hidden_neurons(5);
+            PolicyParams::nn_policy::set_hidden_neurons(5);
         }
         if (vm.count("boundary")) {
             double c = vm["boundary"].as<double>();
@@ -595,12 +596,6 @@ int main(int argc, char** argv)
             Params::opt_cmaes::set_lbound(-6);
             Params::opt_cmaes::set_ubound(6);
         }
-
-        int lambda = -1;
-        if (vm.count("lambda")) {
-            lambda = vm["lambda"].as<int>();
-        }
-        Params::opt_cmaes::set_lambda(lambda);
 
         // Cmaes parameters
         if (vm.count("max_evals")) {
@@ -653,7 +648,7 @@ int main(int argc, char** argv)
     static tbb::task_scheduler_init init(threads);
 #endif
 
-    Params::set_verbose(verbose);
+    Params::medrops::set_verbose(verbose);
     Params::opt_cmaes::set_handle_uncertainty(uncertainty);
 
     std::cout << std::endl;
@@ -663,24 +658,30 @@ int main(int argc, char** argv)
     std::cout << "  restarts = " << Params::opt_cmaes::restarts() << std::endl;
     std::cout << "  elitism = " << Params::opt_cmaes::elitism() << std::endl;
     std::cout << "  handle_uncertainty = " << Params::opt_cmaes::handle_uncertainty() << std::endl;
-    std::cout << "  lambda (CMA-ES population) = " << Params::opt_cmaes::lambda() << std::endl;
     std::cout << "  boundary = " << Params::medrops::boundary() << std::endl;
     std::cout << "  tbb threads = " << threads << std::endl;
     std::cout << std::endl;
 
     using policy_opt_t = limbo::opt::CustomCmaes<Params>;
-//using policy_opt_t = limbo::opt::NLOptGrad<Params>;
-#ifdef SPGPS
-    using GPMM_t = limbo::model::GPMultiModel<Params, mean_t, GP_t, SPGP_t>;
-    using MGP_t = medrops::GPModel<Params, GPMM_t>;
-#else
+
+    using kernel_t = limbo::kernel::SquaredExpARD<Params>;
+    using mean_t = limbo::mean::Constant<Params>;
+
+    using GP_t = limbo::model::GP<Params, kernel_t, mean_t, medrops::KernelLFOpt<Params>>; //, limbo::opt::NLOptGrad<Params, nlopt::LD_SLSQP>>>;
+    // using SPGP_t = limbo::model::SPGP<Params, kernel_t, mean_t>;
+
+    // #ifdef SPGPS
+    //     using GPMM_t = limbo::model::GPMultiModel<Params, mean_t, GP_t, SPGP_t>;
+    //     using MGP_t = medrops::GPModel<Params, GPMM_t>;
+    // #else
+    // using MGP_t = medrops::GPModel<Params, GP_t>;
+    // #endif
     using MGP_t = medrops::GPModel<Params, GP_t>;
-#endif
 
 #ifndef GPPOLICY
-    medrops::Medrops<Params, MGP_t, CartPole, medrops::SFNNPolicy<Params>, policy_opt_t, RewardFunction> cp_system;
+    medrops::Medrops<Params, MGP_t, CartPole, medrops::SFNNPolicy<PolicyParams>, policy_opt_t, RewardFunction> cp_system;
 #else
-    medrops::Medrops<Params, MGP_t, CartPole, medrops::GPPolicy<Params>, policy_opt_t, RewardFunction> cp_system;
+    medrops::Medrops<Params, MGP_t, CartPole, medrops::GPPolicy<PolicyParams>, policy_opt_t, RewardFunction> cp_system;
 #endif
 
     cp_system.learn(1, 15);

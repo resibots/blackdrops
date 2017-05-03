@@ -4,14 +4,13 @@
 #include <boost/program_options.hpp>
 
 #include <medrops/cmaes.hpp>
-#include <medrops/exp_sq_ard.hpp>
 #include <medrops/gp_model.hpp>
-#include <medrops/gp_policy.hpp>
 #include <medrops/kernel_lf_opt.hpp>
-#include <medrops/linear_policy.hpp>
 #include <medrops/medrops.hpp>
 
+#include <medrops/linear_policy.hpp>
 #include <medrops/sf_nn_policy.hpp>
+#include <medrops/gp_policy.hpp>
 
 #if defined(USE_SDL) && !defined(NODSP)
 #include <SDL2/SDL.h>
@@ -126,7 +125,7 @@ struct Params {
     };
 
     struct gp_model {
-        BO_PARAM(double, noise, 1e-5);
+        BO_PARAM(double, noise, 0.01);
     };
 
     struct mean_constant {
@@ -584,10 +583,12 @@ int main(int argc, char** argv)
     using policy_opt_t = limbo::opt::CustomCmaes<Params>;
     //using policy_opt_t = limbo::opt::NLOptGrad<Params>;
     using MGP_t = medrops::GPModel<Params, GP_t>;
-#ifndef GPPOLICY
-    medrops::Medrops<Params, MGP_t, Pendulum, medrops::SFNNPolicy<PolicyParams>, policy_opt_t, RewardFunction> pend_system;
-#else
+#ifdef GPPOLICY
     medrops::Medrops<Params, MGP_t, Pendulum, medrops::GPPolicy<PolicyParams>, policy_opt_t, RewardFunction> pend_system;
+#elif defined(LINEAR)
+    medrops::Medrops<Params, MGP_t, Pendulum, medrops::LinearPolicy<PolicyParams>, policy_opt_t, RewardFunction> pend_system;
+#else
+    medrops::Medrops<Params, MGP_t, Pendulum, medrops::SFNNPolicy<PolicyParams>, policy_opt_t, RewardFunction> pend_system;
 #endif
 
     pend_system.learn(1, 15);

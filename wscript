@@ -28,14 +28,14 @@ def build(bld):
     cxxflags = bld.get_env()['CXXFLAGS']
     cxxflags += ['-D NODSP']
 
-    # limbo.create_variants(bld,
-    #                   source='cartpole.cpp',
-    #                   includes='. ../../src ../ ./include',
-    #                   target='cartpole',
-    #                   uselib=libs,
-    #                   uselib_local='limbo',
-    #                   variants = ['SIMU', 'SIMU GPPOLICY'])
-    #
+    limbo.create_variants(bld,
+                      source='cartpole.cpp',
+                      includes='. ../../src ../ ./include',
+                      target='cartpole',
+                      uselib=libs,
+                      uselib_local='limbo',
+                      variants = ['SIMU', 'SIMU GPPOLICY'])
+
     # limbo.create_variants(bld,
     #                   source='simu_arm.cpp',
     #                   includes='. ../../src ../ ./include',
@@ -76,4 +76,4 @@ def build(bld):
                       target='pendulum',
                       uselib=libs,
                       uselib_local='limbo',
-                      variants = ['SIMU', 'SIMU GPPOLICY'])
+                      variants = ['SIMU', 'SIMU GPPOLICY', 'SIMU LINEAR'])

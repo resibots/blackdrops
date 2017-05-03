@@ -28,7 +28,7 @@ namespace medrops {
             _sdim = Params::gp_policy::state_dim();
             _adim = Params::gp_policy::action_dim();
             _ps = Params::gp_policy::pseudo_samples();
-            _params = Eigen::VectorXd::Zero(_ps * _sdim + _adim * (_ps + _sdim));
+            _params = Eigen::VectorXd::Zero(_ps * _sdim + _adim * (_ps + _sdim + 1));
             _limits = Eigen::VectorXd::Constant(Params::nn_policy::state_dim(), 1.0);
         }
 
@@ -88,7 +88,7 @@ namespace medrops {
             std::vector<Eigen::VectorXd> ells;
             for (size_t j = 0; j < _adim; j++) {
                 //--- extract hyperparameters
-                Eigen::VectorXd ell = _params.segment(_ps * (_sdim + _adim) + j * _sdim, _sdim);
+                Eigen::VectorXd ell = _params.segment(_ps * (_sdim + _adim) + j * (_sdim + 1), _sdim + 1);
                 ells.push_back(ell);
 
                 //--- extract pseudo observations
@@ -111,7 +111,7 @@ namespace medrops {
         Eigen::VectorXd params() const
         {
             if (_random || _params.size() == 0)
-                return limbo::tools::random_vector(_ps * _sdim + _adim * (_ps + _sdim));
+                return limbo::tools::random_vector(_ps * _sdim + _adim * (_ps + _sdim + 1));
             return _params;
         }
 
