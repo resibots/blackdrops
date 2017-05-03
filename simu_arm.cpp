@@ -768,7 +768,7 @@ int main(int argc, char** argv)
     using mean_t = limbo::mean::Constant<Params>;
 
     using GP_t = limbo::model::GP<Params, kernel_t, mean_t, medrops::KernelLFOpt<Params, limbo::opt::NLOptGrad<Params, nlopt::LD_SLSQP>>>;
-    using SPGP_t = limbo::model::SPGP<Params, kernel_t, mean_t>;
+    // using SPGP_t = limbo::model::SPGP<Params, kernel_t, mean_t>;
 
     // #ifdef SPGPS
     //     using GPMM_t = limbo::model::GPMultiModel<Params, mean_t, GP_t, SPGP_t>;

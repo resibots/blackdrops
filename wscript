@@ -44,22 +44,22 @@ def build(bld):
                       uselib_local='limbo',
                       variants = ['SIMU', 'SIMU GPPOLICY'])
 
-    # if bld.get_env()['BUILD_ROBOT'] == True:
-    #     limbo.create_variants(bld,
-    #                       source='robot_arm.cpp',
-    #                       includes='. ../../src ../ ./include',
-    #                       target='robot_arm',
-    #                       uselib=robot_libs,
-    #                       uselib_local='limbo',
-    #                       variants = ['SIMU'])
-    #
-    #     limbo.create_variants(bld,
-    #                       source='robot_replay.cpp',
-    #                       includes='. ../../src ../ ./include',
-    #                       target='robot_replay',
-    #                       uselib=robot_libs,
-    #                       uselib_local='limbo',
-    #                       variants = ['SIMU'])
+    if bld.get_env()['BUILD_ROBOT'] == True:
+        # limbo.create_variants(bld,
+        #                   source='robot_arm.cpp',
+        #                   includes='. ../../src ../ ./include',
+        #                   target='robot_arm',
+        #                   uselib=robot_libs,
+        #                   uselib_local='limbo',
+        #                   variants = ['SIMU'])
+
+        limbo.create_variants(bld,
+                          source='robot_replay.cpp',
+                          includes='. ../../src ../ ./include',
+                          target='robot_replay',
+                          uselib=robot_libs,
+                          uselib_local='limbo',
+                          variants = ['SIMU'])
 
     if bld.get_env()['BUILD_GRAPHIC'] == True:
         limbo.create_variants(bld,
