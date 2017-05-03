@@ -81,7 +81,7 @@ namespace medrops {
                     params_starting,
                     true);
             }
-            if (Params::verbose())
+            if (Params::medrops::verbose())
                 std::cout << _opt_iters << "(" << _max_reward << ")" << std::endl; //", " << _max_simu_reward << ", " << _max_real_reward << ") " << std::endl;
             else
                 std::cout << std::endl;
@@ -146,7 +146,7 @@ namespace medrops {
                 _policy.normalize(_model);
                 std::cout << "Learned model..." << std::endl;
 
-                if (Params::verbose()) {
+                if (Params::medrops::verbose()) {
                     Eigen::VectorXd errors, sigmas;
                     std::tie(errors, sigmas) = get_accuracy();
                     std::cout << "Errors: " << errors.transpose() << std::endl;
@@ -198,7 +198,7 @@ namespace medrops {
 
             _opt_iters++;
             if (_max_reward < r) {
-                // if (Params::verbose()) {
+                // if (Params::medrops::verbose()) {
                 //     std::vector<double> R;
                 //     _robot.execute_dummy(policy, _model, world, Params::medrops::rollout_steps(), R, false);
                 //     double simu_reward = std::accumulate(R.begin(), R.end(), 0.0);
@@ -216,7 +216,7 @@ namespace medrops {
             // if (_opt_iters % 500 == 0)
             //     std::cout << _opt_iters << "(" << _max_reward << ") " << std::flush;
 
-            // if (Params::verbose() && _opt_iters % 1000 == 0) {
+            // if (Params::medrops::verbose() && _opt_iters % 1000 == 0) {
             //     std::cout << _opt_iters << "(" << _max_reward << ", " << _max_simu_reward << ", " << _max_real_reward << ") " << std::flush;
             // }
 
@@ -263,8 +263,8 @@ namespace medrops {
             model.learn(training_samples);
 
             // Get errors and sigmas
-            Eigen::VectorXd errors = Eigen::VectorXd::Zero(Params::model_pred_dim());
-            Eigen::VectorXd sigmas = Eigen::VectorXd::Zero(Params::model_pred_dim());
+            Eigen::VectorXd errors = Eigen::VectorXd::Zero(Params::medrops::model_pred_dim());
+            Eigen::VectorXd sigmas = Eigen::VectorXd::Zero(Params::medrops::model_pred_dim());
 
             for (size_t i = 0; i < test_samples.size(); i++) {
                 Eigen::VectorXd st, act, pred;

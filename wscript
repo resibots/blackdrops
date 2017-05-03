@@ -29,67 +29,51 @@ def build(bld):
     cxxflags += ['-D NODSP']
 
     # limbo.create_variants(bld,
-    #                   source='test.cpp',
+    #                   source='cartpole.cpp',
     #                   includes='. ../../src ../ ./include',
-    #                   target='test',
+    #                   target='cartpole',
     #                   uselib=libs,
     #                   uselib_local='limbo',
-    #                   variants = ['SIMU'])
-
-    limbo.create_variants(bld,
-                      source='test_cp.cpp',
-                      includes='. ../../src ../ ./include',
-                      target='test_cp',
-                      uselib=libs,
-                      uselib_local='limbo',
-                      variants = ['SIMU', 'SIMU GPPOLICY'])
-
-    limbo.create_variants(bld,
-                      source='test_arm.cpp',
-                      includes='. ../../src ../ ./include',
-                      target='test_arm',
-                      uselib=arm_libs,
-                      uselib_local='limbo',
-                      variants = ['SIMU', 'SIMU GPPOLICY'])
-
-    if bld.get_env()['BUILD_ROBOT'] == True:
-        limbo.create_variants(bld,
-                          source='robot_arm.cpp',
-                          includes='. ../../src ../ ./include',
-                          target='robot_arm',
-                          uselib=robot_libs,
-                          uselib_local='limbo',
-                          variants = ['SIMU'])
-
-        limbo.create_variants(bld,
-                          source='robot_replay.cpp',
-                          includes='. ../../src ../ ./include',
-                          target='robot_replay',
-                          uselib=robot_libs,
-                          uselib_local='limbo',
-                          variants = ['SIMU'])
-
-    if bld.get_env()['BUILD_GRAPHIC'] == True:
-        limbo.create_variants(bld,
-                          source='test_arm.cpp',
-                          includes='. ../../src ../ ./include',
-                          target='test_arm',
-                          uselib=arm_libs_graphic,
-                          uselib_local='limbo',
-                          variants = ['GRAPHIC', 'GRAPHIC GPPOLICY'])
-
-    limbo.create_variants(bld,
-                      source='test.cpp',
-                      includes='. ../../src ../ ./include',
-                      target='test',
-                      uselib=libs,
-                      uselib_local='limbo',
-                      variants = ['SIMU', 'SIMU GPPOLICY'])
-
+    #                   variants = ['SIMU', 'SIMU GPPOLICY'])
+    #
     # limbo.create_variants(bld,
-    #                   source='ode_test.cpp',
+    #                   source='simu_arm.cpp',
     #                   includes='. ../../src ../ ./include',
-    #                   target='ode_test',
-    #                   uselib=libs,
+    #                   target='simu_arm',
+    #                   uselib=arm_libs,
     #                   uselib_local='limbo',
-    #                   variants = ['SIMU'])
+    #                   variants = ['SIMU', 'SIMU GPPOLICY'])
+    #
+    # if bld.get_env()['BUILD_ROBOT'] == True:
+    #     limbo.create_variants(bld,
+    #                       source='robot_arm.cpp',
+    #                       includes='. ../../src ../ ./include',
+    #                       target='robot_arm',
+    #                       uselib=robot_libs,
+    #                       uselib_local='limbo',
+    #                       variants = ['SIMU'])
+    #
+    #     limbo.create_variants(bld,
+    #                       source='robot_replay.cpp',
+    #                       includes='. ../../src ../ ./include',
+    #                       target='robot_replay',
+    #                       uselib=robot_libs,
+    #                       uselib_local='limbo',
+    #                       variants = ['SIMU'])
+    #
+    # if bld.get_env()['BUILD_GRAPHIC'] == True:
+    #     limbo.create_variants(bld,
+    #                       source='simu_arm.cpp',
+    #                       includes='. ../../src ../ ./include',
+    #                       target='simu_arm',
+    #                       uselib=arm_libs_graphic,
+    #                       uselib_local='limbo',
+    #                       variants = ['GRAPHIC', 'GRAPHIC GPPOLICY'])
+
+    limbo.create_variants(bld,
+                      source='pendulum.cpp',
+                      includes='. ../../src ../ ./include',
+                      target='pendulum',
+                      uselib=libs,
+                      uselib_local='limbo',
+                      variants = ['SIMU', 'SIMU GPPOLICY'])

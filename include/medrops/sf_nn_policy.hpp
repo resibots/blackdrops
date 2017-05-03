@@ -19,7 +19,7 @@ namespace medrops {
             _nn = std::make_shared<nn_t>(
                 Params::nn_policy::state_dim(),
                 Params::nn_policy::hidden_neurons(),
-                Params::action_dim());
+                Params::nn_policy::action_dim());
             _nn->init();
             _params = Eigen::VectorXd::Zero(_nn->get_nb_connections());
             _limits = Eigen::VectorXd::Constant(Params::nn_policy::state_dim(), 1.0);
@@ -34,7 +34,7 @@ namespace medrops {
         Eigen::VectorXd next(const Eigen::VectorXd& state) const
         {
             if (_random || _params.size() == 0) {
-                Eigen::VectorXd act = (limbo::tools::random_vector(Params::action_dim()).array() * 2 - 1.0);
+                Eigen::VectorXd act = (limbo::tools::random_vector(Params::nn_policy::action_dim()).array() * 2 - 1.0);
                 for (int i = 0; i < act.size(); i++) {
                     act(i) = act(i) * Params::nn_policy::max_u(i);
                 }

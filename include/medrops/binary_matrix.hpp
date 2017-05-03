@@ -49,13 +49,20 @@ namespace Eigen {
         return matrix_sum.array().sqrt();
     }
 
-    double percentile_v(VectorXd vector, int p)
+    double percentile_v(const VectorXd& vector, int p)
     {
-        p = p - 1;
-        if (p < 0)
-            p = 0;
-        std::sort(vector.data(), vector.data() + vector.size());
-        return vector(std::floor((p / 100.0) * vector.size()));
+        VectorXd v = vector;
+        std::sort(v.data(), v.data() + v.size());
+
+        double pp = (p / 100.0) * (v.size() - 1.0);
+        pp = std::round(pp * 1000.0) / 1000.0;
+        int ind_below = std::floor(pp);
+        int ind_above = std::ceil(pp);
+
+        if (ind_below == ind_above)
+            return v[ind_below];
+
+        return v[ind_below] * (double(ind_above) - pp) + v[ind_above] * (pp - double(ind_below));
     }
 
     VectorXd percentile(const MatrixXd& matrix, int p)

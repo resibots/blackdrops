@@ -23,12 +23,7 @@ namespace limbo {
         public:
             customCMAStrategy(libcmaes::FitFunc& func,
                 libcmaes::CMAParameters<TGenoPheno>& parameters)
-                : libcmaes::BIPOPCMAStrategy<Covariance, TGenoPheno>(func, parameters)
-            {
-                _t_limit = 3;
-                _delta = 0.1;
-                _alpha = 1.5;
-            }
+                : libcmaes::BIPOPCMAStrategy<Covariance, TGenoPheno>(func, parameters) {}
 
             ~customCMAStrategy() {}
 
@@ -178,10 +173,6 @@ namespace limbo {
 
                 matrix.conservativeResize(numRows, numCols);
             }
-
-        protected:
-            int _t_limit;
-            double _delta, _alpha;
         };
 
         /// @ingroup opt
@@ -218,12 +209,10 @@ namespace limbo {
                 return -eval(f, m);
                 };
 
-                assert(bounded);
-
-                // if (bounded)
-                return _opt_bounded(f_cmaes, dim, init);
-                // else
-                //     return _opt_unbounded(f_cmaes, dim, init);
+                if (bounded)
+                    return _opt_bounded(f_cmaes, dim, init);
+                else
+                    return _opt_unbounded(f_cmaes, dim, init);
             }
 
         private:
@@ -245,22 +234,22 @@ namespace limbo {
                 return abipop.get_solutions();
             }
 
-            // // F is a CMA-ES style function, not our function
-            // template <typename F>
-            // Eigen::VectorXd _opt_unbounded(F& f_cmaes, int dim, const Eigen::VectorXd& init) const
-            // {
-            //     using namespace libcmaes;
-            //     // initial step-size, i.e. estimated initial parameter error.
-            //     double sigma = 0.5;
-            //     std::vector<double> x0(init.data(), init.data() + init.size());
-            //
-            //     CMAParameters<> cmaparams(x0, sigma);
-            //     _set_common_params(cmaparams, dim);
-            //
-            //     // the optimization itself
-            //     CMASolutions cmasols = run_cmaes<>(f_cmaes, cmaparams);
-            //     return cmasols.get_best_seen_candidate().get_x_dvec();
-            // }
+            // F is a CMA-ES style function, not our function
+            template <typename F>
+            Eigen::VectorXd _opt_unbounded(F& f_cmaes, int dim, const Eigen::VectorXd& init) const
+            {
+                using namespace libcmaes;
+                // initial step-size, i.e. estimated initial parameter error.
+                double sigma = 5.0;
+                std::vector<double> x0(init.data(), init.data() + init.size());
+
+                CMAParameters<> cmaparams(x0, sigma);
+                _set_common_params(cmaparams, dim);
+
+                // the optimization itself
+                CMASolutions cmasols = run_cmaes<>(f_cmaes, cmaparams);
+                return cmasols.get_best_seen_candidate().get_x_dvec();
+            }
 
             // F is a CMA-ES style function, not our function
             template <typename F>
@@ -279,7 +268,7 @@ namespace limbo {
                 double sigma = 0.5 * std::abs(Params::opt_cmaes::ubound() - Params::opt_cmaes::lbound());
                 std::vector<double> x0(init.data(), init.data() + init.size());
                 // -1 for automatically decided lambda, 0 is for random seeding of the internal generator.
-                CMAParameters<GenoPheno<pwqBoundStrategy>> cmaparams(dim, &x0.front(), sigma, Params::opt_cmaes::lambda(), 0, gp);
+                CMAParameters<GenoPheno<pwqBoundStrategy>> cmaparams(dim, &x0.front(), sigma, -1, 0, gp);
                 _set_common_params(cmaparams, dim);
 
                 // the optimization itself
