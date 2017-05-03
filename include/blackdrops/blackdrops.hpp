@@ -1,5 +1,5 @@
-#ifndef MEDROPS_MEDROPS_HPP
-#define MEDROPS_MEDROPS_HPP
+#ifndef BLACKDROPS_BLACKDROPS_HPP
+#define BLACKDROPS_BLACKDROPS_HPP
 
 #include "binary_matrix.hpp"
 #include <chrono>
@@ -7,7 +7,7 @@
 #include <limits>
 #include <limbo/opt/optimizer.hpp>
 
-namespace medrops {
+namespace blackdrops {
 
     template <typename Params, typename Model, typename Robot, typename Policy, typename PolicyOptimizer, typename RewardFunction>
     class Medrops {
@@ -29,7 +29,7 @@ namespace medrops {
             std::vector<double> R;
             RewardFunction world;
             // Execute best policy so far on robot
-            auto obs_new = _robot.execute(_policy, world, Params::medrops::rollout_steps(), R);
+            auto obs_new = _robot.execute(_policy, world, Params::blackdrops::rollout_steps(), R);
 
             // Check if it is better than the previous best
             double r_new = std::accumulate(R.begin(), R.end(), 0.0);
@@ -81,7 +81,7 @@ namespace medrops {
                     params_starting,
                     true);
             }
-            if (Params::medrops::verbose())
+            if (Params::blackdrops::verbose())
                 std::cout << _opt_iters << "(" << _max_reward << ")" << std::endl; //", " << _max_simu_reward << ", " << _max_real_reward << ") " << std::endl;
             else
                 std::cout << std::endl;
@@ -101,7 +101,7 @@ namespace medrops {
 
             std::vector<double> R;
             RewardFunction world;
-            _robot.execute_dummy(_policy, _model, world, Params::medrops::rollout_steps(), R);
+            _robot.execute_dummy(_policy, _model, world, Params::blackdrops::rollout_steps(), R);
             std::cout << "Dummy reward: " << std::accumulate(R.begin(), R.end(), 0.0) << std::endl;
 
             for (auto r : R)
@@ -111,7 +111,7 @@ namespace medrops {
 
         void learn(size_t init, size_t iterations, bool random_policies = false)
         {
-            _boundary = Params::medrops::boundary();
+            _boundary = Params::blackdrops::boundary();
             _random_policies = random_policies;
             _ofs.open("results.dat");
             _ofs_opt.open("times.dat");
@@ -146,7 +146,7 @@ namespace medrops {
                 _policy.normalize(_model);
                 std::cout << "Learned model..." << std::endl;
 
-                if (Params::medrops::verbose()) {
+                if (Params::blackdrops::verbose()) {
                     Eigen::VectorXd errors, sigmas;
                     std::tie(errors, sigmas) = get_accuracy();
                     std::cout << "Errors: " << errors.transpose() << std::endl;
@@ -191,18 +191,18 @@ namespace medrops {
             policy.normalize(_model);
 
             // std::vector<double> R;
-            // _robot.execute(policy, world, Params::medrops::rollout_steps(), R, false);
+            // _robot.execute(policy, world, Params::blackdrops::rollout_steps(), R, false);
             //
             // double r = std::accumulate(R.begin(), R.end(), 0.0);
-            double r = _robot.predict_policy(policy, _model, world, Params::medrops::rollout_steps());
+            double r = _robot.predict_policy(policy, _model, world, Params::blackdrops::rollout_steps());
 
             _opt_iters++;
             if (_max_reward < r) {
-                // if (Params::medrops::verbose()) {
+                // if (Params::blackdrops::verbose()) {
                 //     std::vector<double> R;
-                //     _robot.execute_dummy(policy, _model, world, Params::medrops::rollout_steps(), R, false);
+                //     _robot.execute_dummy(policy, _model, world, Params::blackdrops::rollout_steps(), R, false);
                 //     double simu_reward = std::accumulate(R.begin(), R.end(), 0.0);
-                //     _robot.execute(policy, world, Params::medrops::rollout_steps(), R, false);
+                //     _robot.execute(policy, world, Params::blackdrops::rollout_steps(), R, false);
                 //     double real_reward = std::accumulate(R.begin(), R.end(), 0.0);
                 //
                 //     _max_simu_reward = simu_reward;
@@ -216,7 +216,7 @@ namespace medrops {
             // if (_opt_iters % 500 == 0)
             //     std::cout << _opt_iters << "(" << _max_reward << ") " << std::flush;
 
-            // if (Params::medrops::verbose() && _opt_iters % 1000 == 0) {
+            // if (Params::blackdrops::verbose() && _opt_iters % 1000 == 0) {
             //     std::cout << _opt_iters << "(" << _max_reward << ", " << _max_simu_reward << ", " << _max_real_reward << ") " << std::flush;
             // }
 
@@ -263,8 +263,8 @@ namespace medrops {
             model.learn(training_samples);
 
             // Get errors and sigmas
-            Eigen::VectorXd errors = Eigen::VectorXd::Zero(Params::medrops::model_pred_dim());
-            Eigen::VectorXd sigmas = Eigen::VectorXd::Zero(Params::medrops::model_pred_dim());
+            Eigen::VectorXd errors = Eigen::VectorXd::Zero(Params::blackdrops::model_pred_dim());
+            Eigen::VectorXd sigmas = Eigen::VectorXd::Zero(Params::blackdrops::model_pred_dim());
 
             for (size_t i = 0; i < test_samples.size(); i++) {
                 Eigen::VectorXd st, act, pred;

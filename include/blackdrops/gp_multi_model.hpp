@@ -1,5 +1,5 @@
-#ifndef MEDROPS_GPMM_MODEL_HPP
-#define MEDROPS_GPMM_MODEL_HPP
+#ifndef BLACKDROPS_GPMM_MODEL_HPP
+#define BLACKDROPS_GPMM_MODEL_HPP
 
 namespace limbo {
 

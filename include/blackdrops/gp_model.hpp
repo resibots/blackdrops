@@ -1,9 +1,9 @@
-#ifndef MEDROPS_GP_MODEL_HPP
-#define MEDROPS_GP_MODEL_HPP
+#ifndef BLACKDROPS_GP_MODEL_HPP
+#define BLACKDROPS_GP_MODEL_HPP
 
 #include "binary_matrix.hpp"
 
-namespace medrops {
+namespace blackdrops {
 
     template <typename Params, typename GP>
     class GPModel {
@@ -15,9 +15,9 @@ namespace medrops {
 
         void init()
         {
-            _gp_models = std::vector<std::shared_ptr<GP>>(Params::medrops::model_pred_dim());
+            _gp_models = std::vector<std::shared_ptr<GP>>(Params::blackdrops::model_pred_dim());
             for (size_t i = 0; i < _gp_models.size(); i++) {
-                _gp_models[i] = std::make_shared<GP>(Params::medrops::model_input_dim(), 1);
+                _gp_models[i] = std::make_shared<GP>(Params::blackdrops::model_input_dim(), 1);
             }
         }
 
@@ -43,7 +43,7 @@ namespace medrops {
             _observations = obs;
 
             Eigen::MatrixXd data = _to_matrix((const std::vector<Eigen::VectorXd>&)samples);
-            Eigen::MatrixXd samp = data.block(0, 0, data.rows(), Params::medrops::model_input_dim() + Params::medrops::action_dim());
+            Eigen::MatrixXd samp = data.block(0, 0, data.rows(), Params::blackdrops::model_input_dim() + Params::blackdrops::action_dim());
             _means = samp.colwise().mean().transpose();
             _sigmas = Eigen::colwise_sig(samp).array().transpose();
             Eigen::VectorXd pl = Eigen::percentile(samp.array().abs(), 5);
@@ -55,10 +55,10 @@ namespace medrops {
 
             Eigen::MatrixXd data2(samples.size(), samples[0].size() + obs.cols());
             for (size_t i = 0; i < samples.size(); i++) {
-                data2.block(i, 0, 1, Params::medrops::model_input_dim() + Params::medrops::action_dim()) = samples[i].transpose(); //.array() / _limits.array();
-                data2.block(i, Params::medrops::model_input_dim() + Params::medrops::action_dim(), 1, Params::medrops::model_pred_dim()) = obs.row(i);
+                data2.block(i, 0, 1, Params::blackdrops::model_input_dim() + Params::blackdrops::action_dim()) = samples[i].transpose(); //.array() / _limits.array();
+                data2.block(i, Params::blackdrops::model_input_dim() + Params::blackdrops::action_dim(), 1, Params::blackdrops::model_pred_dim()) = obs.row(i);
             }
-            Eigen::write_binary("medrops_data.bin", data2);
+            Eigen::write_binary("blackdrops_data.bin", data2);
 
             std::cout << "GP Samples: " << samples.size() << std::endl;
             init(); // TODO: Fix this properly
@@ -88,16 +88,16 @@ namespace medrops {
             // // Loading test
             // std::cout << std::endl;
             // Eigen::MatrixXd data_comp;
-            // Eigen::read_binary("medrops_data.bin", data_comp);
+            // Eigen::read_binary("blackdrops_data.bin", data_comp);
             //
             // size_t limit = 120;
             // std::cout << "Loading " << limit << "/" << data_comp.rows() << " rows from file." << std::endl;
             //
             // std::vector<Eigen::VectorXd> samples_comp(limit);
-            // Eigen::MatrixXd observations_comp(limit, Params::medrops::model_pred_dim());
+            // Eigen::MatrixXd observations_comp(limit, Params::blackdrops::model_pred_dim());
             // for (size_t i = 0; i < limit; i++) {
             //     samples_comp[i] = data_comp.row(i).segment(0, Params::state_full_dim());
-            //     observations_comp.row(i) = data_comp.row(i).segment(Params::state_full_dim(), Params::medrops::model_pred_dim());
+            //     observations_comp.row(i) = data_comp.row(i).segment(Params::state_full_dim(), Params::blackdrops::model_pred_dim());
             // }
             //
             // init(); // TODO: Fix this properly

@@ -1,20 +1,19 @@
-#ifndef MEDROPS_NN_POLICY_HPP
-#define MEDROPS_NN_POLICY_HPP
+#ifndef BLACKDROPS_NN_POLICY_HPP
+#define BLACKDROPS_NN_POLICY_HPP
 
 #define EIGEN3_ENABLED
 #include "nn2/mlp.hpp"
 
-namespace medrops {
+namespace blackdrops {
 
     template <typename Params>
     struct NNPolicy {
 
-        // using nn_t = medrops::MLP<medrops::NNLayer<medrops::Neuron<medrops::AfTanh>, medrops::PfSum>, medrops::NNLayer<medrops::Neuron<medrops::AfTanh>, medrops::PfSum>>;
         using nn_t = nn::Mlp<nn::Neuron<nn::PfWSum<>, nn::AfTanhNoBias<>>, nn::Connection<double, double>>;
 
         NNPolicy()
         {
-            _boundary = Params::medrops::boundary();
+            _boundary = Params::blackdrops::boundary();
             _random = false;
             _nn = std::make_shared<nn_t>(
                 Params::nn_policy::state_dim(),

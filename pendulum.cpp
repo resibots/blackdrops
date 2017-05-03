@@ -3,14 +3,14 @@
 #include <boost/numeric/odeint.hpp>
 #include <boost/program_options.hpp>
 
-#include <medrops/cmaes.hpp>
-#include <medrops/gp_model.hpp>
-#include <medrops/kernel_lf_opt.hpp>
-#include <medrops/medrops.hpp>
+#include <blackdrops/cmaes.hpp>
+#include <blackdrops/gp_model.hpp>
+#include <blackdrops/kernel_lf_opt.hpp>
+#include <blackdrops/blackdrops.hpp>
 
-#include <medrops/linear_policy.hpp>
-#include <medrops/nn_policy.hpp>
-#include <medrops/gp_policy.hpp>
+#include <blackdrops/linear_policy.hpp>
+#include <blackdrops/nn_policy.hpp>
+#include <blackdrops/gp_policy.hpp>
 
 #if defined(USE_SDL) && !defined(NODSP)
 #include <SDL2/SDL.h>
@@ -110,7 +110,7 @@ struct Params {
     BO_PARAM(double, goal_pos, M_PI);
     BO_PARAM(double, goal_vel, 0.0);
 
-    struct medrops {
+    struct blackdrops {
         BO_PARAM(size_t, action_dim, 1);
         BO_PARAM(size_t, state_full_dim, 4);
         BO_PARAM(size_t, model_input_dim, 3);
@@ -165,25 +165,25 @@ struct Params {
 };
 
 struct PolicyParams {
-    struct medrops : public Params::medrops {
+    struct blackdrops : public Params::blackdrops {
     };
 
     struct linear_policy {
-        BO_PARAM(size_t, state_dim, Params::medrops::model_input_dim());
-        BO_PARAM(size_t, action_dim, Params::medrops::action_dim());
+        BO_PARAM(size_t, state_dim, Params::blackdrops::model_input_dim());
+        BO_PARAM(size_t, action_dim, Params::blackdrops::action_dim());
         BO_PARAM_ARRAY(double, max_u, 2.5);
     };
 
     struct nn_policy {
-        BO_PARAM(size_t, state_dim, Params::medrops::model_input_dim());
-        BO_PARAM(size_t, action_dim, Params::medrops::action_dim());
+        BO_PARAM(size_t, state_dim, Params::blackdrops::model_input_dim());
+        BO_PARAM(size_t, action_dim, Params::blackdrops::action_dim());
         BO_PARAM_ARRAY(double, max_u, 2.5);
         BO_DYN_PARAM(int, hidden_neurons);
     };
 
     struct gp_policy {
-        BO_PARAM(size_t, state_dim, Params::medrops::model_input_dim());
-        BO_PARAM(size_t, action_dim, Params::medrops::action_dim());
+        BO_PARAM(size_t, state_dim, Params::blackdrops::model_input_dim());
+        BO_PARAM(size_t, action_dim, Params::blackdrops::action_dim());
         BO_PARAM_ARRAY(double, max_u, 2.5);
         BO_PARAM(double, pseudo_samples, 20);
         BO_PARAM(double, noise, 1e-5);
@@ -229,7 +229,7 @@ struct Pendulum {
         ode_state_type pend_state(2, 0.0);
 
         for (size_t i = 0; i < steps; i++) {
-            Eigen::VectorXd init(Params::medrops::model_input_dim());
+            Eigen::VectorXd init(Params::blackdrops::model_input_dim());
             init(0) = pend_state[0];
             init(1) = std::cos(pend_state[1]);
             init(2) = std::sin(pend_state[1]);
@@ -294,15 +294,15 @@ struct Pendulum {
     {
         R = std::vector<double>();
         // init state
-        Eigen::VectorXd init_diff = Eigen::VectorXd::Zero(Params::medrops::model_pred_dim());
-        Eigen::VectorXd init = Eigen::VectorXd::Zero(Params::medrops::model_input_dim());
+        Eigen::VectorXd init_diff = Eigen::VectorXd::Zero(Params::blackdrops::model_pred_dim());
+        Eigen::VectorXd init = Eigen::VectorXd::Zero(Params::blackdrops::model_input_dim());
         init(1) = std::cos(0.0);
         init(2) = std::sin(0.0);
         for (size_t j = 0; j < steps; j++) {
-            Eigen::VectorXd query_vec(Params::medrops::model_input_dim() + Params::medrops::action_dim());
+            Eigen::VectorXd query_vec(Params::blackdrops::model_input_dim() + Params::blackdrops::action_dim());
             Eigen::VectorXd u = policy.next(init);
-            query_vec.head(Params::medrops::model_input_dim()) = init;
-            query_vec.tail(Params::medrops::action_dim()) = u;
+            query_vec.head(Params::blackdrops::model_input_dim()) = init;
+            query_vec.tail(Params::blackdrops::action_dim()) = u;
 
             Eigen::VectorXd mu;
             Eigen::VectorXd sigma;
@@ -364,15 +364,15 @@ struct Pendulum {
         tbb::parallel_for(size_t(0), N, size_t(1), [&](size_t i) {
             double reward = 0.0;
             // init state
-            Eigen::VectorXd init_diff = Eigen::VectorXd::Zero(Params::medrops::model_pred_dim());
-            Eigen::VectorXd init = Eigen::VectorXd::Zero(Params::medrops::model_input_dim());
+            Eigen::VectorXd init_diff = Eigen::VectorXd::Zero(Params::blackdrops::model_pred_dim());
+            Eigen::VectorXd init = Eigen::VectorXd::Zero(Params::blackdrops::model_input_dim());
             init(1) = std::cos(0.0);
             init(2) = std::sin(0.0);
             for (size_t j = 0; j < steps; j++) {
-                Eigen::VectorXd query_vec(Params::medrops::model_input_dim() + Params::medrops::action_dim());
+                Eigen::VectorXd query_vec(Params::blackdrops::model_input_dim() + Params::blackdrops::action_dim());
                 Eigen::VectorXd u = policy.next(init);
-                query_vec.head(Params::medrops::model_input_dim()) = init;
-                query_vec.tail(Params::medrops::action_dim()) = u;
+                query_vec.head(Params::blackdrops::model_input_dim()) = init;
+                query_vec.tail(Params::blackdrops::action_dim()) = u;
 
                 Eigen::VectorXd mu;
                 Eigen::VectorXd sigma;
@@ -448,8 +448,8 @@ struct RewardFunction {
 
 BO_DECLARE_DYN_PARAM(size_t, Params, parallel_evaluations);
 BO_DECLARE_DYN_PARAM(int, PolicyParams::nn_policy, hidden_neurons);
-BO_DECLARE_DYN_PARAM(bool, Params::medrops, verbose);
-BO_DECLARE_DYN_PARAM(double, Params::medrops, boundary);
+BO_DECLARE_DYN_PARAM(bool, Params::blackdrops, verbose);
+BO_DECLARE_DYN_PARAM(double, Params::blackdrops, boundary);
 
 BO_DECLARE_DYN_PARAM(double, Params::opt_cmaes, max_fun_evals);
 BO_DECLARE_DYN_PARAM(double, Params::opt_cmaes, fun_tolerance);
@@ -502,12 +502,12 @@ int main(int argc, char** argv)
             double c = vm["boundary"].as<double>();
             if (c < 0)
                 c = 0;
-            Params::medrops::set_boundary(c);
+            Params::blackdrops::set_boundary(c);
             Params::opt_cmaes::set_lbound(-c);
             Params::opt_cmaes::set_ubound(c);
         }
         else {
-            Params::medrops::set_boundary(0);
+            Params::blackdrops::set_boundary(0);
             Params::opt_cmaes::set_lbound(-6);
             Params::opt_cmaes::set_ubound(6);
         }
@@ -563,7 +563,7 @@ int main(int argc, char** argv)
     static tbb::task_scheduler_init init(threads);
 #endif
 
-    Params::medrops::set_verbose(verbose);
+    Params::blackdrops::set_verbose(verbose);
     Params::opt_cmaes::set_handle_uncertainty(uncertainty);
 
     std::cout << std::endl;
@@ -573,22 +573,22 @@ int main(int argc, char** argv)
     std::cout << "  restarts = " << Params::opt_cmaes::restarts() << std::endl;
     std::cout << "  elitism = " << Params::opt_cmaes::elitism() << std::endl;
     std::cout << "  handle_uncertainty = " << Params::opt_cmaes::handle_uncertainty() << std::endl;
-    std::cout << "  boundary = " << Params::medrops::boundary() << std::endl;
+    std::cout << "  boundary = " << Params::blackdrops::boundary() << std::endl;
     std::cout << std::endl;
 
     using kernel_t = limbo::kernel::SquaredExpARD<Params>;
     using mean_t = limbo::mean::Constant<Params>;
-    using GP_t = limbo::model::GP<Params, kernel_t, mean_t, medrops::KernelLFOpt<Params, limbo::opt::NLOptGrad<Params, nlopt::LD_SLSQP>>>;
+    using GP_t = limbo::model::GP<Params, kernel_t, mean_t, blackdrops::KernelLFOpt<Params, limbo::opt::NLOptGrad<Params, nlopt::LD_SLSQP>>>;
 
     using policy_opt_t = limbo::opt::CustomCmaes<Params>;
     //using policy_opt_t = limbo::opt::NLOptGrad<Params>;
-    using MGP_t = medrops::GPModel<Params, GP_t>;
+    using MGP_t = blackdrops::GPModel<Params, GP_t>;
 #ifdef GPPOLICY
-    medrops::Medrops<Params, MGP_t, Pendulum, medrops::GPPolicy<PolicyParams>, policy_opt_t, RewardFunction> pend_system;
+    blackdrops::Medrops<Params, MGP_t, Pendulum, blackdrops::GPPolicy<PolicyParams>, policy_opt_t, RewardFunction> pend_system;
 #elif defined(LINEAR)
-    medrops::Medrops<Params, MGP_t, Pendulum, medrops::LinearPolicy<PolicyParams>, policy_opt_t, RewardFunction> pend_system;
+    blackdrops::Medrops<Params, MGP_t, Pendulum, blackdrops::LinearPolicy<PolicyParams>, policy_opt_t, RewardFunction> pend_system;
 #else
-    medrops::Medrops<Params, MGP_t, Pendulum, medrops::NNPolicy<PolicyParams>, policy_opt_t, RewardFunction> pend_system;
+    blackdrops::Medrops<Params, MGP_t, Pendulum, blackdrops::NNPolicy<PolicyParams>, policy_opt_t, RewardFunction> pend_system;
 #endif
 
     pend_system.learn(1, 15);

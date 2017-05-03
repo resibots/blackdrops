@@ -1,9 +1,9 @@
-#ifndef MEDROPS_LINEAR_POLICY_HPP
-#define MEDROPS_LINEAR_POLICY_HPP
+#ifndef BLACKDROPS_LINEAR_POLICY_HPP
+#define BLACKDROPS_LINEAR_POLICY_HPP
 
 #include <limbo/tools/random_generator.hpp>
 
-namespace medrops {
+namespace blackdrops {
 
     template <typename Params>
     struct LinearPolicy {

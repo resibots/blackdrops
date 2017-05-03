@@ -10,14 +10,14 @@
 
 #include <boost/program_options.hpp>
 
-#include <medrops/cmaes.hpp>
-#include <medrops/gp_model.hpp>
-// #include <medrops/gp_multi_model.hpp>
-#include <medrops/kernel_lf_opt.hpp>
-#include <medrops/medrops.hpp>
+#include <blackdrops/cmaes.hpp>
+#include <blackdrops/gp_model.hpp>
+// #include <blackdrops/gp_multi_model.hpp>
+#include <blackdrops/kernel_lf_opt.hpp>
+#include <blackdrops/blackdrops.hpp>
 
-#include <medrops/gp_policy.hpp>
-#include <medrops/nn_policy.hpp>
+#include <blackdrops/gp_policy.hpp>
+#include <blackdrops/nn_policy.hpp>
 
 template <typename T>
 inline T gaussian_rand(T m = 0.0, T v = 1.0)
@@ -41,7 +41,7 @@ struct Params {
         BO_PARAM(bool, bounded, true);
     };
 
-    struct medrops {
+    struct blackdrops {
         BO_PARAM(size_t, action_dim, 3);
         BO_PARAM(size_t, state_full_dim, 12);
         BO_PARAM(size_t, model_input_dim, 9);
@@ -101,19 +101,19 @@ struct Params {
 };
 
 struct PolicyParams {
-    struct medrops : public Params::medrops {
+    struct blackdrops : public Params::blackdrops {
     };
 
     struct nn_policy {
-        BO_PARAM(size_t, state_dim, Params::medrops::model_input_dim());
-        BO_PARAM(size_t, action_dim, Params::medrops::action_dim());
+        BO_PARAM(size_t, state_dim, Params::blackdrops::model_input_dim());
+        BO_PARAM(size_t, action_dim, Params::blackdrops::action_dim());
         BO_PARAM_ARRAY(double, max_u, 2.5, 44.7, 14.0);
         BO_DYN_PARAM(int, hidden_neurons);
     };
 
     struct gp_policy {
-        BO_PARAM(size_t, state_dim, Params::medrops::model_input_dim());
-        BO_PARAM(size_t, action_dim, Params::medrops::action_dim());
+        BO_PARAM(size_t, state_dim, Params::blackdrops::model_input_dim());
+        BO_PARAM(size_t, action_dim, Params::blackdrops::action_dim());
         BO_PARAM_ARRAY(double, max_u, 2.5, 44.7, 14.0);
         BO_PARAM(double, pseudo_samples, 10);
         BO_PARAM(double, noise, 1e-5);
@@ -211,9 +211,9 @@ namespace data {
 namespace global {
     std::shared_ptr<robot_dart::Robot> global_robot;
 #ifndef GPPOLICY
-    using policy_t = medrops::NNPolicy<PolicyParams>;
+    using policy_t = blackdrops::NNPolicy<PolicyParams>;
 #else
-    using policy_t = medrops::GPPolicy<PolicyParams>;
+    using policy_t = blackdrops::GPPolicy<PolicyParams>;
 #endif
     // #ifdef GRAPHIC
     //     using robot_simu_t = robot_dart::RobotDARTSimu<robot_dart::robot_control<PolicyControl<policy_t>>, robot_dart::desc<boost::fusion::vector<RobotTraj>>, robot_dart::graphics<robot_dart::Graphics<Params>>>;
@@ -223,10 +223,10 @@ namespace global {
 
     Eigen::VectorXd goal(3);
 
-    using kernel_t = limbo::kernel::Exp<RewardParams>; //medrops::SquaredExpARD<Params>; //limbo::kernel::Exp<Params>;
+    using kernel_t = limbo::kernel::Exp<RewardParams>; //blackdrops::SquaredExpARD<Params>; //limbo::kernel::Exp<Params>;
     using mean_t = limbo::mean::Constant<RewardParams>;
 
-    using GP_t = limbo::model::GP<RewardParams, kernel_t, mean_t>; //, medrops::KernelLFOpt<Params, limbo::opt::NLOptGrad<Params, nlopt::LD_SLSQP>>>;
+    using GP_t = limbo::model::GP<RewardParams, kernel_t, mean_t>; //, blackdrops::KernelLFOpt<Params, limbo::opt::NLOptGrad<Params, nlopt::LD_SLSQP>>>;
     GP_t reward_gp(3, 1);
 }
 
@@ -239,7 +239,7 @@ Eigen::VectorXd get_robot_state(const std::shared_ptr<robot_dart::Robot>& robot,
     // auto bd = robot->skeleton()->getBodyNode("arm_3_sub");
     // Eigen::VectorXd p = bd->getCOM();
     // Eigen::VectorXd v = bd->getCOMLinearVelocity();
-    // Eigen::VectorXd r(Params::medrops::model_input_dim());
+    // Eigen::VectorXd r(Params::blackdrops::model_input_dim());
     // r.segment(3, 3) = p;
     // r.head(3) = v;
     // r.tail(3) = pos;
@@ -423,24 +423,24 @@ struct Omnigrasper {
         //     std::cout << "#: " << vels.size() << std::endl;
         for (size_t j = 0; j < vels.size() - 1; j++) {
             size_t id = j; // * step;
-            Eigen::VectorXd init(Params::medrops::model_pred_dim());
+            Eigen::VectorXd init(Params::blackdrops::model_pred_dim());
             init.head(3) = vels[id];
             // init.segment(3, 3) = poses[id];
             init.tail(3) = poses[id]; //qs[id];
-            Eigen::VectorXd init_full(Params::medrops::model_input_dim());
+            Eigen::VectorXd init_full(Params::blackdrops::model_input_dim());
             init_full.head(3) = init.head(3);
             for (int i = 0; i < 3; i++) {
                 init_full(3 + 2 * i) = std::cos(init(3 + i));
                 init_full(3 + 2 * i + 1) = std::sin(init(3 + i));
             }
             Eigen::VectorXd u = coms[id];
-            Eigen::VectorXd final(Params::medrops::model_pred_dim());
+            Eigen::VectorXd final(Params::blackdrops::model_pred_dim());
             final.head(3) = vels[id + 1];
             // final.segment(3, 3) = poses[id + 1];
             final.tail(3) = poses[id + 1]; //qs[id + 1];
-            // Eigen::VectorXd init = states[j - 1].head(Params::medrops::model_input_dim());
-            // Eigen::VectorXd u = states[j - 1].segment(Params::medrops::model_input_dim(), Params::medrops::action_dim());
-            // Eigen::VectorXd final = states[j].head(Params::medrops::model_input_dim());
+            // Eigen::VectorXd init = states[j - 1].head(Params::blackdrops::model_input_dim());
+            // Eigen::VectorXd u = states[j - 1].segment(Params::blackdrops::model_input_dim(), Params::blackdrops::action_dim());
+            // Eigen::VectorXd final = states[j].head(Params::blackdrops::model_input_dim());
             // if (display) {
             //     std::cout << "state: " << init.transpose() << std::endl;
             //     std::cout << "command: " << u.transpose() << std::endl;
@@ -492,20 +492,20 @@ struct Omnigrasper {
     {
         R = std::vector<double>();
         // init state
-        Eigen::VectorXd init = Eigen::VectorXd::Zero(Params::medrops::model_pred_dim());
+        Eigen::VectorXd init = Eigen::VectorXd::Zero(Params::blackdrops::model_pred_dim());
         // init(5) = 0.58;
         for (size_t j = 0; j < steps; j++) {
-            Eigen::VectorXd query_vec(Params::medrops::model_input_dim() + Params::medrops::action_dim());
-            Eigen::VectorXd init_full(Params::medrops::model_input_dim());
+            Eigen::VectorXd query_vec(Params::blackdrops::model_input_dim() + Params::blackdrops::action_dim());
+            Eigen::VectorXd init_full(Params::blackdrops::model_input_dim());
             init_full.head(3) = init.head(3);
             for (int i = 0; i < 3; i++) {
                 init_full(3 + 2 * i) = std::cos(init(3 + i));
                 init_full(3 + 2 * i + 1) = std::sin(init(3 + i));
             }
-            // init.tail(Params::medrops::model_input_dim()) = init.tail(Params::medrops::model_input_dim()).unaryExpr([](double x) { return angle_dist(0,x); });
+            // init.tail(Params::blackdrops::model_input_dim()) = init.tail(Params::blackdrops::model_input_dim()).unaryExpr([](double x) { return angle_dist(0,x); });
             Eigen::VectorXd u = policy.next(init_full);
-            query_vec.head(Params::medrops::model_input_dim()) = init_full;
-            query_vec.tail(Params::medrops::action_dim()) = u;
+            query_vec.head(Params::blackdrops::model_input_dim()) = init_full;
+            query_vec.tail(Params::blackdrops::action_dim()) = u;
 
             Eigen::VectorXd mu;
             Eigen::VectorXd sigma;
@@ -515,7 +515,7 @@ struct Omnigrasper {
             // std::cout << init.transpose() << " to " << final.transpose() << " dx: " << mu.transpose() << std::endl;
             // std::cout << "state: " << init.transpose() << std::endl;
             // std::cout << "command: " << u.transpose() << std::endl;
-            // final.tail(Params::medrops::model_input_dim()) = final.tail(Params::medrops::model_input_dim()).unaryExpr([](double x) { return angle_dist(0,x); });
+            // final.tail(Params::blackdrops::model_input_dim()) = final.tail(Params::blackdrops::model_input_dim()).unaryExpr([](double x) { return angle_dist(0,x); });
 
             double r = world(init, mu, final);
             R.push_back(r);
@@ -534,19 +534,19 @@ struct Omnigrasper {
 
             double reward = 0.0;
             // init state
-            Eigen::VectorXd init = Eigen::VectorXd::Zero(Params::medrops::model_pred_dim());
+            Eigen::VectorXd init = Eigen::VectorXd::Zero(Params::blackdrops::model_pred_dim());
             // init(5) = 0.58;
             for (size_t j = 0; j < steps; j++) {
-                Eigen::VectorXd query_vec(Params::medrops::model_input_dim() + Params::medrops::action_dim());
-                Eigen::VectorXd init_full(Params::medrops::model_input_dim());
+                Eigen::VectorXd query_vec(Params::blackdrops::model_input_dim() + Params::blackdrops::action_dim());
+                Eigen::VectorXd init_full(Params::blackdrops::model_input_dim());
                 init_full.head(3) = init.head(3);
                 for (int i = 0; i < 3; i++) {
                     init_full(3 + 2 * i) = std::cos(init(3 + i));
                     init_full(3 + 2 * i + 1) = std::sin(init(3 + i));
                 }
                 Eigen::VectorXd u = policy.next(init_full);
-                query_vec.head(Params::medrops::model_input_dim()) = init_full;
-                query_vec.tail(Params::medrops::action_dim()) = u;
+                query_vec.head(Params::blackdrops::model_input_dim()) = init_full;
+                query_vec.tail(Params::blackdrops::action_dim()) = u;
 
                 Eigen::VectorXd mu;
                 Eigen::VectorXd sigma;
@@ -562,7 +562,7 @@ struct Omnigrasper {
                 }
 
                 Eigen::VectorXd final = init + mu;
-                // final.tail(Params::medrops::model_input_dim()) = final.tail(Params::medrops::model_input_dim()).unaryExpr([](double x) { return angle_dist(0,x); });
+                // final.tail(Params::blackdrops::model_input_dim()) = final.tail(Params::blackdrops::model_input_dim()).unaryExpr([](double x) { return angle_dist(0,x); });
 
                 reward += world(init, u, final);
                 init = final;
@@ -633,8 +633,8 @@ void init_simu(const std::string& robot_file)
 
 BO_DECLARE_DYN_PARAM(size_t, Params, parallel_evaluations);
 BO_DECLARE_DYN_PARAM(int, PolicyParams::nn_policy, hidden_neurons);
-BO_DECLARE_DYN_PARAM(double, Params::medrops, boundary);
-BO_DECLARE_DYN_PARAM(bool, Params::medrops, verbose);
+BO_DECLARE_DYN_PARAM(double, Params::blackdrops, boundary);
+BO_DECLARE_DYN_PARAM(bool, Params::blackdrops, verbose);
 
 BO_DECLARE_DYN_PARAM(double, Params::opt_cmaes, max_fun_evals);
 BO_DECLARE_DYN_PARAM(double, Params::opt_cmaes, fun_tolerance);
@@ -688,12 +688,12 @@ int main(int argc, char** argv)
             double c = vm["boundary"].as<double>();
             if (c < 0)
                 c = 0;
-            Params::medrops::set_boundary(c);
+            Params::blackdrops::set_boundary(c);
             Params::opt_cmaes::set_lbound(-c);
             Params::opt_cmaes::set_ubound(c);
         }
         else {
-            Params::medrops::set_boundary(0);
+            Params::blackdrops::set_boundary(0);
             Params::opt_cmaes::set_lbound(-6);
             Params::opt_cmaes::set_ubound(6);
         }
@@ -743,7 +743,7 @@ int main(int argc, char** argv)
     static tbb::task_scheduler_init init(threads);
 #endif
 
-    Params::medrops::set_verbose(verbose);
+    Params::blackdrops::set_verbose(verbose);
     Params::opt_cmaes::set_handle_uncertainty(uncertainty);
 
     std::cout << std::endl;
@@ -753,7 +753,7 @@ int main(int argc, char** argv)
     std::cout << "  restarts = " << Params::opt_cmaes::restarts() << std::endl;
     std::cout << "  elitism = " << Params::opt_cmaes::elitism() << std::endl;
     std::cout << "  handle_uncertainty = " << Params::opt_cmaes::handle_uncertainty() << std::endl;
-    std::cout << "  boundary = " << Params::medrops::boundary() << std::endl;
+    std::cout << "  boundary = " << Params::blackdrops::boundary() << std::endl;
     std::cout << "  tbb threads = " << threads << std::endl;
     std::cout << std::endl;
 
@@ -769,22 +769,22 @@ int main(int argc, char** argv)
     using kernel_t = limbo::kernel::SquaredExpARD<Params>;
     using mean_t = limbo::mean::Constant<Params>;
 
-    using GP_t = limbo::model::GP<Params, kernel_t, mean_t, medrops::KernelLFOpt<Params, limbo::opt::NLOptGrad<Params, nlopt::LD_SLSQP>>>;
+    using GP_t = limbo::model::GP<Params, kernel_t, mean_t, blackdrops::KernelLFOpt<Params, limbo::opt::NLOptGrad<Params, nlopt::LD_SLSQP>>>;
     // using SPGP_t = limbo::model::SPGP<Params, kernel_t, mean_t>;
 
     // #ifdef SPGPS
     //     using GPMM_t = limbo::model::GPMultiModel<Params, mean_t, GP_t, SPGP_t>;
-    //     using MGP_t = medrops::GPModel<Params, GPMM_t>;
+    //     using MGP_t = blackdrops::GPModel<Params, GPMM_t>;
     // #else
-    //     using MGP_t = medrops::GPModel<Params, GP_t>;
+    //     using MGP_t = blackdrops::GPModel<Params, GP_t>;
     // #endif
 
-    using MGP_t = medrops::GPModel<Params, GP_t>;
+    using MGP_t = blackdrops::GPModel<Params, GP_t>;
 
 #ifndef GPPOLICY
-    medrops::Medrops<Params, MGP_t, Omnigrasper, medrops::NNPolicy<PolicyParams>, policy_opt_t, RewardFunction> cp_system;
+    blackdrops::Medrops<Params, MGP_t, Omnigrasper, blackdrops::NNPolicy<PolicyParams>, policy_opt_t, RewardFunction> cp_system;
 #else
-    medrops::Medrops<Params, MGP_t, Omnigrasper, medrops::GPPolicy<PolicyParams>, policy_opt_t, RewardFunction> cp_system;
+    blackdrops::Medrops<Params, MGP_t, Omnigrasper, blackdrops::GPPolicy<PolicyParams>, policy_opt_t, RewardFunction> cp_system;
 #endif
 
     cp_system.learn(20, 20, true);

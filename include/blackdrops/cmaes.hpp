@@ -1,5 +1,5 @@
-#ifndef MEDROPS_CMAES_HPP
-#define MEDROPS_CMAES_HPP
+#ifndef BLACKDROPS_CMAES_HPP
+#define BLACKDROPS_CMAES_HPP
 
 #include <Eigen/Core>
 #include <iostream>

@@ -1,11 +1,11 @@
-#ifndef MEDROPS_KERNEL_LF_OPT
-#define MEDROPS_KERNEL_LF_OPT
+#ifndef BLACKDROPS_KERNEL_LF_OPT
+#define BLACKDROPS_KERNEL_LF_OPT
 
 #include <limbo/model/gp/hp_opt.hpp>
 #include <limbo/tools/random_generator.hpp>
 #include <cmath>
 
-namespace medrops {
+namespace blackdrops {
 
     ///optimize the likelihood of the kernel only
     template <typename Params, typename Optimizer = limbo::opt::ParallelRepeater<Params, limbo::opt::Rprop<Params>>>

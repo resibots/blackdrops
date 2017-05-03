@@ -1,12 +1,13 @@
-#ifndef MEDROPS_GP_POLICY_HPP
-#define MEDROPS_GP_POLICY_HPP
+#ifndef BLACKDROPS_GP_POLICY_HPP
+#define BLACKDROPS_GP_POLICY_HPP
+
 #include <limbo/tools/random_generator.hpp>
 #include <Eigen/Core>
 #include <limbo/tools/macros.hpp>
 #include <limbo/limbo.hpp>
 #include <limbo/tools.hpp>
 
-namespace medrops {
+namespace blackdrops {
     namespace defaults {
         struct gp_policy {
             BO_PARAM(double, max_u, 10.0); //max action
@@ -23,7 +24,7 @@ namespace medrops {
 
         GPPolicy()
         {
-            _boundary = Params::medrops::boundary();
+            _boundary = Params::blackdrops::boundary();
             _random = false;
             _sdim = Params::gp_policy::state_dim();
             _adim = Params::gp_policy::action_dim();

@@ -1,17 +1,17 @@
 #include <limbo/limbo.hpp>
 #include <limbo/mean/constant.hpp>
 
-#include <medrops/safe_velocity_control.hpp>
+#include <blackdrops/safe_velocity_control.hpp>
 
 #include <boost/program_options.hpp>
 
-#include <medrops/cmaes.hpp>
-#include <medrops/gp_model.hpp>
-// #include <medrops/gp_multi_model.hpp>
-#include <medrops/kernel_lf_opt.hpp>
-#include <medrops/medrops.hpp>
+#include <blackdrops/cmaes.hpp>
+#include <blackdrops/gp_model.hpp>
+// #include <blackdrops/gp_multi_model.hpp>
+#include <blackdrops/kernel_lf_opt.hpp>
+#include <blackdrops/blackdrops.hpp>
 
-#include <medrops/nn_policy.hpp>
+#include <blackdrops/nn_policy.hpp>
 
 #include <sstream>
 
@@ -43,7 +43,7 @@ struct Params {
         BO_PARAM(double, noise, 0.01);
     };
 
-    struct medrops {
+    struct blackdrops {
         BO_PARAM(size_t, action_dim, 4);
         BO_PARAM(size_t, state_full_dim, 12);
         BO_PARAM(size_t, model_input_dim, 8);
@@ -71,19 +71,19 @@ struct Params {
 };
 
 struct PolicyParams {
-    struct medrops : public Params::medrops {
+    struct blackdrops : public Params::blackdrops {
     };
 
     struct nn_policy {
-        BO_PARAM(size_t, state_dim, Params::medrops::model_input_dim());
-        BO_PARAM(size_t, action_dim, Params::medrops::action_dim());
+        BO_PARAM(size_t, state_dim, Params::blackdrops::model_input_dim());
+        BO_PARAM(size_t, action_dim, Params::blackdrops::action_dim());
         BO_PARAM_ARRAY(double, max_u, 1.0, 1.0, 1.0, 1.0);
         BO_DYN_PARAM(int, hidden_neurons);
     };
 };
 
 namespace global {
-    using policy_t = medrops::NNPolicy<PolicyParams>;
+    using policy_t = blackdrops::NNPolicy<PolicyParams>;
 
     Eigen::VectorXd goal(3);
     std::shared_ptr<dynamixel::SafeVelocityControl> robot_control;
@@ -297,15 +297,15 @@ double execute_policy(const Policy& policy)
     std::cout << "#: " << q.size() << std::endl;
     std::cout << "init state: " << q[0].transpose() << std::endl;
     for (size_t id = 0; id < q.size() - 1; id++) {
-        Eigen::VectorXd init(Params::medrops::model_pred_dim());
+        Eigen::VectorXd init(Params::blackdrops::model_pred_dim());
         init = q[id];
-        Eigen::VectorXd init_full(Params::medrops::model_input_dim());
+        Eigen::VectorXd init_full(Params::blackdrops::model_input_dim());
         for (int i = 0; i < 4; i++) {
             init_full(2 * i) = std::cos(init(i));
             init_full(2 * i + 1) = std::sin(init(i));
         }
         Eigen::VectorXd u = coms[id];
-        Eigen::VectorXd final(Params::medrops::model_pred_dim());
+        Eigen::VectorXd final(Params::blackdrops::model_pred_dim());
         final = q[id + 1];
 
         // if (display) {
@@ -339,27 +339,27 @@ std::vector<std::tuple<Eigen::VectorXd, Eigen::VectorXd, Eigen::VectorXd>> read_
 
     std::string line;
     std::ifstream ifs(filename);
-    // Params::medrops::model_input_dim()
+    // Params::blackdrops::model_input_dim()
     while (getline(ifs, line)) // same as: while (getline( myfile, line ).good())
     {
         std::stringstream ss(line);
-        Eigen::VectorXd input(Params::medrops::model_input_dim());
-        Eigen::VectorXd output(Params::medrops::model_pred_dim());
-        Eigen::VectorXd action(Params::medrops::action_dim());
+        Eigen::VectorXd input(Params::blackdrops::model_input_dim());
+        Eigen::VectorXd output(Params::blackdrops::model_pred_dim());
+        Eigen::VectorXd action(Params::blackdrops::action_dim());
 
-        for (size_t i = 0; i < Params::medrops::model_input_dim(); i++) {
+        for (size_t i = 0; i < Params::blackdrops::model_input_dim(); i++) {
             double d;
             ss >> d;
             input(i) = d;
         }
 
-        for (size_t i = 0; i < Params::medrops::action_dim(); i++) {
+        for (size_t i = 0; i < Params::blackdrops::action_dim(); i++) {
             double d;
             ss >> d;
             action(i) = d;
         }
 
-        for (size_t i = 0; i < Params::medrops::model_pred_dim(); i++) {
+        for (size_t i = 0; i < Params::blackdrops::model_pred_dim(); i++) {
             double d;
             ss >> d;
             output(i) = d;
@@ -436,19 +436,19 @@ int main(int argc, char** argv)
 
     using kernel_t = limbo::kernel::SquaredExpARD<Params>;
     using mean_t = limbo::mean::Constant<Params>;
-    using GP_t = limbo::model::GP<Params, kernel_t, mean_t, medrops::KernelLFOpt<Params, limbo::opt::NLOptGrad<Params, nlopt::LD_SLSQP>>>;
+    using GP_t = limbo::model::GP<Params, kernel_t, mean_t, blackdrops::KernelLFOpt<Params, limbo::opt::NLOptGrad<Params, nlopt::LD_SLSQP>>>;
 
-    using MGP_t = medrops::GPModel<Params, GP_t>;
+    using MGP_t = blackdrops::GPModel<Params, GP_t>;
 
     double best_r = -std::numeric_limits<double>::max();
     size_t best = 0;
-    // medrops::Medrops<Params, MGP_t, Omnigrasper, medrops::NNPolicy<PolicyParams>, policy_opt_t, RewardFunction> cp_system;
+    // blackdrops::Medrops<Params, MGP_t, Omnigrasper, blackdrops::NNPolicy<PolicyParams>, policy_opt_t, RewardFunction> cp_system;
     for (size_t i = 0; i < random_trials; i++) {
         std::cout << "Random trial #" << (i + 1) << std::endl;
         // Load policy
         Eigen::VectorXd policy_params;
         Eigen::read_binary(random_file + std::to_string(i) + ".bin", policy_params);
-        medrops::NNPolicy<PolicyParams> policy;
+        blackdrops::NNPolicy<PolicyParams> policy;
         policy.set_params(policy_params);
         double r = execute_policy(policy);
         if (r > best_r) {
@@ -465,7 +465,7 @@ int main(int argc, char** argv)
         // Load policy
         Eigen::VectorXd policy_params;
         Eigen::read_binary(policy_file + std::to_string(i + 1) + ".bin", policy_params);
-        medrops::NNPolicy<PolicyParams> policy;
+        blackdrops::NNPolicy<PolicyParams> policy;
         policy.set_params(policy_params);
 
         // Load model points
