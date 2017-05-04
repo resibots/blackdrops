@@ -34,7 +34,7 @@ def build(bld):
                       target='cartpole',
                       uselib=libs,
                       uselib_local='limbo',
-                      variants = ['SIMU', 'SIMU GPPOLICY'])
+                      variants = ['SIMU', 'SIMU SPGPS', 'SIMU GPPOLICY', 'SIMU GPPOLICY SPGPS'])
 
     limbo.create_variants(bld,
                       source='simu_arm.cpp',

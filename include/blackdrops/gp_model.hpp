@@ -76,14 +76,14 @@ namespace blackdrops {
             //     std::cout << diff.squaredNorm() << " with sigma: " << sigma.transpose() << std::endl;
             // }
 
-            for (size_t i = 0; i < (size_t)obs.cols(); ++i) {
-                // Print hparams in logspace
-                Eigen::VectorXd p = _gp_models[i]->kernel_function().h_params();
-                p.segment(0, p.size() - 2) = p.segment(0, p.size() - 2).array().exp();
-                p(p.size() - 2) = std::exp(2 * p(p.size() - 2));
-                p(p.size() - 1) = std::exp(2 * p(p.size() - 1));
-                std::cout << p.array().transpose() << std::endl;
-            }
+            // for (size_t i = 0; i < (size_t)obs.cols(); ++i) {
+            //     // Print hparams in logspace
+            //     Eigen::VectorXd p = _gp_models[i]->kernel_function().h_params();
+            //     p.segment(0, p.size() - 2) = p.segment(0, p.size() - 2).array().exp();
+            //     p(p.size() - 2) = std::exp(2 * p(p.size() - 2));
+            //     p(p.size() - 1) = std::exp(2 * p(p.size() - 1));
+            //     std::cout << p.array().transpose() << std::endl;
+            // }
 
             // // Loading test
             // std::cout << std::endl;

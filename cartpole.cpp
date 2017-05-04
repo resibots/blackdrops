@@ -7,7 +7,8 @@
 
 #include <blackdrops/cmaes.hpp>
 #include <blackdrops/gp_model.hpp>
-// #include <blackdrops/gp_multi_model.hpp>
+#include <blackdrops/gp_multi_model.hpp>
+#include <spt/stgp.hpp>
 #include <blackdrops/kernel_lf_opt.hpp>
 #include <blackdrops/blackdrops.hpp>
 
@@ -131,15 +132,16 @@ struct Params {
         BO_PARAM(double, noise, 0.01);
     };
 
-    // struct model_spgp : public limbo::defaults::model_spgp {
-    //     BO_PARAM(double, samples_percent, 10);
-    //     BO_PARAM(double, jitter, 1e-5);
-    //     BO_PARAM(int, min_m, 100);
-    //     BO_PARAM(double, sig, 0.001);
-    // };
-    // struct model_gpmm : public limbo::defaults::model_gpmm {
-    //     BO_PARAM(int, threshold, 300);
-    // };
+    struct spt_stgp : public spt::defaults::spt_stgp {
+        BO_PARAM(int, leaf_size, 100);
+        BO_PARAM(double, tau, 0.2);
+        BO_PARAM(bool, global_gp, true);
+        BO_PARAM(bool, multi_query, false);
+    };
+
+    struct model_gpmm : public limbo::defaults::model_gpmm {
+        BO_PARAM(int, threshold, 200);
+    };
 
     struct mean_constant {
         BO_PARAM(double, constant, 0.0);
@@ -669,14 +671,15 @@ int main(int argc, char** argv)
 
     using GP_t = limbo::model::GP<Params, kernel_t, mean_t, blackdrops::KernelLFOpt<Params>>; //, limbo::opt::NLOptGrad<Params, nlopt::LD_SLSQP>>>;
     // using SPGP_t = limbo::model::SPGP<Params, kernel_t, mean_t>;
+    using SPGP_t = spt::STGP<Params, kernel_t, mean_t, blackdrops::KernelLFOpt<Params>>;
 
-    // #ifdef SPGPS
-    //     using GPMM_t = limbo::model::GPMultiModel<Params, mean_t, GP_t, SPGP_t>;
-    //     using MGP_t = blackdrops::GPModel<Params, GPMM_t>;
-    // #else
-    // using MGP_t = blackdrops::GPModel<Params, GP_t>;
-    // #endif
+#ifdef SPGPS
+    using GPMM_t = limbo::model::GPMultiModel<Params, GP_t, SPGP_t>;
+    using MGP_t = blackdrops::GPModel<Params, GPMM_t>;
+#else
     using MGP_t = blackdrops::GPModel<Params, GP_t>;
+#endif
+// using MGP_t = blackdrops::GPModel<Params, GP_t>;
 
 #ifndef GPPOLICY
     blackdrops::BlackDROPS<Params, MGP_t, CartPole, blackdrops::NNPolicy<PolicyParams>, policy_opt_t, RewardFunction> cp_system;
