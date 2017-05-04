@@ -442,7 +442,7 @@ int main(int argc, char** argv)
 
     double best_r = -std::numeric_limits<double>::max();
     size_t best = 0;
-    // blackdrops::Medrops<Params, MGP_t, Omnigrasper, blackdrops::NNPolicy<PolicyParams>, policy_opt_t, RewardFunction> cp_system;
+    // blackdrops::BlackDROPS<Params, MGP_t, Omnigrasper, blackdrops::NNPolicy<PolicyParams>, policy_opt_t, RewardFunction> cp_system;
     for (size_t i = 0; i < random_trials; i++) {
         std::cout << "Random trial #" << (i + 1) << std::endl;
         // Load policy

@@ -584,11 +584,11 @@ int main(int argc, char** argv)
     //using policy_opt_t = limbo::opt::NLOptGrad<Params>;
     using MGP_t = blackdrops::GPModel<Params, GP_t>;
 #ifdef GPPOLICY
-    blackdrops::Medrops<Params, MGP_t, Pendulum, blackdrops::GPPolicy<PolicyParams>, policy_opt_t, RewardFunction> pend_system;
+    blackdrops::BlackDROPS<Params, MGP_t, Pendulum, blackdrops::GPPolicy<PolicyParams>, policy_opt_t, RewardFunction> pend_system;
 #elif defined(LINEAR)
-    blackdrops::Medrops<Params, MGP_t, Pendulum, blackdrops::LinearPolicy<PolicyParams>, policy_opt_t, RewardFunction> pend_system;
+    blackdrops::BlackDROPS<Params, MGP_t, Pendulum, blackdrops::LinearPolicy<PolicyParams>, policy_opt_t, RewardFunction> pend_system;
 #else
-    blackdrops::Medrops<Params, MGP_t, Pendulum, blackdrops::NNPolicy<PolicyParams>, policy_opt_t, RewardFunction> pend_system;
+    blackdrops::BlackDROPS<Params, MGP_t, Pendulum, blackdrops::NNPolicy<PolicyParams>, policy_opt_t, RewardFunction> pend_system;
 #endif
 
     pend_system.learn(1, 15);

@@ -10,7 +10,7 @@
 namespace blackdrops {
 
     template <typename Params, typename Model, typename Robot, typename Policy, typename PolicyOptimizer, typename RewardFunction>
-    class Medrops {
+    class BlackDROPS {
     public:
         int _opt_iters;
         double _max_reward;
@@ -21,8 +21,8 @@ namespace blackdrops {
         Eigen::VectorXd old_params;
         Eigen::VectorXd old_starting;
 
-        Medrops() : _best(-std::numeric_limits<double>::max()) {}
-        ~Medrops() {}
+        BlackDROPS() : _best(-std::numeric_limits<double>::max()) {}
+        ~BlackDROPS() {}
 
         void execute_and_record_data()
         {
@@ -70,14 +70,14 @@ namespace blackdrops {
             if (_boundary == 0) {
                 std::cout << "Optimizing policy... " << std::flush;
                 params_star = policy_optimizer(
-                    std::bind(&Medrops::_optimize_policy, this, std::placeholders::_1, std::placeholders::_2),
+                    std::bind(&BlackDROPS::_optimize_policy, this, std::placeholders::_1, std::placeholders::_2),
                     params_starting,
                     false);
             }
             else {
                 std::cout << "Optimizing policy bounded to [-" << _boundary << ", " << _boundary << "]... " << std::flush;
                 params_star = policy_optimizer(
-                    std::bind(&Medrops::_optimize_policy, this, std::placeholders::_1, std::placeholders::_2),
+                    std::bind(&BlackDROPS::_optimize_policy, this, std::placeholders::_1, std::placeholders::_2),
                     params_starting,
                     true);
             }
@@ -328,7 +328,7 @@ namespace blackdrops {
         //     state[3] = v(3);
         //
         //     boost::numeric::odeint::integrate_const(ode_stepper,
-        //         std::bind(&Medrops::dynamics, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, v(4)),
+        //         std::bind(&BlackDROPS::dynamics, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, v(4)),
         //         state, t, dt, dt / 2.0);
         //
         //     Eigen::VectorXd new_state = Eigen::VectorXd::Map(state.data(), state.size());

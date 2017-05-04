@@ -679,9 +679,9 @@ int main(int argc, char** argv)
     using MGP_t = blackdrops::GPModel<Params, GP_t>;
 
 #ifndef GPPOLICY
-    blackdrops::Medrops<Params, MGP_t, CartPole, blackdrops::NNPolicy<PolicyParams>, policy_opt_t, RewardFunction> cp_system;
+    blackdrops::BlackDROPS<Params, MGP_t, CartPole, blackdrops::NNPolicy<PolicyParams>, policy_opt_t, RewardFunction> cp_system;
 #else
-    blackdrops::Medrops<Params, MGP_t, CartPole, blackdrops::GPPolicy<PolicyParams>, policy_opt_t, RewardFunction> cp_system;
+    blackdrops::BlackDROPS<Params, MGP_t, CartPole, blackdrops::GPPolicy<PolicyParams>, policy_opt_t, RewardFunction> cp_system;
 #endif
 
     cp_system.learn(1, 15);
