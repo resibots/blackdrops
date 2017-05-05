@@ -44,6 +44,14 @@ def build(bld):
                       uselib_local='limbo',
                       variants = ['SIMU', 'SIMU GPPOLICY'])
 
+    limbo.create_variants(bld,
+                      source='half_cheetah.cpp',
+                      includes='. ../../src ../ ./include',
+                      target='half_cheetah',
+                      uselib=arm_libs,
+                      uselib_local='limbo',
+                      variants = ['SIMU', 'SIMU SPGPS'])
+
     if bld.get_env()['BUILD_ROBOT'] == True:
         limbo.create_variants(bld,
                           source='robot_arm.cpp',
@@ -69,6 +77,14 @@ def build(bld):
                           uselib=arm_libs_graphic,
                           uselib_local='limbo',
                           variants = ['GRAPHIC', 'GRAPHIC GPPOLICY'])
+
+        limbo.create_variants(bld,
+                          source='half_cheetah.cpp',
+                          includes='. ../../src ../ ./include',
+                          target='half_cheetah',
+                          uselib=arm_libs_graphic,
+                          uselib_local='limbo',
+                          variants = ['GRAPHIC', 'GRAPHIC SPGPS'])
 
     limbo.create_variants(bld,
                       source='pendulum.cpp',

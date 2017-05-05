@@ -43,9 +43,9 @@ namespace Eigen {
     {
         VectorXd matrix_mean = matrix.colwise().mean();
         MatrixXd matrix_std = (matrix - matrix_mean.transpose().replicate(matrix.rows(), 1));
-        matrix_std = matrix_std.array().pow(2);
+        matrix_std = matrix_std.array().square();
         MatrixXd matrix_sum = matrix_std.colwise().sum();
-        matrix_sum *= (1.0 / (matrix.rows() - 1));
+        matrix_sum *= (1.0 / double(matrix.rows() - 1));
         return matrix_sum.array().sqrt();
     }
 
