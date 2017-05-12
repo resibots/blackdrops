@@ -82,6 +82,9 @@ namespace limbo {
                 if (_samples_size < Params::model_gpmm::threshold()) {
                     _gp_low->optimize_hyperparams();
                 }
+                else {
+                    _gp_high->optimize_hyperparams();
+                }
             }
 
             /// return the list of samples that have been tested so far

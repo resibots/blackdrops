@@ -8,7 +8,8 @@
 #include <blackdrops/cmaes.hpp>
 #include <blackdrops/gp_model.hpp>
 #include <blackdrops/gp_multi_model.hpp>
-#include <spt/stgp.hpp>
+#include <spt/poegp.hpp>
+#include <spt/poegp_lf_opt.hpp>
 #include <blackdrops/kernel_lf_opt.hpp>
 #include <blackdrops/blackdrops.hpp>
 
@@ -132,11 +133,9 @@ struct Params {
         BO_PARAM(double, noise, 0.01);
     };
 
-    struct spt_stgp : public spt::defaults::spt_stgp {
+    struct spt_poegp : public spt::defaults::spt_poegp {
         BO_PARAM(int, leaf_size, 100);
-        BO_PARAM(double, tau, 0.2);
-        BO_PARAM(bool, global_gp, true);
-        BO_PARAM(bool, multi_query, false);
+        BO_PARAM(double, tau, 0.05);
     };
 
     struct model_gpmm : public limbo::defaults::model_gpmm {
@@ -670,8 +669,7 @@ int main(int argc, char** argv)
     using mean_t = limbo::mean::Constant<Params>;
 
     using GP_t = limbo::model::GP<Params, kernel_t, mean_t, blackdrops::KernelLFOpt<Params>>; //, limbo::opt::NLOptGrad<Params, nlopt::LD_SLSQP>>>;
-    // using SPGP_t = limbo::model::SPGP<Params, kernel_t, mean_t>;
-    using SPGP_t = spt::STGP<Params, kernel_t, mean_t, blackdrops::KernelLFOpt<Params>>;
+    using SPGP_t = spt::POEGP<Params, kernel_t, mean_t, limbo::model::gp::POEKernelLFOpt<Params>>;
 
 #ifdef SPGPS
     using GPMM_t = limbo::model::GPMultiModel<Params, GP_t, SPGP_t>;
