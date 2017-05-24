@@ -10,6 +10,7 @@
 // #include <blackdrops/gp_multi_model.hpp>
 #include <blackdrops/kernel_lf_opt.hpp>
 #include <blackdrops/blackdrops.hpp>
+#include <blackdrops/parallel_gp.hpp>
 
 #include <blackdrops/nn_policy.hpp>
 
@@ -436,7 +437,7 @@ int main(int argc, char** argv)
 
     using kernel_t = limbo::kernel::SquaredExpARD<Params>;
     using mean_t = limbo::mean::Constant<Params>;
-    using GP_t = limbo::model::GP<Params, kernel_t, mean_t, blackdrops::KernelLFOpt<Params, limbo::opt::NLOptGrad<Params, nlopt::LD_SLSQP>>>;
+    using GP_t = blackdrops::ParallelGP<Params, limbo::model::GP, kernel_t, mean_t, blackdrops::KernelLFOpt<Params, limbo::opt::NLOptGrad<Params, nlopt::LD_SLSQP>>>;
 
     using MGP_t = blackdrops::GPModel<Params, GP_t>;
 

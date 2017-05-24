@@ -29,12 +29,20 @@ def build(bld):
     cxxflags += ['-D NODSP']
 
     limbo.create_variants(bld,
+                      source='multi_gp.cpp',
+                      includes='. ../../src ../ ./include',
+                      target='multi_gp',
+                      uselib=libs,
+                      uselib_local='limbo',
+                      variants = ['SIMU'])
+
+    limbo.create_variants(bld,
                       source='cartpole.cpp',
                       includes='. ../../src ../ ./include',
                       target='cartpole',
                       uselib=libs,
                       uselib_local='limbo',
-                      variants = ['SIMU', 'SIMU SPGPS', 'SIMU GPPOLICY', 'SIMU GPPOLICY SPGPS'])
+                      variants = ['SIMU', 'SIMU MEAN', 'SIMU MEAN MODELIDENT', 'SIMU SPGPS', 'SIMU GPPOLICY', 'SIMU GPPOLICY SPGPS'])
 
     limbo.create_variants(bld,
                       source='simu_arm.cpp',
@@ -50,7 +58,7 @@ def build(bld):
                       target='half_cheetah',
                       uselib=arm_libs,
                       uselib_local='limbo',
-                      variants = ['SIMU', 'SIMU SPGPS'])
+                      variants = ['SIMU SPGPS'])
 
     if bld.get_env()['BUILD_ROBOT'] == True:
         limbo.create_variants(bld,
@@ -84,7 +92,7 @@ def build(bld):
                           target='half_cheetah',
                           uselib=arm_libs_graphic,
                           uselib_local='limbo',
-                          variants = ['GRAPHIC', 'GRAPHIC SPGPS'])
+                          variants = ['GRAPHIC SPGPS'])
 
     limbo.create_variants(bld,
                       source='pendulum.cpp',

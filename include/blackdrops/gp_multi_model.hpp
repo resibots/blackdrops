@@ -42,11 +42,11 @@ namespace limbo {
                 }
                 else {
                     std::cout << "GP HIGH" << std::endl;
-                    _gp_high->compute(samples, observations);
+                    _gp_high->compute(samples, observations, compute_kernel);
                 }
             }
 
-            std::tuple<Eigen::VectorXd, double> query(const Eigen::VectorXd& v) const
+            std::tuple<Eigen::VectorXd, Eigen::VectorXd> query(const Eigen::VectorXd& v) const
             {
                 if (_samples_size < Params::model_gpmm::threshold()) {
                     return _gp_low->query(v);
@@ -66,7 +66,7 @@ namespace limbo {
                 }
             }
 
-            double sigma(const Eigen::VectorXd& v) const
+            Eigen::VectorXd sigma(const Eigen::VectorXd& v) const
             {
                 if (_samples_size < Params::model_gpmm::threshold()) {
                     return _gp_low->sigma(v);
@@ -91,6 +91,20 @@ namespace limbo {
             const std::vector<Eigen::VectorXd>& samples() const
             {
                 return _samples;
+            }
+
+            /// return the number of dimensions of the input
+            int dim_in() const
+            {
+                assert(_dim_in != -1); // need to compute first !
+                return _dim_in;
+            }
+
+            /// return the number of dimensions of the output
+            int dim_out() const
+            {
+                assert(_dim_out != -1); // need to compute first !
+                return _dim_out;
             }
 
         private:

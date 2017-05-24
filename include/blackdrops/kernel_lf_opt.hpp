@@ -21,7 +21,7 @@ namespace blackdrops {
             gp.kernel_function().set_h_params(params);
             gp.set_lik(limbo::opt::eval(optimization, params));
             gp.recompute(false);
-            std::cout << "likelihood: " << gp.get_lik() << std::endl;
+            // std::cout << "likelihood: " << gp.get_lik() << std::endl;
         }
 
     protected:

@@ -8,6 +8,9 @@
 #include <blackdrops/cmaes.hpp>
 #include <blackdrops/gp_model.hpp>
 #include <blackdrops/gp_multi_model.hpp>
+#include <blackdrops/multi_gp.hpp>
+#include <blackdrops/multi_gp_whole_opt.hpp>
+#include <blackdrops/parallel_gp.hpp>
 #include <spt/poegp.hpp>
 #include <spt/poegp_lf_opt.hpp>
 #include <blackdrops/kernel_lf_opt.hpp>
@@ -159,6 +162,7 @@ struct Params {
     };
 
     struct opt_rprop : public limbo::defaults::opt_rprop {
+        BO_PARAM(int, iterations, 150);
     };
 
     struct opt_parallelrepeater : public limbo::defaults::opt_parallelrepeater {
@@ -180,7 +184,7 @@ struct Params {
     };
 
     struct opt_nloptnograd : public limbo::defaults::opt_nloptnograd {
-        BO_PARAM(int, iterations, 20000);
+        BO_PARAM(int, iterations, 100);
     };
 };
 
@@ -531,6 +535,64 @@ struct RewardFunction {
     }
 };
 
+#ifdef MEAN
+struct MeanFunc {
+    typedef std::vector<double> ode_state_type;
+
+    MeanFunc(int dim_out = 1)
+    {
+        _params = Eigen::VectorXd::Zero(3);
+        _params(0) = 0.45; //l
+        _params(1) = 0.55; //m
+        _params(2) = 0.4; //M
+    }
+
+    template <typename GP>
+    Eigen::VectorXd operator()(const Eigen::VectorXd& v, const GP& gp) const
+    {
+        double dt = 0.1;
+        boost::numeric::odeint::runge_kutta4<ode_state_type> ode_stepper;
+
+        ode_state_type cp_state(4, 0.0);
+        cp_state[0] = v(0);
+        cp_state[1] = v(1);
+        cp_state[2] = v(2);
+        cp_state[3] = std::atan2(v(4), v(3));
+        double u = v(5);
+
+        Eigen::VectorXd init = Eigen::VectorXd::Map(cp_state.data(), cp_state.size());
+
+        boost::numeric::odeint::integrate_const(ode_stepper,
+            std::bind(&MeanFunc::dynamics, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, u),
+            cp_state, 0.0, dt, dt / 2.0);
+
+        Eigen::VectorXd final = Eigen::VectorXd::Map(cp_state.data(), cp_state.size());
+        return (final - init);
+    }
+
+    Eigen::VectorXd h_params() const { return _params; }
+
+    void set_h_params(const Eigen::VectorXd& params)
+    {
+        _params = params;
+    }
+
+    /* The rhs of x' = f(x) */
+    void dynamics(const ode_state_type& x, ode_state_type& dx, double t, double u) const
+    {
+        double l = _params(0), m = _params(1), M = _params(2), g = 9.82, b = 0.2;
+
+        dx[0] = x[1];
+        dx[1] = (2 * m * l * std::pow(x[2], 2.0) * std::sin(x[3]) + 3 * m * g * std::sin(x[3]) * std::cos(x[3]) + 4 * u - 4 * b * x[1]) / (4 * (M + m) - 3 * m * std::pow(std::cos(x[3]), 2.0));
+        dx[2] = (-3 * m * l * std::pow(x[2], 2.0) * std::sin(x[3]) * std::cos(x[3]) - 6 * (M + m) * g * std::sin(x[3]) - 6 * (u - b * x[1]) * std::cos(x[3])) / (4 * l * (m + M) - 3 * m * l * std::pow(std::cos(x[3]), 2.0));
+        dx[3] = x[2];
+    }
+
+protected:
+    Eigen::VectorXd _params;
+};
+#endif
+
 BO_DECLARE_DYN_PARAM(size_t, Params, parallel_evaluations);
 BO_DECLARE_DYN_PARAM(int, PolicyParams::nn_policy, hidden_neurons);
 BO_DECLARE_DYN_PARAM(double, Params::blackdrops, boundary);
@@ -666,10 +728,19 @@ int main(int argc, char** argv)
     using policy_opt_t = limbo::opt::CustomCmaes<Params>;
 
     using kernel_t = limbo::kernel::SquaredExpARD<Params>;
+#ifndef MEAN
     using mean_t = limbo::mean::Constant<Params>;
+#else
+    using mean_t = MeanFunc;
+#endif
 
-    using GP_t = limbo::model::GP<Params, kernel_t, mean_t, blackdrops::KernelLFOpt<Params>>; //, limbo::opt::NLOptGrad<Params, nlopt::LD_SLSQP>>>;
-    using SPGP_t = spt::POEGP<Params, kernel_t, mean_t, limbo::model::gp::POEKernelLFOpt<Params>>;
+#ifndef MODELIDENT
+    using GP_t = blackdrops::ParallelGP<Params, limbo::model::GP, kernel_t, mean_t, blackdrops::KernelLFOpt<Params>>; //, limbo::opt::NLOptGrad<Params, nlopt::LD_SLSQP>>>;
+    using SPGP_t = blackdrops::ParallelGP<Params, spt::POEGP, kernel_t, mean_t, limbo::model::gp::POEKernelLFOpt<Params>>;
+#else
+    using GP_t = blackdrops::MultiGP<Params, limbo::model::GP, kernel_t, mean_t, blackdrops::MultiGPWholeLFOpt<Params, limbo::opt::NLOptNoGrad<Params, nlopt::LN_SBPLX>>>;
+    using SPGP_t = blackdrops::MultiGP<Params, spt::POEGP, kernel_t, mean_t, blackdrops::MultiGPWholeLFOpt<Params, limbo::opt::NLOptNoGrad<Params, nlopt::LN_SBPLX>, limbo::model::gp::POEKernelLFOpt<Params>>>;
+#endif
 
 #ifdef SPGPS
     using GPMM_t = limbo::model::GPMultiModel<Params, GP_t, SPGP_t>;
@@ -677,7 +748,6 @@ int main(int argc, char** argv)
 #else
     using MGP_t = blackdrops::GPModel<Params, GP_t>;
 #endif
-// using MGP_t = blackdrops::GPModel<Params, GP_t>;
 
 #ifndef GPPOLICY
     blackdrops::BlackDROPS<Params, MGP_t, CartPole, blackdrops::NNPolicy<PolicyParams>, policy_opt_t, RewardFunction> cp_system;

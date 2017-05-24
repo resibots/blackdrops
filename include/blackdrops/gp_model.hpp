@@ -5,7 +5,7 @@
 
 namespace blackdrops {
 
-    template <typename Params, typename GP>
+    template <typename Params, typename GP_t>
     class GPModel {
     public:
         GPModel()
@@ -15,15 +15,14 @@ namespace blackdrops {
 
         void init()
         {
-            _gp_models = std::vector<std::shared_ptr<GP>>(Params::blackdrops::model_pred_dim());
-            for (size_t i = 0; i < _gp_models.size(); i++) {
-                _gp_models[i] = std::make_shared<GP>(Params::blackdrops::model_input_dim(), 1);
-            }
+            _gp_model = GP_t(Params::blackdrops::model_input_dim() + Params::blackdrops::action_dim(), Params::blackdrops::model_pred_dim());
+            _limits = Eigen::VectorXd::Ones(Params::blackdrops::model_input_dim());
+            _initialized = true;
         }
 
         void learn(const std::vector<std::tuple<Eigen::VectorXd, Eigen::VectorXd, Eigen::VectorXd>>& observations, bool only_limits = false)
         {
-            std::vector<Eigen::VectorXd> samples;
+            std::vector<Eigen::VectorXd> samples, observs;
             Eigen::MatrixXd obs(observations.size(), std::get<2>(observations[0]).size());
             for (size_t i = 0; i < observations.size(); i++) {
                 Eigen::VectorXd st, act, pred;
@@ -37,6 +36,7 @@ namespace blackdrops {
 
                 samples.push_back(s);
                 obs.row(i) = pred;
+                observs.push_back(pred);
                 // std::cout << s.transpose() << std::endl;
                 // std::cout << pred.transpose() << std::endl;
             }
@@ -61,11 +61,11 @@ namespace blackdrops {
             Eigen::write_binary("blackdrops_data.bin", data2);
 
             std::cout << "GP Samples: " << samples.size() << std::endl;
-            init(); // TODO: Fix this properly
-            tbb::parallel_for(size_t(0), (size_t)obs.cols(), size_t(1), [&](size_t i) {
-                _gp_models[i]->compute(samples, _to_vector(obs.col(i)), false);
-                _gp_models[i]->optimize_hyperparams();
-            });
+            if (!_initialized)
+                init();
+
+            _gp_model.compute(samples, observs, true);
+            _gp_model.optimize_hyperparams();
 
             // for (size_t i = 0; i < transf_samples.size(); i++) {
             //     Eigen::VectorXd mu;
@@ -111,7 +111,7 @@ namespace blackdrops {
 
         void save_data(const std::string& filename) const
         {
-            const std::vector<Eigen::VectorXd>& samples = _gp_models[0]->samples();
+            const std::vector<Eigen::VectorXd>& samples = _gp_model.samples();
             Eigen::MatrixXd observations = _observations;
 
             std::ofstream ofs_data(filename);
@@ -139,21 +139,15 @@ namespace blackdrops {
 
         std::tuple<Eigen::VectorXd, Eigen::VectorXd> predictm(const Eigen::VectorXd& x) const
         {
-            Eigen::VectorXd ms(_gp_models.size());
-            Eigen::VectorXd ss(_gp_models.size());
-            tbb::parallel_for(size_t(0), _gp_models.size(), size_t(1), [&](size_t i) {
-                double s;
-                Eigen::VectorXd m;
-                std::tie(m, s) = _gp_models[i]->query(x);//(x.array() - _means.array()) / _sigmas.array());
-                ms(i) = m(0);
-                ss(i) = s;
-            });
-            return std::make_tuple(ms, ss);
+            Eigen::VectorXd ms(_gp_model.dim_out());
+            Eigen::VectorXd ss(_gp_model.dim_out());
+
+            return _gp_model.query(x);
         }
 
         Eigen::MatrixXd samples() const
         {
-            return _to_matrix(_gp_models[0]->samples());
+            return _to_matrix(_gp_model.samples());
         }
 
         Eigen::MatrixXd observations() const
@@ -188,7 +182,7 @@ namespace blackdrops {
         Eigen::MatrixXd _to_matrix(std::vector<Eigen::VectorXd>& xs) const { return _to_matrix(xs); }
 
     protected:
-        std::vector<std::shared_ptr<GP>> _gp_models;
+        GP_t _gp_model;
         bool _initialized = false;
         Eigen::MatrixXd _observations;
         Eigen::VectorXd _means, _sigmas, _limits;
