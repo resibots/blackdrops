@@ -49,7 +49,6 @@
 #include <limbo/model/gp/hp_opt.hpp>
 #include <limbo/tools/random_generator.hpp>
 #include <blackdrops/binary_matrix.hpp>
-#include <blackdrops/multi_gp_kernel_lf_opt.hpp>
 #include <limbo/model/gp/kernel_lf_opt.hpp>
 #include <blackdrops/kernel_lf_opt.hpp>
 #include <limits>
