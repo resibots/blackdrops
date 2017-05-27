@@ -117,9 +117,14 @@ namespace blackdrops {
             _ofs_opt.open("times.dat");
             _ofs_model.open("times_model.dat");
             _policy.set_random_policy();
-            // Eigen::VectorXd pp = limbo::tools::random_vector(_policy.params().size()).array() * 2.0 * _boundary - _boundary;
-            // Eigen::read_binary("policy_params_1.bin", pp);
-            // _policy.set_params(pp);
+
+#ifdef MEAN
+            Eigen::VectorXd pp = limbo::tools::random_vector(_policy.params().size()).array() * 2.0 * _boundary - _boundary;
+            _policy.set_params(pp);
+            optimize_policy(0);
+            optimize_policy(0);
+            execute_and_record_data();
+#else
 
             std::cout << "Executing random actions..." << std::endl;
             for (size_t i = 0; i < init; i++) {
@@ -130,6 +135,7 @@ namespace blackdrops {
                 }
                 execute_and_record_data();
             }
+#endif
 
             std::chrono::steady_clock::time_point time_start;
             std::cout << "Starting learning..." << std::endl;

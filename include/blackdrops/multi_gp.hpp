@@ -53,8 +53,10 @@ namespace blackdrops {
             : _dim_in(dim_in), _dim_out(dim_out)
         {
             _gp_models.resize(_dim_out);
-            for (int i = 0; i < _dim_out; i++)
+            for (int i = 0; i < _dim_out; i++) {
                 _gp_models[i] = GP_t(_dim_in, 1);
+                _gp_models[i].mean_function().set_id(i);
+            }
         }
 
         /// Compute the GP from samples and observations. This call needs to be explicit!
@@ -161,6 +163,10 @@ namespace blackdrops {
                 std::tie(tmp, sigma(i)) = _gp_models[i].query(v);
                 mu(i) = tmp(0);
             });
+
+            // TO-DO: Fix that
+            if (_gp_models[0].samples().size() == 0)
+                sigma = Eigen::VectorXd::Zero(_dim_out);
 
             return std::make_tuple(mu, sigma);
         }
