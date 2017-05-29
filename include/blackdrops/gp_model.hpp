@@ -49,6 +49,10 @@ namespace blackdrops {
             Eigen::VectorXd pl = Eigen::percentile(samp.array().abs(), 5);
             Eigen::VectorXd ph = Eigen::percentile(samp.array().abs(), 95);
             _limits = pl.array().max(ph.array());
+            for (int i = 0; i < _limits.size(); i++) {
+                if (_limits(i) < 1e-8)
+                    _limits(i) = 1.0;
+            }
 
             if (only_limits)
                 return;

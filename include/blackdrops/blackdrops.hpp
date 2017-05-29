@@ -64,9 +64,9 @@ namespace blackdrops {
             Eigen::write_binary("policy_params_starting_" + std::to_string(i) + ".bin", params_starting);
 
             _opt_iters = 0;
-            _max_reward = 0;
-            _max_simu_reward = 0;
-            _max_real_reward = 0;
+            _max_reward = -std::numeric_limits<double>::max();
+            _max_simu_reward = -std::numeric_limits<double>::max();
+            _max_real_reward = -std::numeric_limits<double>::max();
             if (_boundary == 0) {
                 std::cout << "Optimizing policy... " << std::flush;
                 params_star = policy_optimizer(

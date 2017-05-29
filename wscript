@@ -53,6 +53,14 @@ def build(bld):
                       variants = ['SIMU', 'SIMU GPPOLICY'])
 
     limbo.create_variants(bld,
+                      source='door_opening.cpp',
+                      includes='. ../../src ../ ./include',
+                      target='door_opening',
+                      uselib=arm_libs,
+                      uselib_local='limbo',
+                      variants = ['SIMU', 'SIMU MEAN'])
+
+    limbo.create_variants(bld,
                       source='half_cheetah.cpp',
                       includes='. ../../src ../ ./include',
                       target='half_cheetah',
@@ -93,6 +101,14 @@ def build(bld):
                           uselib=arm_libs_graphic,
                           uselib_local='limbo',
                           variants = ['GRAPHIC SPGPS'])
+
+        limbo.create_variants(bld,
+                          source='door_opening.cpp',
+                          includes='. ../../src ../ ./include',
+                          target='door_opening',
+                          uselib=arm_libs_graphic,
+                          uselib_local='limbo',
+                          variants = ['GRAPHIC', 'GRAPHIC MEAN'])
 
     limbo.create_variants(bld,
                       source='pendulum.cpp',
