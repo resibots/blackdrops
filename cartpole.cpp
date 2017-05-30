@@ -186,6 +186,13 @@ struct Params {
     struct opt_nloptnograd : public limbo::defaults::opt_nloptnograd {
         BO_PARAM(int, iterations, 100);
     };
+
+    struct mean_function {
+        BO_DYN_PARAM(double, pole_length);
+        BO_DYN_PARAM(double, pole_mass);
+        BO_DYN_PARAM(double, cart_mass);
+        BO_DYN_PARAM(double, friction);
+    };
 };
 
 struct PolicyParams {
@@ -542,9 +549,11 @@ struct MeanFunc {
     MeanFunc(int dim_out = 1)
     {
         _params = Eigen::VectorXd::Zero(3);
-        _params(0) = 0.45; //l
-        _params(1) = 0.55; //m
-        _params(2) = 0.4; //M
+        // _params(0) = 0.45; //l
+        // _params(1) = 0.55; //m
+        // _params(2) = 0.4; //M
+        // b = 0.2;
+        _params << Params::mean_function::pole_length(), Params::mean_function::pole_mass(), Params::mean_function::cart_mass();
     }
 
     template <typename GP>
@@ -580,7 +589,7 @@ struct MeanFunc {
     /* The rhs of x' = f(x) */
     void dynamics(const ode_state_type& x, ode_state_type& dx, double t, double u) const
     {
-        double l = _params(0), m = _params(1), M = _params(2), g = 9.82, b = 0.2;
+        double l = _params(0), m = _params(1), M = _params(2), g = 9.82, b = Params::mean_function::friction();
 
         dx[0] = x[1];
         dx[1] = (2 * m * l * std::pow(x[2], 2.0) * std::sin(x[3]) + 3 * m * g * std::sin(x[3]) * std::cos(x[3]) + 4 * u - 4 * b * x[1]) / (4 * (M + m) - 3 * m * std::pow(std::cos(x[3]), 2.0));
@@ -606,6 +615,11 @@ BO_DECLARE_DYN_PARAM(int, Params::opt_cmaes, restarts);
 BO_DECLARE_DYN_PARAM(int, Params::opt_cmaes, elitism);
 BO_DECLARE_DYN_PARAM(bool, Params::opt_cmaes, handle_uncertainty);
 
+BO_DECLARE_DYN_PARAM(double, Params::mean_function, pole_length);
+BO_DECLARE_DYN_PARAM(double, Params::mean_function, pole_mass);
+BO_DECLARE_DYN_PARAM(double, Params::mean_function, cart_mass);
+BO_DECLARE_DYN_PARAM(double, Params::mean_function, friction);
+
 int main(int argc, char** argv)
 {
     bool uncertainty = false;
@@ -613,7 +627,23 @@ int main(int argc, char** argv)
     int threads = tbb::task_scheduler_init::automatic;
     namespace po = boost::program_options;
     po::options_description desc("Command line arguments");
-    desc.add_options()("help,h", "Prints this help message")("parallel_evaluations,p", po::value<int>(), "Number of parallel monte carlo evaluations for policy reward estimation.")("hidden_neurons,n", po::value<int>(), "Number of hidden neurons in NN policy.")("boundary,b", po::value<double>(), "Boundary of the values during the optimization.")("max_evals,m", po::value<int>(), "Max function evaluations to optimize the policy.")("tolerance,t", po::value<double>(), "Maximum tolerance to continue optimizing the function.")("restarts,r", po::value<int>(), "Max number of restarts to use during optimization.")("elitism,e", po::value<int>(), "Elitism mode to use [0 to 3].")("uncertainty,u", po::bool_switch(&uncertainty)->default_value(false), "Enable uncertainty handling.")("threads,d", po::value<int>(), "Max number of threads used by TBB")("verbose,v", po::bool_switch(&verbose)->default_value(false), "Enable verbose mode.");
+    // clang-format off
+    desc.add_options()("help,h", "Prints this help message")
+                      ("parallel_evaluations,p", po::value<int>(), "Number of parallel monte carlo evaluations for policy reward estimation.")
+                      ("hidden_neurons,n", po::value<int>(), "Number of hidden neurons in NN policy.")
+                      ("boundary,b", po::value<double>(), "Boundary of the values during the optimization.")
+                      ("max_evals,m", po::value<int>(), "Max function evaluations to optimize the policy.")
+                      ("tolerance,t", po::value<double>(), "Maximum tolerance to continue optimizing the function.")
+                      ("restarts,r", po::value<int>(), "Max number of restarts to use during optimization.")
+                      ("elitism,e", po::value<int>(), "Elitism mode to use [0 to 3].")
+                      ("uncertainty,u", po::bool_switch(&uncertainty)->default_value(false), "Enable uncertainty handling.")
+                      ("threads,d", po::value<int>(), "Max number of threads used by TBB")
+                      ("verbose,v", po::bool_switch(&verbose)->default_value(false), "Enable verbose mode.")
+                      ("pole_length", po::value<double>(), "Initial length of the pole for the mean function [0 to 1].")
+                      ("pole_mass", po::value<double>(), "Initial mass of the pole for the mean function [0 to 1].")
+                      ("cart_mass", po::value<double>(), "Initial mass of the cart for the mean function [0 to 1].")
+                      ("friction", po::value<double>(), "Initial friction coefficient for the mean function [0 to 1].");
+    // clang-format on
 
     try {
         po::variables_map vm;
@@ -695,6 +725,51 @@ int main(int argc, char** argv)
         else {
             Params::opt_cmaes::set_elitism(0);
         }
+        // Mean Function parameters
+        if (vm.count("pole_length")) {
+            double pl = vm["pole_length"].as<double>();
+            if (pl < 0.0)
+                pl = 0.0;
+            if (pl > 1.0)
+                pl = 1.0;
+            Params::mean_function::set_pole_length(pl);
+        }
+        else {
+            Params::mean_function::set_pole_length(0.5);
+        }
+        if (vm.count("pole_mass")) {
+            double pm = vm["pole_mass"].as<double>();
+            if (pm < 0.0)
+                pm = 0.0;
+            if (pm > 1.0)
+                pm = 1.0;
+            Params::mean_function::set_pole_mass(pm);
+        }
+        else {
+            Params::mean_function::set_pole_mass(0.5);
+        }
+        if (vm.count("cart_mass")) {
+            double cm = vm["cart_mass"].as<double>();
+            if (cm < 0.0)
+                cm = 0.0;
+            if (cm > 1.0)
+                cm = 1.0;
+            Params::mean_function::set_cart_mass(cm);
+        }
+        else {
+            Params::mean_function::set_cart_mass(0.5);
+        }
+        if (vm.count("friction")) {
+            double fr = vm["friction"].as<double>();
+            if (fr < 0.0)
+                fr = 0.0;
+            if (fr > 1.0)
+                fr = 1.0;
+            Params::mean_function::set_friction(fr);
+        }
+        else {
+            Params::mean_function::set_friction(0.1);
+        }
     }
     catch (po::error& e) {
         std::cerr << "[Exception caught while parsing command line arguments]: " << e.what() << std::endl;
@@ -724,6 +799,13 @@ int main(int argc, char** argv)
     std::cout << "  boundary = " << Params::blackdrops::boundary() << std::endl;
     std::cout << "  tbb threads = " << threads << std::endl;
     std::cout << std::endl;
+#ifdef MEAN
+    std::cout << "Mean parameters: " << std::endl;
+    std::cout << "  Pole length (m): " << Params::mean_function::pole_length() << std::endl;
+    std::cout << "  Pole mass (kg): " << Params::mean_function::pole_mass() << std::endl;
+    std::cout << "  Cart mass (kg): " << Params::mean_function::cart_mass() << std::endl;
+    std::cout << "  Friction (N/m/s): " << Params::mean_function::friction() << std::endl;
+#endif
 
     using policy_opt_t = limbo::opt::CustomCmaes<Params>;
 
