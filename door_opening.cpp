@@ -58,9 +58,9 @@ struct Params {
 
     struct blackdrops {
         BO_PARAM(size_t, action_dim, 5);
-        BO_PARAM(size_t, state_full_dim, 6);
-        BO_PARAM(size_t, model_input_dim, 6);
-        BO_PARAM(size_t, model_pred_dim, 6);
+        BO_PARAM(size_t, state_full_dim, 11);
+        BO_PARAM(size_t, model_input_dim, 11);
+        BO_PARAM(size_t, model_pred_dim, 11);
         // TO-DO: See how many steps
         BO_PARAM(size_t, rollout_steps, 100);
         BO_DYN_PARAM(double, boundary);
@@ -130,9 +130,11 @@ namespace global {
 Eigen::VectorXd get_robot_state(const std::shared_ptr<robot_dart::Robot>& robot, const std::shared_ptr<robot_dart::Robot>& door)
 {
     Eigen::VectorXd pos = robot->skeleton()->getPositions();
-    size_t size = pos.size() + 1;
+    Eigen::VectorXd vels = robot->skeleton()->getVelocities();
+    size_t size = vels.size() + pos.size() + 1;
     Eigen::VectorXd state(size);
-    state.head(pos.size()) = pos;
+    state.head(vels.size()) = vels;
+    state.segment(vels.size(), pos.size()) = pos;
     state.tail(1) = door->skeleton()->getPositions();
 
     return state;
@@ -175,25 +177,31 @@ public:
     {
         double dt = 0.05;
 
-        if (_t == 0.0 || (_t - _prev_time) >= dt) {
+        // std::cout << _t << " vs " << _prev_time << " --> " << (_t - _prev_time) << std::endl;
+        if (_t == 0.0 || (_t - _prev_time - dt) >= -1e-5) {
+            // std::cout << "in" << std::endl;
+            // std::cout << _t << " vs " << _prev_time << " --> " << (_t - _prev_time) << std::endl;
             Eigen::VectorXd state = get_robot_state(_robot, door);
-            Eigen::VectorXd pos = state.head(5);
+            Eigen::VectorXd vel = state.head(5);
+            Eigen::VectorXd pos = state.segment(5, 5);
             Eigen::VectorXd commands = policy.next(state);
 
             qs->push_back(pos);
+            vels->push_back(vel);
             coms->push_back(commands);
             doors->push_back(state.tail(1)[0]);
 
             assert(_dof == (size_t)commands.size());
             _robot->skeleton()->setCommands(commands);
             _prev_commands = commands;
-            _prev_time = int(_t / dt) * dt;
+            _prev_time = _t; //int(_t / dt) * dt;
         }
         else
             _robot->skeleton()->setCommands(_prev_commands);
     }
 
     std::vector<Eigen::VectorXd>* qs;
+    std::vector<Eigen::VectorXd>* vels;
     std::vector<Eigen::VectorXd>* coms;
     std::vector<double>* doors;
     std::shared_ptr<robot_dart::Robot> door;
@@ -212,9 +220,9 @@ struct Omnigrasper {
         double t = 5.0;
 
 #ifndef GRAPHIC
-        using robot_simu_t = robot_dart::RobotDARTSimu<robot_dart::robot_control<PolicyControl>, robot_dart::collision<dart::collision::FCLCollisionDetector>>;
+        using robot_simu_t = robot_dart::RobotDARTSimu<robot_dart::robot_control<PolicyControl>>; //, robot_dart::collision<dart::collision::FCLCollisionDetector>>;
 #else
-        using robot_simu_t = robot_dart::RobotDARTSimu<robot_dart::robot_control<PolicyControl>, robot_dart::collision<dart::collision::FCLCollisionDetector>, robot_dart::graphics<robot_dart::Graphics<Params>>>;
+        using robot_simu_t = robot_dart::RobotDARTSimu<robot_dart::robot_control<PolicyControl>, robot_dart::graphics<robot_dart::Graphics<Params>>>; //, robot_dart::collision<dart::collision::FCLCollisionDetector>, robot_dart::graphics<robot_dart::Graphics<Params>>>;
 #endif
 
         Eigen::VectorXd ctrl_params = policy.params();
@@ -237,13 +245,14 @@ struct Omnigrasper {
         pose.head(3) = Eigen::Vector3d(0, 0, -dart::math::constants<double>::pi() / 2.0);
         simu.add_skeleton(c_door->skeleton(), pose, "fixed", "door");
 
-        simu.set_step(0.001);
+        simu.set_step(0.01);
         simu.add_floor();
 
-        std::vector<Eigen::VectorXd> qs, coms;
+        std::vector<Eigen::VectorXd> qs, coms, vels;
         std::vector<double> doors;
 
         simu.controller().qs = &qs;
+        simu.controller().vels = &vels;
         simu.controller().coms = &coms;
         simu.controller().doors = &doors;
 
@@ -253,20 +262,22 @@ struct Omnigrasper {
 
         simu.run(t);
 
-        assert(doors.size() == 100);
+        assert(doors.size() == 101);
         R = std::vector<double>();
 
         std::vector<std::tuple<Eigen::VectorXd, Eigen::VectorXd, Eigen::VectorXd>> ret;
 
         for (size_t i = 0; i < doors.size() - 1; i++) {
             Eigen::VectorXd state(Params::blackdrops::model_input_dim());
-            state.head(5) = qs[i];
+            state.head(5) = vels[i];
+            state.segment(5, 5) = qs[i];
             state.tail(1) = limbo::tools::make_vector(doors[i]);
 
             Eigen::VectorXd command = coms[i];
 
             Eigen::VectorXd to_state(Params::blackdrops::model_input_dim());
-            to_state.head(5) = qs[i + 1];
+            to_state.head(5) = vels[i + 1];
+            to_state.segment(5, 5) = qs[i + 1];
             to_state.tail(1) = limbo::tools::make_vector(doors[i + 1]);
 
             ret.push_back(std::make_tuple(state, command, to_state - state));
@@ -345,7 +356,7 @@ struct RewardFunction {
     double operator()(const Eigen::VectorXd& from_state, const Eigen::VectorXd& action, const Eigen::VectorXd& to_state) const
     {
         double s_c_sq = 0.1 * 0.1;
-        double da = angle_dist(Params::goal_pos(), to_state(5));
+        double da = angle_dist(Params::goal_pos(), to_state.tail(1)[0]);
 
         return std::exp(-0.5 / s_c_sq * da * da);
     }
@@ -385,9 +396,11 @@ public:
     void set_commands()
     {
         Eigen::VectorXd state = get_robot_state(_robot, door);
-        Eigen::VectorXd pos = state.head(5);
+        Eigen::VectorXd vel = state.head(5);
+        Eigen::VectorXd pos = state.segment(5, 5);
 
         qs->push_back(pos);
+        vels->push_back(vel);
         doors->push_back(state.tail(1)[0]);
 
         assert(_dof == (size_t)_velocities.size());
@@ -395,6 +408,7 @@ public:
     }
 
     std::vector<Eigen::VectorXd>* qs;
+    std::vector<Eigen::VectorXd>* vels;
     std::vector<double>* doors;
     std::shared_ptr<robot_dart::Robot> door;
 
@@ -411,7 +425,12 @@ struct MeanFunc {
     {
         double dt = 0.05;
 
-        using robot_simu_t = robot_dart::RobotDARTSimu<robot_dart::robot_control<VelocityControl>, robot_dart::collision<dart::collision::FCLCollisionDetector>>;
+        using robot_simu_t = robot_dart::RobotDARTSimu<robot_dart::robot_control<VelocityControl>>; //, robot_dart::collision<dart::collision::FCLCollisionDetector>>;
+        // #ifndef GRAPHIC
+        //         using robot_simu_t = robot_dart::RobotDARTSimu<robot_dart::robot_control<VelocityControl>, robot_dart::collision<dart::collision::FCLCollisionDetector>>;
+        // #else
+        //         using robot_simu_t = robot_dart::RobotDARTSimu<robot_dart::robot_control<VelocityControl>, robot_dart::collision<dart::collision::FCLCollisionDetector>, robot_dart::graphics<robot_dart::Graphics<Params>>>;
+        // #endif
 
         Eigen::VectorXd ctrl_params = v.tail(5);
 
@@ -425,7 +444,9 @@ struct MeanFunc {
         auto c_door = global::door_robot->clone();
 
         auto simu = robot_simu_t(ctrl, c_robot);
-        Eigen::VectorXd positions = v.head(5);
+        Eigen::VectorXd velocities = v.head(5);
+        Eigen::VectorXd positions = v.segment(5, 5);
+        c_robot->skeleton()->setVelocities(velocities);
         c_robot->skeleton()->setPositions(positions);
         simu.controller().door = c_door;
 
@@ -433,29 +454,35 @@ struct MeanFunc {
         pose.tail(3) = Eigen::Vector3d(-0.6, 0.0, 0.0);
         pose.head(3) = Eigen::Vector3d(0, 0, -dart::math::constants<double>::pi() / 2.0);
         simu.add_skeleton(c_door->skeleton(), pose, "fixed", "door");
-        c_door->skeleton()->setPositions(v.segment(5, 1));
+        c_door->skeleton()->setPositions(v.segment(10, 1));
 
-        simu.set_step(0.001);
+        simu.set_step(0.01);
         simu.add_floor();
 
-        std::vector<Eigen::VectorXd> qs;
+        std::vector<Eigen::VectorXd> qs, vels;
         std::vector<double> doors;
 
         simu.controller().qs = &qs;
+        simu.controller().vels = &vels;
         simu.controller().doors = &doors;
 
-        simu.run(dt);
+        // #ifdef GRAPHIC
+        //         simu.graphics()->fixed_camera(Eigen::Vector3d(1.0, 1.0, 1.5), Eigen::Vector3d(-0.6, 0.0, 0.0));
+        // #endif
+
+        simu.run(dt + 0.01);
 
         // assert(doors.size() == 1);
 
-        Eigen::VectorXd state(Params::blackdrops::model_input_dim());
-        state.head(6) = v.head(6);
+        Eigen::VectorXd state = v.head(11);
 
         Eigen::VectorXd command = ctrl_params;
 
         Eigen::VectorXd to_state(Params::blackdrops::model_input_dim());
-        to_state.head(5) = qs.back();
+        to_state.head(5) = vels.back();
+        to_state.segment(5, 5) = qs.back();
         to_state.tail(1) = limbo::tools::make_vector(doors.back());
+        // std::cout << state.transpose() << " ---> " << to_state.transpose() << " with " << ctrl_params.transpose() << std::endl;
 
         return (to_state - state);
     }

@@ -65,10 +65,10 @@ namespace blackdrops {
             MultiGPWholeLFOptimization<GP> optimization(gp);
             Optimizer optimizer;
             // std::cout << "kernel: " << gp.kernel_h_params().transpose().array().exp() << std::endl;
-            Eigen::VectorXd params = optimizer(optimization, gp.mean_h_params(), true);
-            gp.set_mean_h_params(params);
+            Eigen::VectorXd params = optimizer(optimization, gp.mean_function().h_params(), true);
+            gp.mean_function().set_h_params(params);
             // std::cout << "mean: " << gp.mean_h_params().array().exp().transpose() << std::endl;
-            std::cout << "mean: " << gp.mean_h_params().transpose() << std::endl;
+            std::cout << "mean: " << gp.mean_function().h_params().transpose() << std::endl;
             gp.recompute(true, false);
             // std::cout << "kernel after: " << gp.kernel_h_params().transpose().array().exp() << std::endl;
 
@@ -91,7 +91,7 @@ namespace blackdrops {
             {
                 GP gp_all(this->_original_gp);
                 // Eigen::VectorXd initial_params = gp_all.mean_h_params();
-                gp_all.set_mean_h_params(params);
+                gp_all.mean_function().set_h_params(params);
                 gp_all.recompute(true, false);
 
                 auto& small_gps = gp_all.gp_models();

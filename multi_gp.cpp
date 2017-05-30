@@ -253,7 +253,7 @@ void benchmark(const std::string& name)
             // blackdrops::ParallelGP<Params, limbo::kernel::SquaredExpARD<Params>, MeanFunc, limbo::model::gp::KernelLFOpt<Params, limbo::opt::CustomCmaes<SecondParams>>> gp_old;
             Eigen::VectorXd mean_pp(3);
             mean_pp << std::log(0.5), std::log(0.5), std::log(0.5);
-            gp_old.set_mean_h_params(mean_pp);
+            gp_old.mean_function().set_h_params(mean_pp);
             // blackdrops::MultiGP<Params, limbo::kernel::SquaredExpARD<Params>, MeanFunc, blackdrops::MultiGPMeanLFOpt<Params, limbo::opt::CustomCmaes<Params>>> gp_old;
             start = std::chrono::high_resolution_clock::now();
             gp_old.compute(points, obs, false);

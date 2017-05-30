@@ -2,6 +2,7 @@
 #define BLACKDROPS_PARALLEL_GP_HPP
 
 #include <limbo/model/gp.hpp>
+#include <limbo/mean/null_function.hpp>
 
 #include <map>
 
@@ -10,38 +11,7 @@ namespace blackdrops {
     template <typename Params, template <typename, typename, typename, typename> class GPClass, typename KernelFunction, typename MeanFunction, class HyperParamsOptimizer = limbo::model::gp::NoLFOpt<Params>>
     class ParallelGP {
     public:
-        struct MultiMean : MeanFunction {
-
-            MultiMean(size_t dim_out = 1) : _id(0) {}
-
-            template <typename GP>
-            Eigen::VectorXd operator()(const Eigen::VectorXd& v, const GP& gp) const
-            {
-                Eigen::VectorXd res;
-                // if (MultiMean::_cashing.find(v) == MultiMean::_cashing.end())
-                res = MeanFunction::operator()(v, gp);
-                // else
-                //     res = MultiMean::_cashing[v];
-
-                if (_id >= res.size())
-                    return res.tail(1);
-
-                return limbo::tools::make_vector(res(_id));
-            }
-
-            void set_id(int id)
-            {
-                _id = id;
-            }
-
-            int id() { return _id; }
-
-        protected:
-            // static std::map<Eigen::VectorXd, Eigen::VectorXd> _cashing;
-            int _id;
-        };
-
-        using GP_t = GPClass<Params, KernelFunction, MultiMean, HyperParamsOptimizer>;
+        using GP_t = GPClass<Params, KernelFunction, limbo::mean::NullFunction<Params>, HyperParamsOptimizer>;
 
         /// useful because the model might be created before knowing anything about the process
         ParallelGP() : _dim_in(-1), _dim_out(-1)
@@ -50,12 +20,12 @@ namespace blackdrops {
 
         /// useful because the model might be created  before having samples
         ParallelGP(int dim_in, int dim_out)
-            : _dim_in(dim_in), _dim_out(dim_out)
+            : _dim_in(dim_in), _dim_out(dim_out), _mean_function(dim_out)
         {
             _gp_models.resize(_dim_out);
             for (int i = 0; i < _dim_out; i++) {
                 _gp_models[i] = GP_t(_dim_in, 1);
-                _gp_models[i].mean_function().set_id(i);
+                // _gp_models[i].mean_function().set_id(i);
             }
         }
 
@@ -77,15 +47,20 @@ namespace blackdrops {
                     _gp_models[i] = GP_t(_dim_in, 1);
             }
 
+            _samples = samples;
+            _observations = observations;
+
             std::vector<std::vector<Eigen::VectorXd>> obs(_dim_out);
 
             for (size_t j = 0; j < observations.size(); j++) {
+                Eigen::VectorXd mean_vector = _mean_function(samples[j], *this);
+                assert(mean_vector.size() == _dim_out);
                 for (int i = 0; i < _dim_out; i++) {
-                    obs[i].push_back(limbo::tools::make_vector(observations[j][i]));
+                    obs[i].push_back(limbo::tools::make_vector(observations[j][i] - mean_vector[i]));
                 }
             }
             tbb::parallel_for(size_t(0), (size_t)_dim_out, size_t(1), [&](size_t i) {
-                _gp_models[i].mean_function().set_id(i);
+                // _gp_models[i].mean_function().set_id(i);
                 _gp_models[i].compute(samples, obs[i], compute_kernel);
             });
         }
@@ -103,20 +78,13 @@ namespace blackdrops {
             // std::cout << "Likelihood: " << -std::log(lik_all) << std::endl;
         }
 
-        void set_mean_h_params(const Eigen::VectorXd& mean_params)
-        {
-            for (int i = 0; i < _dim_out; i++) {
-                _gp_models[i].mean_function().set_h_params(mean_params);
-            }
-        }
+        const MeanFunction& mean_function() const { return _mean_function; }
 
-        Eigen::VectorXd mean_h_params()
-        {
-            return _gp_models[0].mean_function().h_params();
-        }
+        MeanFunction& mean_function() { return _mean_function; }
 
         void add_sample(const Eigen::VectorXd& sample, const Eigen::VectorXd& observation)
         {
+            // std::cerr << "[WARNING-ParallelGP]: add_sample might not work properly if the params of MeanFunction are changed between function calls!" << std::endl;
             if (_gp_models.size() == 0) {
                 if (_dim_in != sample.size()) {
                     _dim_in = sample.size();
@@ -133,9 +101,15 @@ namespace blackdrops {
                 assert(observation.size() == _dim_out);
             }
 
+            _samples.push_back(sample);
+            _observations.push_back(observation);
+
+            Eigen::VectorXd mean_vector = _mean_function(sample, *this);
+            assert(mean_vector.size() == _dim_out);
+
             tbb::parallel_for(size_t(0), (size_t)_dim_out, size_t(1), [&](size_t i) {
-                _gp_models[i].mean_function().set_id(i);
-                _gp_models[i].add_sample(sample, limbo::tools::make_vector(observation[i]));
+                // _gp_models[i].mean_function().set_id(i);
+                _gp_models[i].add_sample(sample, limbo::tools::make_vector(observation[i] - mean_vector[i]));
             });
         }
 
@@ -144,10 +118,12 @@ namespace blackdrops {
             Eigen::VectorXd mu(_dim_out);
             Eigen::VectorXd sigma(_dim_out);
 
+            Eigen::VectorXd mean_vector = _mean_function(v, *this);
+
             tbb::parallel_for(size_t(0), (size_t)_dim_out, size_t(1), [&](size_t i) {
                 Eigen::VectorXd tmp;
                 std::tie(tmp, sigma(i)) = _gp_models[i].query(v);
-                mu(i) = tmp(0);
+                mu(i) = tmp(0) + mean_vector(i);
             });
 
             // TO-DO: Fix that
@@ -160,9 +136,10 @@ namespace blackdrops {
         Eigen::VectorXd mu(const Eigen::VectorXd& v) const
         {
             Eigen::VectorXd mu(_dim_out);
+            Eigen::VectorXd mean_vector = _mean_function(v, *this);
 
             tbb::parallel_for(size_t(0), (size_t)_dim_out, size_t(1), [&](size_t i) {
-                mu(i) = _gp_models[i].mu(v);
+                mu(i) = _gp_models[i].mu(v) + mean_vector(i);
             });
 
             return mu;
@@ -203,6 +180,9 @@ namespace blackdrops {
         ///  recomputes the GP
         void recompute(bool update_obs_mean = true, bool update_full_kernel = true)
         {
+            if (update_obs_mean)
+                return compute(_samples, _observations, update_full_kernel);
+
             tbb::parallel_for(size_t(0), (size_t)_dim_out, size_t(1), [&](size_t i) {
               _gp_models[i].recompute(update_obs_mean, update_full_kernel);
             });
@@ -223,6 +203,8 @@ namespace blackdrops {
     protected:
         std::vector<GP_t> _gp_models;
         int _dim_in, _dim_out;
+        MeanFunction _mean_function;
+        std::vector<Eigen::VectorXd> _samples, _observations;
     };
 }
 
