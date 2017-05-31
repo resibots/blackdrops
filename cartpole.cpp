@@ -424,6 +424,8 @@ struct CartPole {
             init(3) = std::cos(0.0);
             init(4) = std::sin(0.0);
             for (size_t j = 0; j < steps; j++) {
+                if(init.norm()>1000)
+                  break;
                 Eigen::VectorXd query_vec(Params::blackdrops::model_input_dim() + Params::blackdrops::action_dim());
                 Eigen::VectorXd u = policy.next(init);
                 query_vec.head(Params::blackdrops::model_input_dim()) = init;
@@ -434,13 +436,10 @@ struct CartPole {
                 std::tie(mu, sigma) = model.predictm(query_vec);
 
                 if (Params::parallel_evaluations() > 1 || Params::opt_cmaes::handle_uncertainty()) {
-                    if (Params::opt_cmaes::handle_uncertainty()) {
-                        sigma = sigma.array();
-                    }
-                    else {
-                        sigma = sigma.array().sqrt();
-                    }
+                    sigma = sigma.array().sqrt();
                     for (int i = 0; i < mu.size(); i++) {
+                        if (sigma(i) < 1e-6)
+                            continue;
                         double s = gaussian_rand(mu(i), sigma(i));
                         mu(i) = std::max(mu(i) - sigma(i),
                             std::min(s, mu(i) + sigma(i)));
@@ -527,7 +526,9 @@ struct RewardFunction {
     double operator()(const Eigen::VectorXd& from_state, const Eigen::VectorXd& action, const Eigen::VectorXd& to_state) const
     {
         double s_c_sq = 0.25 * 0.25;
-        double da = angle_dist(to_state(3), Params::goal_pos());
+        double da = std::numeric_limits<double>::max();
+        if (std::abs(to_state(3)) < 100.0)
+            da = angle_dist(to_state(3), Params::goal_pos());
         // double dsin = std::sin(to_state(3)); // - std::sin(Params::goal_pos());
         // double dcos = std::cos(to_state(3)); // - std::cos(Params::goal_pos());
         // double dy = to_state(2) - Params::goal_vel();
