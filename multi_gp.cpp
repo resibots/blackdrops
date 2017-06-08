@@ -228,6 +228,14 @@ void benchmark(const std::string& name)
             auto start = std::chrono::high_resolution_clock::now();
             gp.compute(points, obs, true);
             gp.optimize_hyperparams();
+            long double lik = 0.0;
+            for (auto sgp : gp.gp_models()) {
+                long double lik_small = sgp.compute_lik();
+                lik += lik_small;
+                long double log_lik = sgp.compute_log_lik();
+                std::cout << std::log(lik_small) << " vs " << log_lik << " and also: " << lik_small << " vs " << std::exp(log_lik) << std::endl;
+            }
+            std::cout << "Whole: " << std::log(lik) << std::endl;
             // Eigen::VectorXd mean_pp(2);
             // mean_pp << std::log(0.5), std::log(0.5);
             // gp.set_mean_h_params(mean_pp);
@@ -258,6 +266,8 @@ void benchmark(const std::string& name)
             start = std::chrono::high_resolution_clock::now();
             gp_old.compute(points, obs, false);
             gp_old.optimize_hyperparams();
+            for (auto sgp : gp_old.gp_models())
+                std::cout << std::log(sgp.compute_lik()) << " vs " << sgp.compute_log_lik() << std::endl;
             // Eigen::VectorXd pk = gp_old.kernel_function().h_params();
             // std::cout << "old_gp : ";
             // for (int j = 0; j < pk.size() - 2; j++)

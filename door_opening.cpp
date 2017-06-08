@@ -71,6 +71,15 @@ struct Params {
         BO_PARAM(double, noise, 0.01);
     };
 
+    struct spt_poegp : public spt::defaults::spt_poegp {
+        BO_PARAM(int, leaf_size, 100);
+        BO_PARAM(double, tau, 0.05);
+    };
+
+    struct model_gpmm : public limbo::defaults::model_gpmm {
+        BO_PARAM(int, threshold, 200);
+    };
+
     struct mean_constant {
         BO_PARAM(double, constant, 0.0);
     };
@@ -324,6 +333,8 @@ struct Omnigrasper {
         // init state
         Eigen::VectorXd init = Eigen::VectorXd::Zero(Params::blackdrops::model_pred_dim());
         for (size_t j = 0; j < steps; j++) {
+            if (init.norm() > 50)
+                break;
             Eigen::VectorXd query_vec(Params::blackdrops::model_input_dim() + Params::blackdrops::action_dim());
             Eigen::VectorXd u = policy.next(init);
             query_vec.head(Params::blackdrops::model_input_dim()) = init;
@@ -456,7 +467,7 @@ struct MeanFunc {
         simu.add_skeleton(c_door->skeleton(), pose, "fixed", "door");
         c_door->skeleton()->setPositions(v.segment(10, 1));
 
-        simu.set_step(0.01);
+        simu.set_step(0.05);
         simu.add_floor();
 
         std::vector<Eigen::VectorXd> qs, vels;

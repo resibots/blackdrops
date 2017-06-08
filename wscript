@@ -42,7 +42,7 @@ def build(bld):
                       target='cartpole',
                       uselib=libs,
                       uselib_local='limbo',
-                      variants = ['SIMU', 'SIMU MEAN', 'SIMU MEAN MODELIDENT', 'SIMU SPGPS', 'SIMU GPPOLICY', 'SIMU GPPOLICY SPGPS'])
+                      variants = ['SIMU', 'SIMU MEAN', 'SIMU MEAN MODELIDENT', 'SIMU MEAN MODELIDENT ONLYMI', 'SIMU SPGPS', 'SIMU GPPOLICY', 'SIMU GPPOLICY SPGPS'])
 
     limbo.create_variants(bld,
                       source='simu_arm.cpp',
@@ -58,7 +58,7 @@ def build(bld):
                       target='door_opening',
                       uselib=arm_libs,
                       uselib_local='limbo',
-                      variants = ['SIMU', 'SIMU MEAN'])
+                      variants = ['SIMU SPGPS', 'SIMU SPGPS MEAN'])
 
     limbo.create_variants(bld,
                       source='half_cheetah.cpp',
@@ -108,7 +108,7 @@ def build(bld):
                           target='door_opening',
                           uselib=arm_libs_graphic,
                           uselib_local='limbo',
-                          variants = ['GRAPHIC', 'GRAPHIC MEAN'])
+                          variants = ['GRAPHIC SPGPS', 'GRAPHIC SPGPS MEAN'])
 
     limbo.create_variants(bld,
                       source='pendulum.cpp',
