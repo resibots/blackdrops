@@ -120,6 +120,7 @@ namespace blackdrops {
 
             Eigen::VectorXd mean_vector = _mean_function(v, *this);
 
+#ifndef ONLYMI
             tbb::parallel_for(size_t(0), (size_t)_dim_out, size_t(1), [&](size_t i) {
                 Eigen::VectorXd tmp;
                 std::tie(tmp, sigma(i)) = _gp_models[i].query(v);
@@ -129,6 +130,10 @@ namespace blackdrops {
             // TO-DO: Fix that
             if (_gp_models[0].samples().size() == 0)
                 sigma = Eigen::VectorXd::Zero(_dim_out);
+#else
+            mu = mean_vector;
+            sigma = Eigen::VectorXd::Zero(_dim_out);
+#endif
 
             return std::make_tuple(mu, sigma);
         }
