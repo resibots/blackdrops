@@ -109,6 +109,7 @@ struct PolicyParams {
         BO_PARAM(size_t, state_dim, Params::blackdrops::model_input_dim());
         BO_PARAM(size_t, action_dim, Params::blackdrops::action_dim());
         BO_PARAM_ARRAY(double, max_u, 2.5, 44.7, 14.0);
+        BO_PARAM_ARRAY(double, limits, 1., 1., 1., 1., 1., 1., 1., 1., 1.);
         BO_DYN_PARAM(int, hidden_neurons);
     };
 
@@ -116,6 +117,7 @@ struct PolicyParams {
         BO_PARAM(size_t, state_dim, Params::blackdrops::model_input_dim());
         BO_PARAM(size_t, action_dim, Params::blackdrops::action_dim());
         BO_PARAM_ARRAY(double, max_u, 2.5, 44.7, 14.0);
+        BO_PARAM_ARRAY(double, limits, 1., 1., 1., 1., 1., 1., 1., 1., 1.);
         BO_PARAM(double, pseudo_samples, 10);
         BO_PARAM(double, noise, 1e-5);
     };

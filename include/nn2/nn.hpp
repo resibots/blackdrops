@@ -204,7 +204,7 @@ namespace nn {
             assert(num_vertices(_g) == pfs.size());
             size_t k = 0;
             BGL_FORALL_VERTICES_T(v, _g, graph_t)
-            _g[v].set_pfparamst(pfs[k++]);
+            _g[v].set_pfparams(pfs[k++]);
         }
 
         void set_all_afparams(const std::vector<typename af_t::params_t>& afs)
@@ -212,7 +212,7 @@ namespace nn {
             assert(num_vertices(_g) == afs.size());
             size_t k = 0;
             BGL_FORALL_VERTICES_T(v, _g, graph_t)
-            _g[v].set_afparamst(afs[k++]);
+            _g[v].set_afparams(afs[k++]);
         }
 
         void set_all_weights(const std::vector<weight_t>& ws)

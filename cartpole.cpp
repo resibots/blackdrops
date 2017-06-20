@@ -204,6 +204,7 @@ struct PolicyParams {
         BO_PARAM(size_t, action_dim, Params::blackdrops::action_dim());
         BO_PARAM_ARRAY(double, max_u, 10.0);
         BO_DYN_PARAM(int, hidden_neurons);
+        BO_PARAM_ARRAY(double, limits, 5., 5., 10., 1., 1.);
     };
 
     struct gp_policy {
@@ -212,6 +213,7 @@ struct PolicyParams {
         BO_PARAM_ARRAY(double, max_u, 10.0);
         BO_PARAM(double, pseudo_samples, 10);
         BO_PARAM(double, noise, 1e-5);
+        BO_PARAM_ARRAY(double, limits, 5., 5., 10., 1., 1.);
     };
 
     struct kernel : public limbo::defaults::kernel {
@@ -526,20 +528,27 @@ struct RewardFunction {
     double operator()(const Eigen::VectorXd& from_state, const Eigen::VectorXd& action, const Eigen::VectorXd& to_state) const
     {
         double s_c_sq = 0.25 * 0.25;
-        double da = std::numeric_limits<double>::max();
-        if (std::abs(to_state(3)) < 100.0)
-            da = angle_dist(to_state(3), Params::goal_pos());
-        // double dsin = std::sin(to_state(3)); // - std::sin(Params::goal_pos());
-        // double dcos = std::cos(to_state(3)); // - std::cos(Params::goal_pos());
-        // double dy = to_state(2) - Params::goal_vel();
-        // double dz = to_state(1) - Params::goal_vel_x();
-        double dx = to_state(0); // - Params::goal_pos_x();
-        // exp(-0.5/sigma*(Δcos^2/4 + Δx*(Δsin/2 + Δx) + Δsin*(Δsin/4 + Δx/2))
-        // double derr = (dcos * dcos) / 4.0 + dsin * (dsin / 4.0 + dx / 2.0) + dx * (dsin / 2.0 + dx);
-        // double derr = dx * dx + 2 * dx * 0.5 * dsin + 2 * 0.5 * 0.5 + 2 * 0.5 * 0.5 * dcos;
-        // return std::exp(-0.5 / s_c_sq * derr);
+        // double da = std::numeric_limits<double>::max();
+        // if (std::abs(to_state(3)) < 100.0)
+        //     da = angle_dist(to_state(3), Params::goal_pos());
+        // // double dsin = std::sin(to_state(3)); // - std::sin(Params::goal_pos());
+        // // double dcos = std::cos(to_state(3)); // - std::cos(Params::goal_pos());
+        // // double dy = to_state(2) - Params::goal_vel();
+        // // double dz = to_state(1) - Params::goal_vel_x();
+        // double dx = to_state(0); // - Params::goal_pos_x();
+        // // exp(-0.5/sigma*(Δcos^2/4 + Δx*(Δsin/2 + Δx) + Δsin*(Δsin/4 + Δx/2))
+        // // double derr = (dcos * dcos) / 4.0 + dsin * (dsin / 4.0 + dx / 2.0) + dx * (dsin / 2.0 + dx);
+        // // double derr = dx * dx + 2 * dx * 0.5 * dsin + 2 * 0.5 * 0.5 + 2 * 0.5 * 0.5 * dcos;
+        // // return std::exp(-0.5 / s_c_sq * derr);
+        //
+        // return std::exp(-0.5 / s_c_sq * (dx * dx + da * da));
 
-        return std::exp(-0.5 / s_c_sq * (dx * dx + da * da));
+        double x = to_state(0);
+        double theta = to_state(3);
+        double l = 0.5;
+
+        double derr = x * x + 2. * x * l * std::sin(theta) + 2. * l * l + 2. * l * l * std::cos(theta);
+        return std::exp(-0.5 / s_c_sq * derr);
     }
 };
 

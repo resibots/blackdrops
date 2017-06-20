@@ -128,6 +128,7 @@ struct PolicyParams {
         BO_PARAM(size_t, action_dim, Params::blackdrops::action_dim());
         // Velocity limits
         BO_PARAM_ARRAY(double, max_u, 3.0, 3.46, 1.67, 3.0, 3.11);
+        BO_PARAM_ARRAY(double, limits, 3.0, 3.46, 1.67, 3.0, 3.11, M_PI, 1.8, 1.82, M_PI, M_PI / 2.0);
         BO_DYN_PARAM(int, hidden_neurons);
     };
 };

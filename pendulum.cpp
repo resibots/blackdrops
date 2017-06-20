@@ -180,6 +180,7 @@ struct PolicyParams {
         BO_PARAM(size_t, action_dim, Params::blackdrops::action_dim());
         BO_PARAM_ARRAY(double, max_u, 2.5);
         BO_DYN_PARAM(int, hidden_neurons);
+        BO_PARAM_ARRAY(double, limits, 10., 1., 1.);
     };
 
     struct gp_policy {
@@ -188,6 +189,7 @@ struct PolicyParams {
         BO_PARAM_ARRAY(double, max_u, 2.5);
         BO_PARAM(double, pseudo_samples, 20);
         BO_PARAM(double, noise, 1e-5);
+        BO_PARAM_ARRAY(double, limits, 10., 1., 1.);
     };
 
     struct kernel : public limbo::defaults::kernel {

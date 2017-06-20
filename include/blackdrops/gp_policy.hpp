@@ -31,12 +31,11 @@ namespace blackdrops {
             _ps = Params::gp_policy::pseudo_samples();
             _params = Eigen::VectorXd::Zero(_ps * _sdim + _adim * (_ps + _sdim + 1));
             _limits = Eigen::VectorXd::Constant(Params::nn_policy::state_dim(), 1.0);
-        }
 
-        template <typename Model>
-        void normalize(const Model& model)
-        {
-            _limits = model.limits().head(Params::nn_policy::state_dim());
+            // Get the limits
+            for (int i = 0; i < _limits.size(); i++) {
+                _limits(i) = Params::gp_policy::limits(i);
+            }
         }
 
         Eigen::VectorXd next(const Eigen::VectorXd& state) const

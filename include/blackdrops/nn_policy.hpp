@@ -22,12 +22,11 @@ namespace blackdrops {
             _nn->init();
             _params = Eigen::VectorXd::Zero(_nn->get_nb_connections());
             _limits = Eigen::VectorXd::Constant(Params::nn_policy::state_dim(), 1.0);
-        }
 
-        template <typename Model>
-        void normalize(const Model& model)
-        {
-            _limits = model.limits().head(Params::nn_policy::state_dim());
+            // Get the limits
+            for (int i = 0; i < _limits.size(); i++) {
+                _limits(i) = Params::nn_policy::limits(i);
+            }
         }
 
         Eigen::VectorXd next(const Eigen::VectorXd& state) const
