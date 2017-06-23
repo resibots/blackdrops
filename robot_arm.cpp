@@ -111,6 +111,7 @@ struct PolicyParams {
         BO_PARAM_ARRAY(double, max_u, 1.0, 1.0, 1.0, 1.0);
         BO_PARAM_ARRAY(double, limits, 1., 1., 1., 1., 1., 1., 1., 1.);
         BO_DYN_PARAM(int, hidden_neurons);
+        BO_PARAM(double, af, 1.0);
     };
 };
 

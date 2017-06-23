@@ -46,11 +46,11 @@
 #ifndef MULTI_GP_WHOLE_OPT_HPP
 #define MULTI_GP_WHOLE_OPT_HPP
 
-#include <limbo/model/gp/hp_opt.hpp>
-#include <limbo/tools/random_generator.hpp>
 #include <blackdrops/binary_matrix.hpp>
-#include <limbo/model/gp/kernel_lf_opt.hpp>
 #include <blackdrops/kernel_lf_opt.hpp>
+#include <limbo/model/gp/hp_opt.hpp>
+#include <limbo/model/gp/kernel_lf_opt.hpp>
+#include <limbo/tools/random_generator.hpp>
 #include <limits>
 
 namespace blackdrops {

@@ -27,6 +27,9 @@ namespace blackdrops {
             for (int i = 0; i < _limits.size(); i++) {
                 _limits(i) = Params::nn_policy::limits(i);
             }
+
+            std::vector<float> afs(_nn->get_nb_neurons(), Params::nn_policy::af());
+            _nn->set_all_afparams(afs);
         }
 
         Eigen::VectorXd next(const Eigen::VectorXd& state) const

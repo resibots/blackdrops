@@ -1,4 +1,7 @@
+#include <future>
 #include <limbo/limbo.hpp>
+
+#include <trac_ik/trac_ik.hpp>
 
 #include <boost/program_options.hpp>
 
@@ -8,16 +11,16 @@
 #include <robot_dart/graphics.hpp>
 #endif
 
+#include <blackdrops/blackdrops.hpp>
 #include <blackdrops/cmaes.hpp>
 #include <blackdrops/gp_model.hpp>
 #include <blackdrops/gp_multi_model.hpp>
+#include <blackdrops/kernel_lf_opt.hpp>
 #include <blackdrops/multi_gp.hpp>
 #include <blackdrops/multi_gp_whole_opt.hpp>
 #include <blackdrops/parallel_gp.hpp>
 #include <spt/poegp.hpp>
 #include <spt/poegp_lf_opt.hpp>
-#include <blackdrops/kernel_lf_opt.hpp>
-#include <blackdrops/blackdrops.hpp>
 
 #include <blackdrops/gp_policy.hpp>
 #include <blackdrops/nn_policy.hpp>
@@ -54,17 +57,27 @@ struct Params {
         BO_PARAM(bool, bounded, true);
     };
 
-    BO_PARAM(double, goal_pos, -M_PI / 2.0);
-
     struct blackdrops {
+        BO_PARAM(double, dt, 0.1);
+        BO_PARAM(double, t, 4.0);
         BO_PARAM(size_t, action_dim, 5);
-        BO_PARAM(size_t, state_full_dim, 11);
-        BO_PARAM(size_t, model_input_dim, 11);
-        BO_PARAM(size_t, model_pred_dim, 11);
+        BO_PARAM(size_t, state_full_dim, 10);
+        BO_PARAM(size_t, model_input_dim, 10);
+        BO_PARAM(size_t, model_pred_dim, 10);
+        // BO_PARAM(size_t, state_full_dim, 11);
+        // BO_PARAM(size_t, model_input_dim, 11);
+        // BO_PARAM(size_t, model_pred_dim, 11);
         // TO-DO: See how many steps
-        BO_PARAM(size_t, rollout_steps, 100);
+        BO_PARAM(size_t, rollout_steps, std::round(t() / dt()));
         BO_DYN_PARAM(double, boundary);
         BO_DYN_PARAM(bool, verbose);
+    };
+
+    struct damages {
+        BO_PARAM_ARRAY(double, vel_offsets, 0.4, 0., 0., 0., 0.);
+        BO_PARAM_ARRAY(double, offsets, 0., 0., 0., 0., 0.);
+        BO_PARAM_ARRAY(int, blocked_jnts, 3);
+        BO_PARAM_ARRAY(double, blocked_values, M_PI / 6.0);
     };
 
     struct gp_model {
@@ -112,6 +125,7 @@ struct Params {
 
     struct opt_rprop : public limbo::defaults::opt_rprop {
         BO_PARAM(int, iterations, 150);
+        BO_PARAM(double, eps_stop, 1e-4);
     };
 
     struct opt_parallelrepeater : public limbo::defaults::opt_parallelrepeater {
@@ -130,23 +144,110 @@ struct PolicyParams {
         BO_PARAM_ARRAY(double, max_u, 3.0, 3.46, 1.67, 3.0, 3.11);
         BO_PARAM_ARRAY(double, limits, 3.0, 3.46, 1.67, 3.0, 3.11, M_PI, 1.8, 1.82, M_PI, M_PI / 2.0);
         BO_DYN_PARAM(int, hidden_neurons);
-        BO_PARAM(double, af, 1.0);
+        BO_PARAM(double, af, 0.5);
     };
 };
 
 namespace global {
-    std::shared_ptr<robot_dart::Robot> global_robot, door_robot;
+    // FK/IK solvers
+    std::shared_ptr<TRAC_IK::TRAC_IK> _ik_solver;
+    std::shared_ptr<KDL::ChainFkSolverPos_recursive> _fk_solver;
+
+    std::shared_ptr<robot_dart::Robot> global_robot; //, door_robot;
+    dart::dynamics::SkeletonPtr object_skel;
+    Eigen::VectorXd init_goal, goal;
+    std::vector<dart::dynamics::SkeletonPtr> available_robots;
+    std::vector<bool> used_robots, recreating_robots;
+    std::mutex robot_mutex;
+    int n_robots = 100;
+    bool end = false;
 }
 
-Eigen::VectorXd get_robot_state(const std::shared_ptr<robot_dart::Robot>& robot, const std::shared_ptr<robot_dart::Robot>& door)
+dart::dynamics::SkeletonPtr get_available_robot()
+{
+    std::lock_guard<std::mutex> lock(global::robot_mutex);
+    for (int i = 0; i < global::n_robots; i++) {
+        // std::lock_guard<std::mutex> lock(global::robot_mutex);
+        if (global::used_robots[i] == false && global::recreating_robots[i] == false) {
+            // std::lock_guard<std::mutex> lock(global::robot_mutex);
+            // std::cout << "Giving robot '" << i << "'" << std::endl;
+            global::used_robots[i] = true;
+            return global::available_robots[i];
+        }
+    }
+
+    return nullptr;
+}
+
+bool release_robot(const dart::dynamics::SkeletonPtr& robot)
+{
+    std::lock_guard<std::mutex> lock(global::robot_mutex);
+    for (int i = 0; i < global::n_robots; i++) {
+        // std::lock_guard<std::mutex> lock(global::robot_mutex);
+        if (global::available_robots[i] == robot) {
+            // std::lock_guard<std::mutex> lock(global::robot_mutex);
+            // std::cout << "Releasing robot '" << i << "'" << std::endl;
+            global::used_robots[i] = false;
+            global::recreating_robots[i] = true;
+            return true;
+        }
+    }
+
+    return false;
+}
+
+void recreate_robots()
+{
+    while (!global::end) {
+        std::lock_guard<std::mutex> lock(global::robot_mutex);
+        for (int i = 0; i < global::n_robots; i++) {
+            // std::lock_guard<std::mutex> lock(global::robot_mutex);
+            if (global::recreating_robots[i]) {
+                // std::lock_guard<std::mutex> lock(global::robot_mutex);
+                // std::cout << "Recreating robot '" << i << "'" << std::endl;
+                global::available_robots[i]->clearExternalForces();
+                global::available_robots[i]->clearInternalForces();
+                global::available_robots[i]->clearConstraintImpulses();
+                global::available_robots[i]->resetPositions();
+                global::available_robots[i]->resetVelocities();
+                global::available_robots[i]->resetAccelerations();
+                global::available_robots[i]->resetGeneralizedForces();
+                global::available_robots[i]->resetCommands();
+                for (int j = 0; j < global::available_robots[i]->getNumDofs(); j++) {
+                    auto d = global::available_robots[i]->getDof(j);
+                    d->resetPosition();
+                    d->resetVelocity();
+                    d->resetAcceleration();
+                    d->resetForce();
+                    d->resetVelocityChange();
+                    d->resetConstraintImpulse();
+                    d->resetCommand();
+                }
+                for (int j = 0; j < global::available_robots[i]->getNumJoints(); j++) {
+                    auto d = global::available_robots[i]->getJoint(j);
+                    d->resetPositions();
+                    d->resetVelocities();
+                    d->resetAccelerations();
+                    d->resetForces();
+                    d->resetVelocityChanges();
+                    d->resetConstraintImpulses();
+                    d->resetCommands();
+                }
+                global::recreating_robots[i] = false;
+            }
+        }
+    }
+}
+
+Eigen::VectorXd get_robot_state(const std::shared_ptr<robot_dart::Robot>& robot) //, const std::shared_ptr<robot_dart::Robot>& ball)
 {
     Eigen::VectorXd pos = robot->skeleton()->getPositions();
     Eigen::VectorXd vels = robot->skeleton()->getVelocities();
-    size_t size = vels.size() + pos.size() + 1;
+    size_t size = vels.size() + pos.size(); // + 3;
     Eigen::VectorXd state(size);
     state.head(vels.size()) = vels;
     state.segment(vels.size(), pos.size()) = pos;
-    state.tail(1) = door->skeleton()->getPositions();
+    // state.tail(1) = ball->skeleton()->getPositions();
 
     return state;
 }
@@ -161,9 +262,9 @@ public:
     {
         // _robot->set_actuator_types(dart::dynamics::Joint::SERVO);
         size_t _start_dof = 0;
-        if (!_robot->fixed_to_world()) {
-            _start_dof = 6;
-        }
+        // if (!_robot->fixed_to_world()) {
+        //     _start_dof = 6;
+        // }
         std::vector<size_t> indices;
         std::vector<dart::dynamics::Joint::ActuatorType> types;
         for (size_t i = _start_dof; i < _dof; i++) {
@@ -186,23 +287,40 @@ public:
 
     void set_commands()
     {
-        double dt = 0.05;
+        double dt = Params::blackdrops::dt();
 
         // std::cout << _t << " vs " << _prev_time << " --> " << (_t - _prev_time) << std::endl;
         if (_t == 0.0 || (_t - _prev_time - dt) >= -1e-5) {
             // std::cout << "in" << std::endl;
             // std::cout << _t << " vs " << _prev_time << " --> " << (_t - _prev_time) << std::endl;
-            Eigen::VectorXd state = get_robot_state(_robot, door);
+            Eigen::VectorXd state = get_robot_state(_robot); //, door);
             Eigen::VectorXd vel = state.head(5);
             Eigen::VectorXd pos = state.segment(5, 5);
+            // // apply offsets/sensor damages
+            // for (size_t i = 0; i < 5; i++) {
+            //     pos(i) += Params::damages::offsets(i);
+            // }
+            // state.segment(5, 5) = pos;
             Eigen::VectorXd commands = policy.next(state);
 
             qs->push_back(pos);
             vels->push_back(vel);
             coms->push_back(commands);
-            doors->push_back(state.tail(1)[0]);
+            // doors->push_back(state.tail(1)[0]);
+
+            // blocked joints
+            for (size_t i = 0; i < Params::damages::blocked_jnts_size(); i++) {
+                if (Params::damages::blocked_jnts(i) == -1)
+                    continue;
+                commands(Params::damages::blocked_jnts(i)) = 0.0;
+                _robot->skeleton()->setPosition(Params::damages::blocked_jnts(i), Params::damages::blocked_values(i));
+            }
 
             assert(_dof == (size_t)commands.size());
+            // apply velocity offsets
+            for (size_t i = 0; i < 5; i++) {
+                commands(i) += Params::damages::vel_offsets(i);
+            }
             _robot->skeleton()->setCommands(commands);
             _prev_commands = commands;
             _prev_time = _t; //int(_t / dt) * dt;
@@ -214,8 +332,8 @@ public:
     std::vector<Eigen::VectorXd>* qs;
     std::vector<Eigen::VectorXd>* vels;
     std::vector<Eigen::VectorXd>* coms;
-    std::vector<double>* doors;
-    std::shared_ptr<robot_dart::Robot> door;
+    // std::vector<double>* doors;
+    // std::shared_ptr<robot_dart::Robot> door;
     blackdrops::NNPolicy<PolicyParams> policy;
 
 protected:
@@ -228,7 +346,7 @@ struct Omnigrasper {
     template <typename Policy, typename Reward>
     std::vector<std::tuple<Eigen::VectorXd, Eigen::VectorXd, Eigen::VectorXd>> execute(const Policy& policy, const Reward& world, size_t steps, std::vector<double>& R, bool display = true)
     {
-        double t = 5.0;
+        double t = Params::blackdrops::t();
 
 #ifndef GRAPHIC
         using robot_simu_t = robot_dart::RobotDARTSimu<robot_dart::robot_control<PolicyControl>>; //, robot_dart::collision<dart::collision::FCLCollisionDetector>>;
@@ -242,54 +360,54 @@ struct Omnigrasper {
         Eigen::VectorXd::Map(ctrl.data(), ctrl.size()) = ctrl_params;
 
         auto c_robot = global::global_robot->clone();
-        c_robot->fix_to_world();
-        c_robot->set_position_enforced(true);
+        // c_robot->fix_to_world();
+        // c_robot->set_position_enforced(true);
 
-        auto c_door = global::door_robot->clone();
+        // auto c_door = global::door_robot->clone();
 
         auto simu = robot_simu_t(ctrl, c_robot);
         simu.controller().policy = policy;
-        simu.controller().door = c_door;
+        // simu.controller().door = c_door;
 
-        Eigen::Vector6d pose = Eigen::VectorXd::Zero(6);
-        pose.tail(3) = Eigen::Vector3d(-0.6, 0.0, 0.0);
-        pose.head(3) = Eigen::Vector3d(0, 0, -dart::math::constants<double>::pi() / 2.0);
-        simu.add_skeleton(c_door->skeleton(), pose, "fixed", "door");
+        // Eigen::Vector6d pose = Eigen::VectorXd::Zero(6);
+        // pose.tail(3) = Eigen::Vector3d(-0.6, 0.0, 0.0);
+        // pose.head(3) = Eigen::Vector3d(0, 0, -dart::math::constants<double>::pi() / 2.0);
+        // simu.add_skeleton(c_door->skeleton(), pose, "fixed", "door");
 
         simu.set_step(0.01);
         simu.add_floor();
 
         std::vector<Eigen::VectorXd> qs, coms, vels;
-        std::vector<double> doors;
+        // std::vector<double> doors;
 
         simu.controller().qs = &qs;
         simu.controller().vels = &vels;
         simu.controller().coms = &coms;
-        simu.controller().doors = &doors;
+        // simu.controller().doors = &doors;
 
-#ifdef GRAPHIC
-        simu.graphics()->fixed_camera(Eigen::Vector3d(1.0, 1.0, 1.5), Eigen::Vector3d(-0.6, 0.0, 0.0));
-#endif
+        // #ifdef GRAPHIC
+        //         simu.graphics()->fixed_camera(Eigen::Vector3d(1.0, 1.0, 1.5), Eigen::Vector3d(-0.6, 0.0, 0.0));
+        // #endif
 
         simu.run(t);
 
-        assert(doors.size() == 101);
+        // assert(doors.size() == 101);
         R = std::vector<double>();
 
         std::vector<std::tuple<Eigen::VectorXd, Eigen::VectorXd, Eigen::VectorXd>> ret;
 
-        for (size_t i = 0; i < doors.size() - 1; i++) {
+        for (size_t i = 0; i < vels.size() - 1; i++) {
             Eigen::VectorXd state(Params::blackdrops::model_input_dim());
             state.head(5) = vels[i];
             state.segment(5, 5) = qs[i];
-            state.tail(1) = limbo::tools::make_vector(doors[i]);
+            // state.tail(1) = limbo::tools::make_vector(doors[i]);
 
             Eigen::VectorXd command = coms[i];
 
             Eigen::VectorXd to_state(Params::blackdrops::model_input_dim());
             to_state.head(5) = vels[i + 1];
             to_state.segment(5, 5) = qs[i + 1];
-            to_state.tail(1) = limbo::tools::make_vector(doors[i + 1]);
+            // to_state.tail(1) = limbo::tools::make_vector(doors[i + 1]);
 
             ret.push_back(std::make_tuple(state, command, to_state - state));
             R.push_back(world(state, command, to_state));
@@ -335,8 +453,8 @@ struct Omnigrasper {
         // init state
         Eigen::VectorXd init = Eigen::VectorXd::Zero(Params::blackdrops::model_pred_dim());
         for (size_t j = 0; j < steps; j++) {
-            if (init.norm() > 50)
-                break;
+            // if (init.norm() > 50)
+            //     break;
             Eigen::VectorXd query_vec(Params::blackdrops::model_input_dim() + Params::blackdrops::action_dim());
             Eigen::VectorXd u = policy.next(init);
             query_vec.head(Params::blackdrops::model_input_dim()) = init;
@@ -368,10 +486,22 @@ struct Omnigrasper {
 struct RewardFunction {
     double operator()(const Eigen::VectorXd& from_state, const Eigen::VectorXd& action, const Eigen::VectorXd& to_state) const
     {
+        // Eigen::VectorXd goal_state(5);
+        // goal_state << 0, 0, M_PI / 4.0, M_PI / 4.0, M_PI / 4.0;
         double s_c_sq = 0.1 * 0.1;
-        double da = angle_dist(Params::goal_pos(), to_state.tail(1)[0]);
 
-        return std::exp(-0.5 / s_c_sq * da * da);
+        // get goal position
+        KDL::Frame end_effector_pose;
+        KDL::JntArray q(5);
+        for (uint j = 0; j < 5; j++) {
+            q(j) = to_state(5 + j);
+        }
+
+        global::_fk_solver->JntToCart(q, end_effector_pose);
+        Eigen::VectorXd end_eff = Eigen::VectorXd::Map(end_effector_pose.p.data, 3);
+        double da = (global::goal - end_eff).squaredNorm();
+
+        return std::exp(-0.5 / s_c_sq * da);
     }
 };
 
@@ -386,9 +516,9 @@ public:
     {
         // _robot->set_actuator_types(dart::dynamics::Joint::SERVO);
         size_t _start_dof = 0;
-        if (!_robot->fixed_to_world()) {
-            _start_dof = 6;
-        }
+        // if (!_robot->fixed_to_world()) {
+        //     _start_dof = 6;
+        // }
         std::vector<size_t> indices;
         std::vector<dart::dynamics::Joint::ActuatorType> types;
         for (size_t i = _start_dof; i < _dof; i++) {
@@ -399,103 +529,113 @@ public:
         _robot->set_actuator_types(indices, types);
 
         _velocities = Eigen::VectorXd::Map(ctrl.data(), ctrl.size());
+        _t = 0.0;
+        _prev_time = 0.0;
     }
 
     void update(double t)
     {
+        _t = t;
         set_commands();
     }
 
     void set_commands()
     {
-        Eigen::VectorXd state = get_robot_state(_robot, door);
-        Eigen::VectorXd vel = state.head(5);
-        Eigen::VectorXd pos = state.segment(5, 5);
+        double dt = Params::blackdrops::dt();
+        if (_t == 0.0 || (_t - _prev_time - dt) >= -1e-5) {
+            _state = get_robot_state(_robot);
 
-        qs->push_back(pos);
-        vels->push_back(vel);
-        doors->push_back(state.tail(1)[0]);
+            _prev_time = _t;
+        }
 
         assert(_dof == (size_t)_velocities.size());
         _robot->skeleton()->setCommands(_velocities);
     }
 
-    std::vector<Eigen::VectorXd>* qs;
-    std::vector<Eigen::VectorXd>* vels;
-    std::vector<double>* doors;
-    std::shared_ptr<robot_dart::Robot> door;
+    Eigen::VectorXd _state;
 
 protected:
     Eigen::VectorXd _velocities;
+    double _t, _prev_time;
 };
 
 struct MeanFunc {
 
-    MeanFunc(int dim_out = 1) {}
+    MeanFunc(int dim_out = 1)
+    {
+        _params = Eigen::VectorXd::Zero(5);
+        _params << 0.5, 0.5, 0.5, 0.5, 0.5;
+        // _params(0) = (0.2 + 1.0) / 2.0; // 0.2 offset
+    }
 
     template <typename GP>
     Eigen::VectorXd operator()(const Eigen::VectorXd& v, const GP& gp) const
     {
-        double dt = 0.05;
+        double dt = Params::blackdrops::dt();
 
-        using robot_simu_t = robot_dart::RobotDARTSimu<robot_dart::robot_control<VelocityControl>>; //, robot_dart::collision<dart::collision::FCLCollisionDetector>>;
-        // #ifndef GRAPHIC
-        //         using robot_simu_t = robot_dart::RobotDARTSimu<robot_dart::robot_control<VelocityControl>, robot_dart::collision<dart::collision::FCLCollisionDetector>>;
-        // #else
-        //         using robot_simu_t = robot_dart::RobotDARTSimu<robot_dart::robot_control<VelocityControl>, robot_dart::collision<dart::collision::FCLCollisionDetector>, robot_dart::graphics<robot_dart::Graphics<Params>>>;
-        // #endif
+        // Eigen::VectorXd state = v.head(10);
+        // Eigen::VectorXd u = v.tail(5);
+        //
+        // Eigen::VectorXd to_state = state;
+        // to_state.head(5) = (1.0 - _params.array()) * u.array() + _params.array() * state.head(5).array();
+        // to_state.tail(5) = state.tail(5).array() + (1.0 - _params.array()) * u.array() * dt + _params.array() * state.head(5).array() * dt;
+        //
+        // if (_lower_limits.size()) {
+        //     for (int i = 0; i < 5; i++) {
+        //         if (to_state(5 + i) < _lower_limits(i))
+        //             to_state(5 + i) = _lower_limits(i);
+        //         if (to_state(5 + i) > _upper_limits(i))
+        //             to_state(5 + i) = _upper_limits(i);
+        //     }
+        // }
+        //
+        // return (to_state - state);
+
+        using robot_simu_t = robot_dart::RobotDARTSimu<robot_dart::robot_control<VelocityControl>>;
+        // using robot_simu_t = robot_dart::RobotDARTSimu<robot_dart::robot_control<VelocityControl>, robot_dart::graphics<robot_dart::Graphics<Params>>>;
 
         Eigen::VectorXd ctrl_params = v.tail(5);
+        for (int i = 0; i < _params.size(); i++)
+            ctrl_params(i) += _params(i) * 2.0 - 1.0;
+        // std::cout << v.tail(5).transpose() << " vs " << ctrl_params.transpose() << std::endl;
 
         std::vector<double> ctrl(ctrl_params.size(), 0.0);
         Eigen::VectorXd::Map(ctrl.data(), ctrl.size()) = ctrl_params;
 
-        auto c_robot = global::global_robot->clone();
-        c_robot->fix_to_world();
-        c_robot->set_position_enforced(true);
-
-        auto c_door = global::door_robot->clone();
+        auto rob = get_available_robot();
+        while (rob == nullptr)
+            rob = get_available_robot();
+        // for (size_t i = 0; i < rob->getNumDofs(); i++) {
+        //     auto j = rob->getDof(i)->getJoint();
+        //     j->setSpringStiffness(0, 0.0);
+        //     j->setDampingCoefficient(0, 0.0);
+        //     j->setCoulombFriction(0, 0.0);
+        // }
+        auto c_robot = std::make_shared<robot_dart::Robot>(rob);
+        // auto c_robot = global::global_robot->clone();
+        // c_robot->fix_to_world();
+        // c_robot->set_position_enforced(true);
 
         auto simu = robot_simu_t(ctrl, c_robot);
+
+        simu.set_step(0.01);
+        simu.add_floor();
+
         Eigen::VectorXd velocities = v.head(5);
         Eigen::VectorXd positions = v.segment(5, 5);
         c_robot->skeleton()->setVelocities(velocities);
         c_robot->skeleton()->setPositions(positions);
-        simu.controller().door = c_door;
-
-        Eigen::Vector6d pose = Eigen::VectorXd::Zero(6);
-        pose.tail(3) = Eigen::Vector3d(-0.6, 0.0, 0.0);
-        pose.head(3) = Eigen::Vector3d(0, 0, -dart::math::constants<double>::pi() / 2.0);
-        simu.add_skeleton(c_door->skeleton(), pose, "fixed", "door");
-        c_door->skeleton()->setPositions(v.segment(10, 1));
-
-        simu.set_step(0.05);
-        simu.add_floor();
-
-        std::vector<Eigen::VectorXd> qs, vels;
-        std::vector<double> doors;
-
-        simu.controller().qs = &qs;
-        simu.controller().vels = &vels;
-        simu.controller().doors = &doors;
-
-        // #ifdef GRAPHIC
-        //         simu.graphics()->fixed_camera(Eigen::Vector3d(1.0, 1.0, 1.5), Eigen::Vector3d(-0.6, 0.0, 0.0));
-        // #endif
 
         simu.run(dt + 0.01);
+        // std::cout << simu.world()->getTime() << std::endl;
 
         // assert(doors.size() == 1);
 
-        Eigen::VectorXd state = v.head(11);
+        Eigen::VectorXd state = v.head(10);
 
-        Eigen::VectorXd command = ctrl_params;
+        Eigen::VectorXd to_state = simu.controller()._state; //get_robot_state(c_robot);
 
-        Eigen::VectorXd to_state(Params::blackdrops::model_input_dim());
-        to_state.head(5) = vels.back();
-        to_state.segment(5, 5) = qs.back();
-        to_state.tail(1) = limbo::tools::make_vector(doors.back());
-        // std::cout << state.transpose() << " ---> " << to_state.transpose() << " with " << ctrl_params.transpose() << std::endl;
+        release_robot(c_robot->skeleton());
 
         return (to_state - state);
     }
@@ -512,11 +652,126 @@ protected:
 };
 #endif
 
-void init_simu(const std::string& robot_file, const std::string& door_file)
+void init_simu(const std::string& robot_file) //, const std::string& door_file)
 {
     global::global_robot = std::make_shared<robot_dart::Robot>(robot_dart::Robot(robot_file, {}, "arm", true));
-    global::door_robot = std::make_shared<robot_dart::Robot>(robot_dart::Robot(door_file, {}, "door", true));
+    // global::door_robot = std::make_shared<robot_dart::Robot>(robot_dart::Robot(door_file, {}, "door", true));
+
+    // Initialize FK/IK solvers
+    global::_ik_solver = std::make_shared<TRAC_IK::TRAC_IK>(robot_file, "base_link", "end_eff", 0.005, 1e-5);
+    KDL::Chain chain;
+    KDL::JntArray ll, ul;
+
+    bool valid = global::_ik_solver->getKDLChain(chain);
+
+    if (!valid) {
+        std::cerr << "There was no valid KDL chain found" << std::endl;
+        return;
+    }
+
+    valid = global::_ik_solver->getKDLLimits(ll, ul);
+
+    if (!valid) {
+        std::cerr << "There were no valid KDL joint limits found" << std::endl;
+        return;
+    }
+
+    assert(chain.getNrOfJoints() == ll.data.size());
+    assert(chain.getNrOfJoints() == ul.data.size());
+
+    global::_fk_solver = std::make_shared<KDL::ChainFkSolverPos_recursive>(chain);
+
+    // get goal position
+    KDL::Frame end_effector_pose;
+    Eigen::VectorXd q_desired(5);
+    // q_desired << 2., 0., 0.45, -0.4, 0.1;
+    q_desired << M_PI / 6.0, 0, M_PI / 4.0, M_PI / 4.0, M_PI / 4.0;
+    KDL::JntArray q(chain.getNrOfJoints());
+    for (uint j = 0; j < ll.data.size(); j++) {
+        q(j) = q_desired(j);
+    }
+
+    global::_fk_solver->JntToCart(q, end_effector_pose);
+    global::goal = Eigen::VectorXd::Map(end_effector_pose.p.data, 3);
+
+    global::available_robots.clear();
+    global::used_robots.clear();
+    global::recreating_robots.clear();
+
+    global::global_robot->fix_to_world();
+    global::global_robot->set_position_enforced(true);
+
+    for (int i = 0; i < global::n_robots; i++) {
+        global::available_robots.push_back(global::global_robot->skeleton()->clone());
+        // global::available_robots.back()->fix_to_world();
+        // global::available_robots.back()->set_position_enforced(true);
+        global::used_robots.push_back(false);
+        global::recreating_robots.push_back(false);
+    }
 }
+
+// limbo::opt::eval_t optimize_policy(const Eigen::VectorXd& params, bool eval_grad = false)
+// {
+//     RewardFunction world;
+//     blackdrops::NNPolicy<PolicyParams> policy;
+//
+//     policy.set_params(params.array());
+//
+//     double r = 0.0;
+//
+//     double t = Params::blackdrops::t();
+//
+//     using robot_simu_t = robot_dart::RobotDARTSimu<robot_dart::robot_control<PolicyControl>>; //, robot_dart::collision<dart::collision::FCLCollisionDetector>>;
+//
+//     Eigen::VectorXd ctrl_params = policy.params();
+//
+//     std::vector<double> ctrl(ctrl_params.size(), 0.0);
+//     Eigen::VectorXd::Map(ctrl.data(), ctrl.size()) = ctrl_params;
+//
+//     // std::cout << "I want a robot!" << std::endl;
+//     auto rob = get_available_robot();
+//     while (rob == nullptr)
+//         rob = get_available_robot();
+//     auto c_robot = std::make_shared<robot_dart::Robot>(rob); // global::global_robot->clone();
+//     c_robot->fix_to_world();
+//     c_robot->set_position_enforced(true);
+//
+//     // auto c_door = global::door_robot->clone();
+//
+//     auto simu = robot_simu_t(ctrl, c_robot);
+//     simu.controller().policy = policy;
+//
+//     simu.set_step(0.01);
+//     simu.add_floor();
+//
+//     std::vector<Eigen::VectorXd> qs, coms, vels;
+//     // std::vector<double> doors;
+//
+//     simu.controller().qs = &qs;
+//     simu.controller().vels = &vels;
+//     simu.controller().coms = &coms;
+//
+//     simu.run(t);
+//
+//     for (size_t i = 0; i < vels.size() - 1; i++) {
+//         Eigen::VectorXd state(Params::blackdrops::model_input_dim());
+//         state.head(5) = vels[i];
+//         state.segment(5, 5) = qs[i];
+//         // state.tail(1) = limbo::tools::make_vector(doors[i]);
+//
+//         Eigen::VectorXd command = coms[i];
+//
+//         Eigen::VectorXd to_state(Params::blackdrops::model_input_dim());
+//         to_state.head(5) = vels[i + 1];
+//         to_state.segment(5, 5) = qs[i + 1];
+//
+//         r += world(state, command, to_state);
+//     }
+//
+//     // std::cout << "Do not need the robot!" << std::endl;
+//     release_robot(c_robot->skeleton());
+//     return limbo::opt::no_grad(r);
+// }
 
 BO_DECLARE_DYN_PARAM(size_t, Params, parallel_evaluations);
 BO_DECLARE_DYN_PARAM(int, PolicyParams::nn_policy, hidden_neurons);
@@ -648,9 +903,9 @@ int main(int argc, char** argv)
     const char* env_p = std::getenv("RESIBOTS_DIR");
     // initilisation of the simulation and the simulated robot
     if (env_p) //if the environment variable exists
-        init_simu(std::string(std::getenv("RESIBOTS_DIR")) + "/share/arm_models/URDF/omnigrasper_hook.urdf", std::string(std::getenv("RESIBOTS_DIR")) + "/share/robot_models/URDF/door.urdf");
+        init_simu(std::string(std::getenv("RESIBOTS_DIR")) + "/share/arm_models/URDF/omnigrasper_hook_real.urdf"); //, std::string(std::getenv("RESIBOTS_DIR")) + "/share/robot_models/URDF/door.urdf");
     else //if it does not exist, we might be running this on the cluster
-        init_simu("/nfs/hal01/kchatzil/Workspaces/ResiBots/share/arm_models/URDF/omnigrasper_hook.urdf", "/nfs/hal01/kchatzil/Workspaces/ResiBots/share/robot_models/URDF/door.urdf");
+        init_simu("/nfs/hal01/kchatzil/Workspaces/ResiBots/share/arm_models/URDF/omnigrasper_hook_real.urdf"); //, "/nfs/hal01/kchatzil/Workspaces/ResiBots/share/robot_models/URDF/door.urdf");
 
     using policy_opt_t = limbo::opt::CustomCmaes<Params>;
 
@@ -676,9 +931,69 @@ int main(int argc, char** argv)
     using MGP_t = blackdrops::GPModel<Params, GP_t>;
 #endif
 
+    auto fut = std::async(std::launch::async, recreate_robots);
+    // auto start = std::chrono::high_resolution_clock::now();
     blackdrops::BlackDROPS<Params, MGP_t, Omnigrasper, blackdrops::NNPolicy<PolicyParams>, policy_opt_t, RewardFunction> omni_door;
 
-    omni_door.learn(1, 15);
+    omni_door.learn(1, 15, true);
+    // Omnigrasper robot;
+    // blackdrops::NNPolicy<PolicyParams> policy;
+    // policy.set_random_policy();
+    // policy.set_params(policy.params());
+    // std::vector<double> R;
+    // RewardFunction world;
+    // // Execute best policy so far on robot
+    // auto obs_new = robot.execute(policy, world, Params::blackdrops::rollout_steps(), R);
+    //
+    // std::vector<Eigen::VectorXd> states, commands, states_mean;
+    // for (size_t i = 0; i < obs_new.size(); i++) {
+    //     Eigen::VectorXd st, act, pred;
+    //     st = std::get<0>(obs_new[i]);
+    //     act = std::get<1>(obs_new[i]);
+    //     pred = std::get<2>(obs_new[i]);
+    //
+    //     states.push_back(st);
+    //     commands.push_back(act);
+    // }
+    //
+    // MeanFunc model;
+    //
+    // // init state
+    // Eigen::VectorXd init_state = Eigen::VectorXd::Zero(Params::blackdrops::model_pred_dim());
+    // for (size_t j = 0; j < 40; j++) {
+    //     states_mean.push_back(init_state);
+    //     Eigen::VectorXd query_vec(Params::blackdrops::model_input_dim() + Params::blackdrops::action_dim());
+    //
+    //     Eigen::VectorXd u = commands[j];
+    //     query_vec.head(Params::blackdrops::model_input_dim()) = init_state;
+    //     query_vec.tail(Params::blackdrops::action_dim()) = u;
+    //
+    //     Eigen::VectorXd mu = model(query_vec, query_vec);
+    //
+    //     Eigen::VectorXd final = init_state + mu;
+    //
+    //     // double r = world(init, mu, final);
+    //     // R.push_back(r);
+    //     init_state = final;
+    // }
+    //
+    // assert(states.size() == states_mean.size());
+    // int n_errors = 0;
+    // for (int i = 0; i < states.size(); i++) {
+    //     std::cout << states[i].transpose() << " vs " << states_mean[i].transpose() << std::endl;
+    //     if (states[i].isApprox(states_mean[i], 1e-5))
+    //         std::cout << "Equal" << std::endl;
+    //     else {
+    //         std::cout << "Not equal!" << std::endl;
+    //         n_errors++;
+    //     }
+    // }
+    //
+    // std::cout << "# errors: " << n_errors << std::endl;
+
+    // auto time1 = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::high_resolution_clock::now() - start).count();
+    // std::cout << "Time(s): " << time1 * 1e-6 << std::endl;
+    global::end = true;
 
     return 0;
 }
