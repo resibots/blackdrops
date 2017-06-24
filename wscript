@@ -90,7 +90,14 @@ def build(bld):
                       uselib_local='limbo',
                       variants = ['SIMU SPGPS'])
 
-    # if bld.get_env()['BUILD_ROBOT'] == True:
+    if bld.get_env()['BUILD_ROBOT'] == True:
+        limbo.create_variants(bld,
+                          source='reacher.cpp',
+                          includes='. ../../src ../ ./include',
+                          target='reacher',
+                          uselib=robot_arm_libs,
+                          uselib_local='limbo',
+                          variants = ['ROBOT', 'ROBOT MEAN', 'ROBOT MEAN MODELIDENT', 'ROBOT MEAN MODELIDENT ONLYMI'])
         # limbo.create_variants(bld,
         #                   source='robot_arm.cpp',
         #                   includes='. ../../src ../ ./include',
