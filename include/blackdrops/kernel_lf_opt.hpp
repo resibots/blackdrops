@@ -1,9 +1,9 @@
 #ifndef BLACKDROPS_KERNEL_LF_OPT
 #define BLACKDROPS_KERNEL_LF_OPT
 
+#include <cmath>
 #include <limbo/model/gp/hp_opt.hpp>
 #include <limbo/tools/random_generator.hpp>
-#include <cmath>
 
 namespace blackdrops {
 
@@ -21,7 +21,6 @@ namespace blackdrops {
             gp.kernel_function().set_h_params(params);
             gp.set_lik(limbo::opt::eval(optimization, params));
             gp.recompute(false);
-            // std::cout << "likelihood: " << gp.get_lik() << std::endl;
         }
 
     protected:

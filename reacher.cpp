@@ -248,7 +248,15 @@ bool release_robot(const dart::dynamics::SkeletonPtr& robot)
             // std::lock_guard<std::mutex> lock(global::robot_mutex);
             // std::cout << "Releasing robot '" << i << "'" << std::endl;
             global::used_robots[i] = false;
-            global::recreating_robots[i] = true;
+            // global::recreating_robots[i] = true;
+            global::available_robots[i]->clearExternalForces();
+            global::available_robots[i]->clearInternalForces();
+            global::available_robots[i]->clearConstraintImpulses();
+            global::available_robots[i]->resetPositions();
+            global::available_robots[i]->resetVelocities();
+            global::available_robots[i]->resetAccelerations();
+            global::available_robots[i]->resetGeneralizedForces();
+            global::available_robots[i]->resetCommands();
             return true;
         }
     }
@@ -609,6 +617,12 @@ struct Omnigrasper {
         R = std::vector<double>();
         // init state
         Eigen::VectorXd init = Eigen::VectorXd::Zero(Params::blackdrops::model_pred_dim());
+        // blocked joints
+        for (size_t i = 0; i < Params::damages::blocked_jnts_size(); i++) {
+            if (Params::damages::blocked_jnts(i) == -1)
+                continue;
+            init(5 + Params::damages::blocked_jnts(i)) = Params::damages::blocked_values(i);
+        }
         for (size_t j = 0; j < steps; j++) {
             Eigen::VectorXd query_vec(Params::blackdrops::model_input_dim() + Params::blackdrops::action_dim());
 
@@ -621,8 +635,9 @@ struct Omnigrasper {
             std::tie(mu, sigma) = model.predictm(query_vec);
 
             Eigen::VectorXd final = init + mu;
+            std::cerr << init.transpose() << " with " << u.transpose() << " ---> " << final.transpose() << std::endl;
 
-            double r = world(init, mu, final);
+            double r = world(init, u, final);
             R.push_back(r);
             init = final;
         }
@@ -634,6 +649,12 @@ struct Omnigrasper {
         double reward = 0.0;
         // init state
         Eigen::VectorXd init = Eigen::VectorXd::Zero(Params::blackdrops::model_pred_dim());
+        // blocked joints
+        for (size_t i = 0; i < Params::damages::blocked_jnts_size(); i++) {
+            if (Params::damages::blocked_jnts(i) == -1)
+                continue;
+            init(5 + Params::damages::blocked_jnts(i)) = Params::damages::blocked_values(i);
+        }
         for (size_t j = 0; j < steps; j++) {
             // if (init.norm() > 50)
             //     break;
@@ -981,7 +1002,7 @@ int main(int argc, char** argv)
     bool uncertainty = false;
     bool verbose = false;
     int threads = tbb::task_scheduler_init::automatic;
-    std::string usb_port = "/dev/ttyUSB0";
+    std::string usb_port = "/dev/ttyUSB0"; //, policy_file = "";
 
     namespace po = boost::program_options;
     po::options_description desc("Command line arguments");
@@ -998,6 +1019,7 @@ int main(int argc, char** argv)
     ("threads,d", po::value<int>(), "Max number of threads used by TBB")
     ("verbose,v", po::bool_switch(&verbose)->default_value(false), "Enable verbose mode.")
     ("usb,s", po::value<std::string>(), "Set the USB port for the robot");
+    // ("policy,f", po::value<std::string>(), "Policy to replay");
     // clang-format on
 
     try {
@@ -1025,6 +1047,9 @@ int main(int argc, char** argv)
         if (vm.count("usb")) {
             usb_port = vm["usb"].as<std::string>();
         }
+        // if (vm.count("policy")) {
+        //     policy_file = vm["policy"].as<std::string>();
+        // }
         if (vm.count("hidden_neurons")) {
             int c = vm["hidden_neurons"].as<int>();
             if (c < 1)
@@ -1134,7 +1159,7 @@ int main(int argc, char** argv)
 #endif
 
 #ifndef MODELIDENT
-    using GP_t = blackdrops::ParallelGP<Params, limbo::model::GP, kernel_t, mean_t, blackdrops::KernelLFOpt<Params>>; //, limbo::opt::NLOptGrad<Params, nlopt::LD_SLSQP>>>;
+    using GP_t = blackdrops::ParallelGP<Params, limbo::model::GP, kernel_t, mean_t, limbo::model::gp::KernelLFOpt<Params>>; //, limbo::opt::NLOptGrad<Params, nlopt::LD_SLSQP>>>;
     using SPGP_t = blackdrops::ParallelGP<Params, spt::POEGP, kernel_t, mean_t, limbo::model::gp::POEKernelLFOpt<Params>>;
 #else
     using GP_t = blackdrops::MultiGP<Params, limbo::model::GP, kernel_t, mean_t, blackdrops::MultiGPWholeLFOpt<Params, limbo::opt::NLOptNoGrad<Params, nlopt::LN_SBPLX>>>;
@@ -1148,15 +1173,28 @@ int main(int argc, char** argv)
     using MGP_t = blackdrops::GPModel<Params, GP_t>;
 #endif
 
-    auto fut = std::async(std::launch::async, recreate_robots);
+    // auto fut = std::async(std::launch::async, recreate_robots);
     // auto start = std::chrono::high_resolution_clock::now();
     blackdrops::BlackDROPS<Params, MGP_t, Omnigrasper, blackdrops::NNPolicy<PolicyParams>, policy_opt_t, RewardFunction> omni_reacher;
 
-    omni_reacher.learn(1, 15, true);
+    omni_reacher.learn(1, 10, true);
+
+    // // Let's just replay
+    // if (policy_file == "") {
+    //     std::cerr << "No file for replay provided.." << std::endl;
+    //     exit(1);
+    // }
+    // if (policy_file == "target") {
+    //     std::vector<double> target = {M_PI / 6.0, 0, M_PI / 4.0, M_PI / 4.0, M_PI / 4.0};
+    //     global::robot_control->go_to_target(target);
+    //     exit(1);
+    // }
     // Omnigrasper robot;
     // blackdrops::NNPolicy<PolicyParams> policy;
     // policy.set_random_policy();
-    // policy.set_params(policy.params());
+    // Eigen::VectorXd pp = policy.params();
+    // Eigen::read_binary(policy_file, pp);
+    // policy.set_params(pp);
     // std::vector<double> R;
     // RewardFunction world;
     // // Execute best policy so far on robot
