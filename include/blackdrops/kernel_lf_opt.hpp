@@ -19,7 +19,7 @@ namespace blackdrops {
             Optimizer optimizer;
             Eigen::VectorXd params = optimizer(optimization, gp.kernel_function().h_params(), false);
             gp.kernel_function().set_h_params(params);
-            gp.set_lik(limbo::opt::eval(optimization, params));
+            gp.set_log_lik(limbo::opt::eval(optimization, params));
             gp.recompute(false);
         }
 

@@ -23,10 +23,9 @@
 #include <blackdrops/multi_gp.hpp>
 #include <blackdrops/multi_gp_whole_opt.hpp>
 #include <blackdrops/parallel_gp.hpp>
-#include <spt/poegp.hpp>
-#include <spt/poegp_lf_opt.hpp>
+#include <limbo/experimental/model/poegp.hpp>
+#include <limbo/experimental/model/poegp/poegp_lf_opt.hpp>
 
-#include <blackdrops/gp_policy.hpp>
 #include <blackdrops/nn_policy.hpp>
 
 template <typename T>
@@ -87,7 +86,7 @@ struct Params {
         BO_PARAM(double, noise, 0.01);
     };
 
-    struct spt_poegp : public spt::defaults::spt_poegp {
+    struct model_poegp : public limbo::defaults::model_poegp {
         BO_PARAM(int, leaf_size, 100);
         BO_PARAM(double, tau, 0.05);
     };
@@ -1160,13 +1159,16 @@ int main(int argc, char** argv)
 
 #ifndef MODELIDENT
     using GP_t = blackdrops::ParallelGP<Params, limbo::model::GP, kernel_t, mean_t, limbo::model::gp::KernelLFOpt<Params>>; //, limbo::opt::NLOptGrad<Params, nlopt::LD_SLSQP>>>;
-    using SPGP_t = blackdrops::ParallelGP<Params, spt::POEGP, kernel_t, mean_t, limbo::model::gp::POEKernelLFOpt<Params>>;
 #else
     using GP_t = blackdrops::MultiGP<Params, limbo::model::GP, kernel_t, mean_t, blackdrops::MultiGPWholeLFOpt<Params, limbo::opt::NLOptNoGrad<Params, nlopt::LN_SBPLX>>>;
-    using SPGP_t = blackdrops::MultiGP<Params, spt::POEGP, kernel_t, mean_t, blackdrops::MultiGPWholeLFOpt<Params, limbo::opt::NLOptNoGrad<Params, nlopt::LN_SBPLX>, limbo::model::gp::POEKernelLFOpt<Params>>>;
 #endif
 
 #ifdef SPGPS
+#ifndef MODELIDENT
+    using SPGP_t = blackdrops::ParallelGP<Params, limbo::experimental::model::POEGP, kernel_t, mean_t, limbo::experimental::model::poegp::POEKernelLFOpt<Params>>;
+#else
+    using SPGP_t = blackdrops::MultiGP<Params, limbo::experimental::model::POEGP, kernel_t, mean_t, blackdrops::MultiGPWholeLFOpt<Params, limbo::opt::NLOptNoGrad<Params, nlopt::LN_SBPLX>, limbo::experimental::model::poegp::POEKernelLFOpt<Params>>>;
+#endif
     using GPMM_t = limbo::model::GPMultiModel<Params, GP_t, SPGP_t>;
     using MGP_t = blackdrops::GPModel<Params, GPMM_t>;
 #else

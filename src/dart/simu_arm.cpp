@@ -1,20 +1,18 @@
-#include <limbo/experimental/model/spgp.hpp>
 #include <limbo/limbo.hpp>
 #include <limbo/mean/constant.hpp>
 
-#include <robot_dart/robot_dart_simu.hpp>
 #include <robot_dart/position_control.hpp>
+#include <robot_dart/robot_dart_simu.hpp>
 #ifdef GRAPHIC
 #include <robot_dart/graphics.hpp>
 #endif
 
 #include <boost/program_options.hpp>
 
+#include <blackdrops/blackdrops.hpp>
 #include <blackdrops/cmaes.hpp>
 #include <blackdrops/gp_model.hpp>
-// #include <blackdrops/gp_multi_model.hpp>
 #include <blackdrops/kernel_lf_opt.hpp>
-#include <blackdrops/blackdrops.hpp>
 #include <blackdrops/parallel_gp.hpp>
 
 #include <blackdrops/gp_policy.hpp>
@@ -55,16 +53,6 @@ struct Params {
     struct gp_model {
         BO_PARAM(double, noise, 0.01);
     };
-
-    // struct model_spgp : public limbo::defaults::model_spgp {
-    //     BO_PARAM(double, samples_percent, 10);
-    //     BO_PARAM(double, jitter, 1e-5);
-    //     BO_PARAM(int, min_m, 100);
-    //     BO_PARAM(double, sig, 0.001);
-    // };
-    // struct model_gpmm : public limbo::defaults::model_gpmm {
-    //     BO_PARAM(int, threshold, 300);
-    // };
 
     struct mean_constant {
         BO_PARAM(double, constant, 0.0);
@@ -762,7 +750,7 @@ int main(int argc, char** argv)
     std::cout << std::endl;
 
     const char* env_p = std::getenv("RESIBOTS_DIR");
-    // initilisation of the simulation and the simulated robot
+    // initialisation of the simulation and the simulated robot
     if (env_p) //if the environment variable exists
         init_simu(std::string(std::getenv("RESIBOTS_DIR")) + "/share/arm_models/URDF/omnigrasper_3dof.urdf");
     else //if it does not exist, we might be running this on the cluster
@@ -774,14 +762,6 @@ int main(int argc, char** argv)
     using mean_t = limbo::mean::Constant<Params>;
 
     using GP_t = blackdrops::ParallelGP<Params, limbo::model::GP, kernel_t, mean_t, blackdrops::KernelLFOpt<Params, limbo::opt::NLOptGrad<Params, nlopt::LD_SLSQP>>>;
-    // using SPGP_t = limbo::model::SPGP<Params, kernel_t, mean_t>;
-
-    // #ifdef SPGPS
-    //     using GPMM_t = limbo::model::GPMultiModel<Params, mean_t, GP_t, SPGP_t>;
-    //     using MGP_t = blackdrops::GPModel<Params, GPMM_t>;
-    // #else
-    //     using MGP_t = blackdrops::GPModel<Params, GP_t>;
-    // #endif
 
     using MGP_t = blackdrops::GPModel<Params, GP_t>;
 

@@ -1,20 +1,19 @@
-#include <limbo/experimental/model/spgp.hpp>
 #include <limbo/limbo.hpp>
 #include <limbo/mean/constant.hpp>
 
 #include <boost/numeric/odeint.hpp>
 #include <boost/program_options.hpp>
 
+#include <blackdrops/blackdrops.hpp>
 #include <blackdrops/cmaes.hpp>
 #include <blackdrops/gp_model.hpp>
 #include <blackdrops/gp_multi_model.hpp>
+#include <blackdrops/kernel_lf_opt.hpp>
 #include <blackdrops/multi_gp.hpp>
 #include <blackdrops/multi_gp_whole_opt.hpp>
 #include <blackdrops/parallel_gp.hpp>
-#include <spt/poegp.hpp>
-#include <spt/poegp_lf_opt.hpp>
-#include <blackdrops/kernel_lf_opt.hpp>
-#include <blackdrops/blackdrops.hpp>
+#include <limbo/experimental/model/poegp.hpp>
+#include <limbo/experimental/model/poegp/poegp_lf_opt.hpp>
 
 #include <blackdrops/gp_policy.hpp>
 #include <blackdrops/nn_policy.hpp>
@@ -136,7 +135,7 @@ struct Params {
         BO_PARAM(double, noise, 0.01);
     };
 
-    struct spt_poegp : public spt::defaults::spt_poegp {
+    struct model_poegp : public limbo::defaults::model_poegp {
         BO_PARAM(int, leaf_size, 100);
         BO_PARAM(double, tau, 0.05);
     };
@@ -427,8 +426,8 @@ struct CartPole {
             init(3) = std::cos(0.0);
             init(4) = std::sin(0.0);
             for (size_t j = 0; j < steps; j++) {
-                if(init.norm()>1000)
-                  break;
+                if (init.norm() > 1000)
+                    break;
                 Eigen::VectorXd query_vec(Params::blackdrops::model_input_dim() + Params::blackdrops::action_dim());
                 Eigen::VectorXd u = policy.next(init);
                 query_vec.head(Params::blackdrops::model_input_dim()) = init;
@@ -501,28 +500,6 @@ struct CartPole {
 
 protected:
     double _u;
-};
-
-template <typename Params>
-struct RandomOpt {
-    template <typename F>
-    Eigen::VectorXd operator()(const F& f, const Eigen::VectorXd& init, bool bounded) const
-    {
-        // Random point does not support unbounded search
-        assert(bounded);
-        double best = -1000;
-        Eigen::VectorXd p = limbo::tools::random_vector(init.size());
-
-        for (size_t i = 0; i < Params::opt_cmaes::max_fun_evals(); i++) {
-            Eigen::VectorXd pp = limbo::tools::random_vector(init.size());
-            double v = limbo::opt::eval(f, pp);
-            if (v > best) {
-                best = v;
-                p = pp;
-            }
-        }
-        return p;
-    }
 };
 
 struct RewardFunction {
@@ -829,13 +806,16 @@ int main(int argc, char** argv)
 
 #ifndef MODELIDENT
     using GP_t = blackdrops::ParallelGP<Params, limbo::model::GP, kernel_t, mean_t, blackdrops::KernelLFOpt<Params>>; //, limbo::opt::NLOptGrad<Params, nlopt::LD_SLSQP>>>;
-    using SPGP_t = blackdrops::ParallelGP<Params, spt::POEGP, kernel_t, mean_t, limbo::model::gp::POEKernelLFOpt<Params>>;
 #else
     using GP_t = blackdrops::MultiGP<Params, limbo::model::GP, kernel_t, mean_t, blackdrops::MultiGPWholeLFOpt<Params, limbo::opt::NLOptNoGrad<Params, nlopt::LN_SBPLX>>>;
-    using SPGP_t = blackdrops::MultiGP<Params, spt::POEGP, kernel_t, mean_t, blackdrops::MultiGPWholeLFOpt<Params, limbo::opt::NLOptNoGrad<Params, nlopt::LN_SBPLX>, limbo::model::gp::POEKernelLFOpt<Params>>>;
 #endif
 
 #ifdef SPGPS
+#ifndef MODELIDENT
+    using SPGP_t = blackdrops::ParallelGP<Params, limbo::experimental::model::POEGP, kernel_t, mean_t, limbo::experimental::model::poegp::POEKernelLFOpt<Params>>;
+#else
+    using SPGP_t = blackdrops::MultiGP<Params, limbo::experimental::model::POEGP, kernel_t, mean_t, blackdrops::MultiGPWholeLFOpt<Params, limbo::opt::NLOptNoGrad<Params, nlopt::LN_SBPLX>, limbo::experimental::model::poegp::POEKernelLFOpt<Params>>>;
+#endif
     using GPMM_t = limbo::model::GPMultiModel<Params, GP_t, SPGP_t>;
     using MGP_t = blackdrops::GPModel<Params, GPMM_t>;
 #else
