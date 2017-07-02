@@ -11,12 +11,12 @@
 #include <blackdrops/blackdrops.hpp>
 #include <blackdrops/gp_model.hpp>
 #include <blackdrops/gp_multi_model.hpp>
-#include <blackdrops/kernel_lf_opt.hpp>
-#include <blackdrops/parallel_gp.hpp>
+#include <blackdrops/model/gp/kernel_lf_opt.hpp>
+#include <blackdrops/model/parallel_gp.hpp>
 #include <limbo/experimental/model/poegp.hpp>
 #include <limbo/experimental/model/poegp/poegp_lf_opt.hpp>
 
-#include <blackdrops/nn_policy.hpp>
+#include <blackdrops/policy/nn_policy.hpp>
 
 template <typename T>
 inline T gaussian_rand(T m = 0.0, T v = 1.0)
@@ -59,7 +59,7 @@ struct Params {
         BO_PARAM(double, tau, 0.05);
     };
 
-    struct model_gpmm : public limbo::defaults::model_gpmm {
+    struct model_gpmm : public ::blackdrops::defaults::model_gpmm {
         BO_PARAM(int, threshold, 198);
     };
 
@@ -128,7 +128,7 @@ inline double angle_dist(double a, double b)
 namespace global {
     std::shared_ptr<robot_dart::Robot> global_robot;
 
-    using policy_t = blackdrops::NNPolicy<PolicyParams>;
+    using policy_t = blackdrops::policy::NNPolicy<PolicyParams>;
 }
 
 Eigen::VectorXd get_robot_state(const std::shared_ptr<robot_dart::Robot>& robot)
@@ -520,17 +520,17 @@ int main(int argc, char** argv)
 
     // using GP_t = limbo::model::GP<Params, kernel_t, mean_t, blackdrops::KernelLFOpt<Params>>;
     // using SPGP_t = spt::POEGP<Params, kernel_t, mean_t, limbo::model::gp::POEKernelLFOpt<Params>>;
-    using GP_t = blackdrops::ParallelGP<Params, limbo::model::GP, kernel_t, mean_t, blackdrops::KernelLFOpt<Params>>; //, limbo::opt::NLOptGrad<Params, nlopt::LD_SLSQP>>>;;
+    using GP_t = blackdrops::model::ParallelGP<Params, limbo::model::GP, kernel_t, mean_t, blackdrops::model::gp::KernelLFOpt<Params>>; //, limbo::opt::NLOptGrad<Params, nlopt::LD_SLSQP>>>;;
 
 #ifdef SPGPS
-    using SPGP_t = blackdrops::ParallelGP<Params, limbo::experimental::model::POEGP, kernel_t, mean_t, limbo::experimental::model::poegp::POEKernelLFOpt<Params>>;
-    using GPMM_t = limbo::model::GPMultiModel<Params, GP_t, SPGP_t>;
+    using SPGP_t = blackdrops::model::ParallelGP<Params, limbo::experimental::model::POEGP, kernel_t, mean_t, limbo::experimental::model::poegp::POEKernelLFOpt<Params>>;
+    using GPMM_t = blackdrops::GPMultiModel<Params, GP_t, SPGP_t>;
     using MGP_t = blackdrops::GPModel<Params, GPMM_t>;
 #else
     using MGP_t = blackdrops::GPModel<Params, GP_t>;
 #endif
 
-    blackdrops::BlackDROPS<Params, MGP_t, HalfCheetah, blackdrops::NNPolicy<PolicyParams>, policy_opt_t, RewardFunction> cp_system;
+    blackdrops::BlackDROPS<Params, MGP_t, HalfCheetah, blackdrops::policy::NNPolicy<PolicyParams>, policy_opt_t, RewardFunction> cp_system;
 
     cp_system.learn(1, 20, true);
 

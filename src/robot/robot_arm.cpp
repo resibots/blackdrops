@@ -2,17 +2,17 @@
 #include <limbo/limbo.hpp>
 #include <limbo/mean/constant.hpp>
 
-#include <blackdrops/safe_velocity_control.hpp>
+#include <dynamixel/safe_velocity_control.hpp>
 
 #include <boost/program_options.hpp>
 
 #include <blackdrops/gp_model.hpp>
 // #include <blackdrops/gp_multi_model.hpp>
 #include <blackdrops/blackdrops.hpp>
-#include <blackdrops/kernel_lf_opt.hpp>
-#include <blackdrops/parallel_gp.hpp>
+#include <blackdrops/model/gp/kernel_lf_opt.hpp>
+#include <blackdrops/model/parallel_gp.hpp>
 
-#include <blackdrops/nn_policy.hpp>
+#include <blackdrops/policy/nn_policy.hpp>
 
 template <typename T>
 inline T gaussian_rand(T m = 0.0, T v = 1.0)
@@ -47,16 +47,6 @@ struct Params {
     struct gp_model {
         BO_PARAM(double, noise, 0.001);
     };
-
-    // struct model_spgp : public limbo::defaults::model_spgp {
-    //     BO_PARAM(double, samples_percent, 10);
-    //     BO_PARAM(double, jitter, 1e-5);
-    //     BO_PARAM(int, min_m, 100);
-    //     BO_PARAM(double, sig, 0.001);
-    // };
-    // struct model_gpmm : public limbo::defaults::model_gpmm {
-    //     BO_PARAM(int, threshold, 300);
-    // };
 
     struct kernel : public limbo::defaults::kernel {
         BO_PARAM(double, noise, gp_model::noise());
@@ -135,7 +125,7 @@ inline double angle_dist(double a, double b)
 }
 
 namespace global {
-    using policy_t = blackdrops::NNPolicy<PolicyParams>;
+    using policy_t = blackdrops::policy::NNPolicy<PolicyParams>;
 
     Eigen::VectorXd goal(3);
 
@@ -754,12 +744,12 @@ int main(int argc, char** argv)
     using kernel_t = limbo::kernel::SquaredExpARD<Params>;
     using mean_t = limbo::mean::Constant<Params>;
 
-    using GP_t = blackdrops::ParallelGP<Params, limbo::model::GP, kernel_t, mean_t, blackdrops::KernelLFOpt<Params, limbo::opt::NLOptGrad<Params, nlopt::LD_SLSQP>>>;
+    using GP_t = blackdrops::model::ParallelGP<Params, limbo::model::GP, kernel_t, mean_t, blackdrops::model::gp::KernelLFOpt<Params, limbo::opt::NLOptGrad<Params, nlopt::LD_SLSQP>>>;
     // using SPGP_t = limbo::model::SPGP<Params, kernel_t, mean_t>;
 
     using MGP_t = blackdrops::GPModel<Params, GP_t>;
 
-    blackdrops::BlackDROPS<Params, MGP_t, Omnigrasper, blackdrops::NNPolicy<PolicyParams>, policy_opt_t, RewardFunction> cp_system;
+    blackdrops::BlackDROPS<Params, MGP_t, Omnigrasper, blackdrops::policy::NNPolicy<PolicyParams>, policy_opt_t, RewardFunction> cp_system;
 
     cp_system.learn(1, 15, true);
 

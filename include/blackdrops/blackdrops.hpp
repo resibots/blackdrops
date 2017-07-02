@@ -1,11 +1,11 @@
 #ifndef BLACKDROPS_BLACKDROPS_HPP
 #define BLACKDROPS_BLACKDROPS_HPP
 
-#include "binary_matrix.hpp"
+#include <Eigen/binary_matrix.hpp>
 #include <chrono>
 #include <fstream>
-#include <limits>
 #include <limbo/opt/optimizer.hpp>
+#include <limits>
 
 namespace blackdrops {
 

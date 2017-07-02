@@ -11,11 +11,11 @@
 
 #include <blackdrops/blackdrops.hpp>
 #include <blackdrops/gp_model.hpp>
-#include <blackdrops/kernel_lf_opt.hpp>
-#include <blackdrops/parallel_gp.hpp>
+#include <blackdrops/model/gp/kernel_lf_opt.hpp>
+#include <blackdrops/model/parallel_gp.hpp>
 
-#include <blackdrops/gp_policy.hpp>
-#include <blackdrops/nn_policy.hpp>
+#include <blackdrops/policy/gp_policy.hpp>
+#include <blackdrops/policy/nn_policy.hpp>
 
 template <typename T>
 inline T gaussian_rand(T m = 0.0, T v = 1.0)
@@ -202,9 +202,9 @@ namespace data {
 namespace global {
     std::shared_ptr<robot_dart::Robot> global_robot;
 #ifndef GPPOLICY
-    using policy_t = blackdrops::NNPolicy<PolicyParams>;
+    using policy_t = blackdrops::policy::NNPolicy<PolicyParams>;
 #else
-    using policy_t = blackdrops::GPPolicy<PolicyParams>;
+    using policy_t = blackdrops::policy::GPPolicy<PolicyParams>;
 #endif
     // #ifdef GRAPHIC
     //     using robot_simu_t = robot_dart::RobotDARTSimu<robot_dart::robot_control<PolicyControl<policy_t>>, robot_dart::desc<boost::fusion::vector<RobotTraj>>, robot_dart::graphics<robot_dart::Graphics<Params>>>;
@@ -760,14 +760,14 @@ int main(int argc, char** argv)
     using kernel_t = limbo::kernel::SquaredExpARD<Params>;
     using mean_t = limbo::mean::Constant<Params>;
 
-    using GP_t = blackdrops::ParallelGP<Params, limbo::model::GP, kernel_t, mean_t, blackdrops::KernelLFOpt<Params, limbo::opt::NLOptGrad<Params, nlopt::LD_SLSQP>>>;
+    using GP_t = blackdrops::model::ParallelGP<Params, limbo::model::GP, kernel_t, mean_t, blackdrops::model::gp::KernelLFOpt<Params, limbo::opt::NLOptGrad<Params, nlopt::LD_SLSQP>>>;
 
     using MGP_t = blackdrops::GPModel<Params, GP_t>;
 
 #ifndef GPPOLICY
-    blackdrops::BlackDROPS<Params, MGP_t, Omnigrasper, blackdrops::NNPolicy<PolicyParams>, policy_opt_t, RewardFunction> cp_system;
+    blackdrops::BlackDROPS<Params, MGP_t, Omnigrasper, blackdrops::policy::NNPolicy<PolicyParams>, policy_opt_t, RewardFunction> cp_system;
 #else
-    blackdrops::BlackDROPS<Params, MGP_t, Omnigrasper, blackdrops::GPPolicy<PolicyParams>, policy_opt_t, RewardFunction> cp_system;
+    blackdrops::BlackDROPS<Params, MGP_t, Omnigrasper, blackdrops::policy::GPPolicy<PolicyParams>, policy_opt_t, RewardFunction> cp_system;
 #endif
 
     cp_system.learn(1, 20, true);
