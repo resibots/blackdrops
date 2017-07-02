@@ -1,17 +1,17 @@
 #include <limbo/limbo.hpp>
 #include <limbo/mean/constant.hpp>
 
-#include <blackdrops/safe_velocity_control.hpp>
+#include <dynamixel/safe_velocity_control.hpp>
 
 #include <boost/program_options.hpp>
 
 #include <blackdrops/gp_model.hpp>
 // #include <blackdrops/gp_multi_model.hpp>
 #include <blackdrops/blackdrops.hpp>
-#include <blackdrops/kernel_lf_opt.hpp>
-#include <blackdrops/parallel_gp.hpp>
+#include <blackdrops/model/gp/kernel_lf_opt.hpp>
+#include <blackdrops/model/parallel_gp.hpp>
 
-#include <blackdrops/nn_policy.hpp>
+#include <blackdrops/policy/nn_policy.hpp>
 
 #include <sstream>
 
@@ -85,7 +85,7 @@ struct PolicyParams {
 };
 
 namespace global {
-    using policy_t = blackdrops::NNPolicy<PolicyParams>;
+    using policy_t = blackdrops::policy::NNPolicy<PolicyParams>;
 
     Eigen::VectorXd goal(3);
     std::shared_ptr<dynamixel::SafeVelocityControl> robot_control;
@@ -438,7 +438,7 @@ int main(int argc, char** argv)
 
     using kernel_t = limbo::kernel::SquaredExpARD<Params>;
     using mean_t = limbo::mean::Constant<Params>;
-    using GP_t = blackdrops::ParallelGP<Params, limbo::model::GP, kernel_t, mean_t, blackdrops::KernelLFOpt<Params, limbo::opt::NLOptGrad<Params, nlopt::LD_SLSQP>>>;
+    using GP_t = blackdrops::model::ParallelGP<Params, limbo::model::GP, kernel_t, mean_t, blackdrops::model::gp::KernelLFOpt<Params, limbo::opt::NLOptGrad<Params, nlopt::LD_SLSQP>>>;
 
     using MGP_t = blackdrops::GPModel<Params, GP_t>;
 
@@ -450,7 +450,7 @@ int main(int argc, char** argv)
         // Load policy
         Eigen::VectorXd policy_params;
         Eigen::read_binary(random_file + std::to_string(i) + ".bin", policy_params);
-        blackdrops::NNPolicy<PolicyParams> policy;
+        blackdrops::policy::NNPolicy<PolicyParams> policy;
         policy.set_params(policy_params);
         double r = execute_policy(policy);
         if (r > best_r) {
@@ -467,7 +467,7 @@ int main(int argc, char** argv)
         // Load policy
         Eigen::VectorXd policy_params;
         Eigen::read_binary(policy_file + std::to_string(i + 1) + ".bin", policy_params);
-        blackdrops::NNPolicy<PolicyParams> policy;
+        blackdrops::policy::NNPolicy<PolicyParams> policy;
         policy.set_params(policy_params);
 
         // Load model points

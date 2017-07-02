@@ -1,7 +1,7 @@
 #ifndef BLACKDROPS_GP_MODEL_HPP
 #define BLACKDROPS_GP_MODEL_HPP
 
-#include "binary_matrix.hpp"
+#include <Eigen/binary_matrix.hpp>
 
 namespace blackdrops {
 

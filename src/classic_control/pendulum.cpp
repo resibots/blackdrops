@@ -5,12 +5,12 @@
 
 #include <blackdrops/blackdrops.hpp>
 #include <blackdrops/gp_model.hpp>
-#include <blackdrops/kernel_lf_opt.hpp>
-#include <blackdrops/parallel_gp.hpp>
+#include <blackdrops/model/gp/kernel_lf_opt.hpp>
+#include <blackdrops/model/parallel_gp.hpp>
 
-#include <blackdrops/gp_policy.hpp>
-#include <blackdrops/linear_policy.hpp>
-#include <blackdrops/nn_policy.hpp>
+#include <blackdrops/policy/gp_policy.hpp>
+#include <blackdrops/policy/linear_policy.hpp>
+#include <blackdrops/policy/nn_policy.hpp>
 
 #if defined(USE_SDL) && !defined(NODSP)
 #include <SDL2/SDL.h>
@@ -581,17 +581,17 @@ int main(int argc, char** argv)
 
     using kernel_t = limbo::kernel::SquaredExpARD<Params>;
     using mean_t = limbo::mean::Constant<Params>;
-    using GP_t = blackdrops::ParallelGP<Params, limbo::model::GP, kernel_t, mean_t, blackdrops::KernelLFOpt<Params, limbo::opt::NLOptGrad<Params, nlopt::LD_SLSQP>>>;
+    using GP_t = blackdrops::model::ParallelGP<Params, limbo::model::GP, kernel_t, mean_t, blackdrops::model::gp::KernelLFOpt<Params, limbo::opt::NLOptGrad<Params, nlopt::LD_SLSQP>>>;
 
     using policy_opt_t = limbo::opt::Cmaes<Params>;
     //using policy_opt_t = limbo::opt::NLOptGrad<Params>;
     using MGP_t = blackdrops::GPModel<Params, GP_t>;
 #ifdef GPPOLICY
-    blackdrops::BlackDROPS<Params, MGP_t, Pendulum, blackdrops::GPPolicy<PolicyParams>, policy_opt_t, RewardFunction> pend_system;
+    blackdrops::BlackDROPS<Params, MGP_t, Pendulum, blackdrops::policy::GPPolicy<PolicyParams>, policy_opt_t, RewardFunction> pend_system;
 #elif defined(LINEAR)
-    blackdrops::BlackDROPS<Params, MGP_t, Pendulum, blackdrops::LinearPolicy<PolicyParams>, policy_opt_t, RewardFunction> pend_system;
+    blackdrops::BlackDROPS<Params, MGP_t, Pendulum, blackdrops::policy::LinearPolicy<PolicyParams>, policy_opt_t, RewardFunction> pend_system;
 #else
-    blackdrops::BlackDROPS<Params, MGP_t, Pendulum, blackdrops::NNPolicy<PolicyParams>, policy_opt_t, RewardFunction> pend_system;
+    blackdrops::BlackDROPS<Params, MGP_t, Pendulum, blackdrops::policy::NNPolicy<PolicyParams>, policy_opt_t, RewardFunction> pend_system;
 #endif
 
     pend_system.learn(1, 15);
