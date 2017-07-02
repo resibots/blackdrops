@@ -10,7 +10,6 @@
 #include <boost/program_options.hpp>
 
 #include <blackdrops/blackdrops.hpp>
-#include <blackdrops/cmaes.hpp>
 #include <blackdrops/gp_model.hpp>
 #include <blackdrops/kernel_lf_opt.hpp>
 #include <blackdrops/parallel_gp.hpp>
@@ -756,7 +755,7 @@ int main(int argc, char** argv)
     else //if it does not exist, we might be running this on the cluster
         init_simu("/nfs/hal01/kchatzil/Workspaces/ResiBots/share/arm_models/URDF/omnigrasper_3dof.urdf");
 
-    using policy_opt_t = limbo::opt::CustomCmaes<Params>;
+    using policy_opt_t = limbo::opt::Cmaes<Params>;
 
     using kernel_t = limbo::kernel::SquaredExpARD<Params>;
     using mean_t = limbo::mean::Constant<Params>;

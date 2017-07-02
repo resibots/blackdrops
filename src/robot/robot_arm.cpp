@@ -6,11 +6,10 @@
 
 #include <boost/program_options.hpp>
 
-#include <blackdrops/cmaes.hpp>
 #include <blackdrops/gp_model.hpp>
 // #include <blackdrops/gp_multi_model.hpp>
-#include <blackdrops/kernel_lf_opt.hpp>
 #include <blackdrops/blackdrops.hpp>
+#include <blackdrops/kernel_lf_opt.hpp>
 #include <blackdrops/parallel_gp.hpp>
 
 #include <blackdrops/nn_policy.hpp>
@@ -745,7 +744,7 @@ int main(int argc, char** argv)
     //     // std::cout << std::endl;
     // }
 
-    using policy_opt_t = limbo::opt::CustomCmaes<Params>;
+    using policy_opt_t = limbo::opt::Cmaes<Params>;
     // #ifdef SPGPS
     //     using GPMM_t = limbo::model::GPMultiModel<Params, mean_t, GP_t, SPGP_t>;
     //     using MGP_t = blackdrops::GPModel<Params, GPMM_t>;

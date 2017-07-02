@@ -5,7 +5,6 @@
 #include <boost/program_options.hpp>
 
 #include <blackdrops/blackdrops.hpp>
-#include <blackdrops/cmaes.hpp>
 #include <blackdrops/gp_model.hpp>
 #include <blackdrops/gp_multi_model.hpp>
 #include <blackdrops/kernel_lf_opt.hpp>
@@ -795,7 +794,7 @@ int main(int argc, char** argv)
     std::cout << "  Friction (N/m/s): " << Params::mean_function::friction() << std::endl;
 #endif
 
-    using policy_opt_t = limbo::opt::CustomCmaes<Params>;
+    using policy_opt_t = limbo::opt::Cmaes<Params>;
 
     using kernel_t = limbo::kernel::SquaredExpARD<Params>;
 #ifndef MEAN

@@ -3,15 +3,14 @@
 #include <boost/numeric/odeint.hpp>
 #include <boost/program_options.hpp>
 
-#include <blackdrops/cmaes.hpp>
+#include <blackdrops/blackdrops.hpp>
 #include <blackdrops/gp_model.hpp>
 #include <blackdrops/kernel_lf_opt.hpp>
-#include <blackdrops/blackdrops.hpp>
 #include <blackdrops/parallel_gp.hpp>
 
+#include <blackdrops/gp_policy.hpp>
 #include <blackdrops/linear_policy.hpp>
 #include <blackdrops/nn_policy.hpp>
-#include <blackdrops/gp_policy.hpp>
 
 #if defined(USE_SDL) && !defined(NODSP)
 #include <SDL2/SDL.h>
@@ -584,7 +583,7 @@ int main(int argc, char** argv)
     using mean_t = limbo::mean::Constant<Params>;
     using GP_t = blackdrops::ParallelGP<Params, limbo::model::GP, kernel_t, mean_t, blackdrops::KernelLFOpt<Params, limbo::opt::NLOptGrad<Params, nlopt::LD_SLSQP>>>;
 
-    using policy_opt_t = limbo::opt::CustomCmaes<Params>;
+    using policy_opt_t = limbo::opt::Cmaes<Params>;
     //using policy_opt_t = limbo::opt::NLOptGrad<Params>;
     using MGP_t = blackdrops::GPModel<Params, GP_t>;
 #ifdef GPPOLICY

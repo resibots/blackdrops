@@ -5,11 +5,10 @@
 
 #include <boost/program_options.hpp>
 
-#include <blackdrops/cmaes.hpp>
 #include <blackdrops/gp_model.hpp>
 // #include <blackdrops/gp_multi_model.hpp>
-#include <blackdrops/kernel_lf_opt.hpp>
 #include <blackdrops/blackdrops.hpp>
+#include <blackdrops/kernel_lf_opt.hpp>
 #include <blackdrops/parallel_gp.hpp>
 
 #include <blackdrops/nn_policy.hpp>
