@@ -1,40 +1,41 @@
-#ifndef MEDROPS_SF_NN_POLICY_HPP
-#define MEDROPS_SF_NN_POLICY_HPP
+#ifndef BLACKDROPS_NN_POLICY_HPP
+#define BLACKDROPS_NN_POLICY_HPP
 
 #define EIGEN3_ENABLED
 #include "nn2/mlp.hpp"
 
-namespace medrops {
+namespace blackdrops {
 
     template <typename Params>
-    struct SFNNPolicy {
+    struct NNPolicy {
 
-        // using nn_t = medrops::MLP<medrops::NNLayer<medrops::Neuron<medrops::AfTanh>, medrops::PfSum>, medrops::NNLayer<medrops::Neuron<medrops::AfTanh>, medrops::PfSum>>;
         using nn_t = nn::Mlp<nn::Neuron<nn::PfWSum<>, nn::AfTanhNoBias<>>, nn::Connection<double, double>>;
 
-        SFNNPolicy()
+        NNPolicy()
         {
-            _boundary = Params::medrops::boundary();
+            _boundary = Params::blackdrops::boundary();
             _random = false;
             _nn = std::make_shared<nn_t>(
                 Params::nn_policy::state_dim(),
                 Params::nn_policy::hidden_neurons(),
-                Params::action_dim());
+                Params::nn_policy::action_dim());
             _nn->init();
             _params = Eigen::VectorXd::Zero(_nn->get_nb_connections());
             _limits = Eigen::VectorXd::Constant(Params::nn_policy::state_dim(), 1.0);
-        }
 
-        template <typename Model>
-        void normalize(const Model& model)
-        {
-            _limits = model.limits().head(Params::nn_policy::state_dim());
+            // Get the limits
+            for (int i = 0; i < _limits.size(); i++) {
+                _limits(i) = Params::nn_policy::limits(i);
+            }
+
+            std::vector<float> afs(_nn->get_nb_neurons(), Params::nn_policy::af());
+            _nn->set_all_afparams(afs);
         }
 
         Eigen::VectorXd next(const Eigen::VectorXd& state) const
         {
             if (_random || _params.size() == 0) {
-                Eigen::VectorXd act = (limbo::tools::random_vector(Params::action_dim()).array() * 2 - 1.0);
+                Eigen::VectorXd act = (limbo::tools::random_vector(Params::nn_policy::action_dim()).array() * 2 - 1.0);
                 for (int i = 0; i < act.size(); i++) {
                     act(i) = act(i) * Params::nn_policy::max_u(i);
                 }

@@ -1,19 +1,23 @@
 #ifndef SAFE_TORQUE_CONTROL
 #define SAFE_TORQUE_CONTROL
+
 #include <iostream>
 #include <map>
 #include <unordered_set>
 #include <cmath> // for sin/cos, computing direct kinematic model
 #include <dynamixel/dynamixel.hpp>
+
 using namespace dynamixel;
 using namespace controllers;
 using namespace servos;
 using namespace instructions;
 using namespace protocols;
+
 namespace dynamixel {
     class SafeTorqueControl {
     public:
         typedef typename Protocol2::id_t id_t;
+
         SafeTorqueControl(
             const std::string& usb_serial_port,
             std::unordered_set<Protocol2::id_t> selected_servos,
@@ -53,6 +57,7 @@ namespace dynamixel {
                 _serial_interface.recv(status);
             }
         }
+
         void init_position()
         {
             // move all joints to neutral position : middle between max and min angles
@@ -65,6 +70,7 @@ namespace dynamixel {
                 _serial_interface.recv(status);
             }
         }
+
         void reset_to_position_control()
         {
             StatusPacket<Protocol2> status;
@@ -95,11 +101,13 @@ namespace dynamixel {
                 _serial_interface.recv(status);
             }
         }
+
         void set_torque_control_mode()
         {
             // switch to torque control
             change_control_mode();
         }
+
         /**
             The main method of this class. Stops all actuators if any one is beyond
             set joint limits.
@@ -155,6 +163,7 @@ namespace dynamixel {
             else
                 return false;
         }
+
         /** Send a random torque to each actuator, within a percentage of the
             max torque.
             @param ratio of the torque that can be used (between 0 and 1)
@@ -173,6 +182,7 @@ namespace dynamixel {
             std::cout << std::endl;
             _serial_interface.send(Action<Protocol2>(Protocol2::broadcast_id));
         }
+
         /** Send torque orders to all the actuators.
             @param vector of torques, in ascending order of actuator ID;
                 value is between 0 and 1;
@@ -199,6 +209,7 @@ namespace dynamixel {
             _serial_interface.send(Action<Protocol2>(Protocol2::broadcast_id));
             // std::cout << std::endl;
         }
+
         /** Querry the actuators for their current angles
             @return map from ids to doubles, one for each actuator
         **/
@@ -225,6 +236,7 @@ namespace dynamixel {
             }
             return angles;
         }
+
         /** Querry the actuators for joint position and joint speed, returning
             them concatenated.
             @return vector of joint speeds followed by vector of joint positions
@@ -272,6 +284,7 @@ namespace dynamixel {
             }
             return state;
         }
+
         /** Querry the actuators for their current angles
             @return vector of doubles, one for each actuator, in the same order
                 as the list of servos
@@ -299,6 +312,7 @@ namespace dynamixel {
             }
             return angles;
         }
+
         /** Querry the actuators for their current angular speeds
             @return vector of doubles, one for each actuator, in the same order as
                 returned by ids
@@ -326,22 +340,27 @@ namespace dynamixel {
             }
             return angles;
         }
+
         void set_min_angles(const std::map<id_t, double>& min_angles)
         {
             _min_angles = min_angles;
         }
+
         void set_max_angles(const std::map<id_t, double>& max_angles)
         {
             _max_angles = max_angles;
         }
+
         void set_max_torques(const std::map<id_t, double>& max_torques)
         {
             _max_torques = max_torques;
         }
+
         double min_height()
         {
             return _min_height;
         }
+
         void set_min_height(double new_height)
         {
             _min_height = new_height;
@@ -378,6 +397,7 @@ namespace dynamixel {
             }
             std::cout << "\ttorque enabled again" << std::endl;
         }
+
         /** Check whether one of the actuator reached a joint limit.
             The angles vector is modified so that it can be given as a position
             command to put back all joints within the joint limits.
@@ -406,6 +426,7 @@ namespace dynamixel {
             }
             return reached_limit;
         }
+
         /** Check whether the end effector is lower than the given height.
             This method is specific to our robotic arm based on Dynamixel Pros.
             @param angles current joint angles for each actuator
@@ -420,6 +441,7 @@ namespace dynamixel {
             double z = 0.252 * cos(angles.at(2) + angles.at(3)) - 0.264 * cos(angles.at(2));
             return (z <= _min_height);
         }
+
         Usb2Dynamixel _serial_interface;
         std::map<id_t, std::shared_ptr<BaseServo<Protocol2>>> _servos;
         std::map<id_t, double> _min_angles;

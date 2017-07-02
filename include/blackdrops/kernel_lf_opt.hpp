@@ -1,11 +1,11 @@
-#ifndef MEDROPS_KERNEL_LF_OPT
-#define MEDROPS_KERNEL_LF_OPT
+#ifndef BLACKDROPS_KERNEL_LF_OPT
+#define BLACKDROPS_KERNEL_LF_OPT
 
+#include <cmath>
 #include <limbo/model/gp/hp_opt.hpp>
 #include <limbo/tools/random_generator.hpp>
-#include <cmath>
 
-namespace medrops {
+namespace blackdrops {
 
     ///optimize the likelihood of the kernel only
     template <typename Params, typename Optimizer = limbo::opt::ParallelRepeater<Params, limbo::opt::Rprop<Params>>>
@@ -19,9 +19,8 @@ namespace medrops {
             Optimizer optimizer;
             Eigen::VectorXd params = optimizer(optimization, gp.kernel_function().h_params(), false);
             gp.kernel_function().set_h_params(params);
-            gp.set_lik(limbo::opt::eval(optimization, params));
+            gp.set_log_lik(limbo::opt::eval(optimization, params));
             gp.recompute(false);
-            std::cout << "likelihood: " << gp.get_lik() << std::endl;
         }
 
     protected:
@@ -95,7 +94,7 @@ namespace medrops {
                 Eigen::VectorXd grad = Eigen::VectorXd::Zero(params.size());
                 for (size_t i = 0; i < n; ++i) {
                     for (size_t j = 0; j <= i; ++j) {
-                        Eigen::VectorXd g = gp.kernel_function().grad(gp.samples()[i], gp.samples()[j]);
+                        Eigen::VectorXd g = gp.kernel_function().grad(gp.samples()[i], gp.samples()[j], i, j);
                         if (i == j)
                             grad += w(i, j) * g * 0.5;
                         else

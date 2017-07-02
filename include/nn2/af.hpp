@@ -81,14 +81,18 @@ namespace nn {
     // -1 to +1 sigmoid
     template <typename P = float>
     struct AfTanhNoBias : public Af<P> {
-        typedef params::Dummy params_t;
+        typedef P params_t;
         BOOST_STATIC_CONSTEXPR float lambda = 5.0f;
-        AfTanhNoBias() {}
+        AfTanhNoBias()
+        {
+            assert(trait<P>::size(this->_params) == 1);
+            this->_params = 1.0f;
+        }
         float operator()(float p) const
         {
             // std::cout << p << " ";
             // return tanh(p * lambda);
-            return tanh(p);
+            return tanh(trait<P>::single_value(this->_params) * p);
         }
     };
 

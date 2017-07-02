@@ -1,5 +1,5 @@
-#ifndef MEDROPS_MEDROPS_HPP
-#define MEDROPS_MEDROPS_HPP
+#ifndef BLACKDROPS_BLACKDROPS_HPP
+#define BLACKDROPS_BLACKDROPS_HPP
 
 #include "binary_matrix.hpp"
 #include <chrono>
@@ -7,10 +7,10 @@
 #include <limits>
 #include <limbo/opt/optimizer.hpp>
 
-namespace medrops {
+namespace blackdrops {
 
     template <typename Params, typename Model, typename Robot, typename Policy, typename PolicyOptimizer, typename RewardFunction>
-    class Medrops {
+    class BlackDROPS {
     public:
         int _opt_iters;
         double _max_reward;
@@ -21,15 +21,15 @@ namespace medrops {
         Eigen::VectorXd old_params;
         Eigen::VectorXd old_starting;
 
-        Medrops() : _best(-std::numeric_limits<double>::max()) {}
-        ~Medrops() {}
+        BlackDROPS() : _best(-std::numeric_limits<double>::max()) {}
+        ~BlackDROPS() {}
 
         void execute_and_record_data()
         {
             std::vector<double> R;
             RewardFunction world;
             // Execute best policy so far on robot
-            auto obs_new = _robot.execute(_policy, world, Params::medrops::rollout_steps(), R);
+            auto obs_new = _robot.execute(_policy, world, Params::blackdrops::rollout_steps(), R);
 
             // Check if it is better than the previous best
             double r_new = std::accumulate(R.begin(), R.end(), 0.0);
@@ -64,24 +64,24 @@ namespace medrops {
             Eigen::write_binary("policy_params_starting_" + std::to_string(i) + ".bin", params_starting);
 
             _opt_iters = 0;
-            _max_reward = 0;
-            _max_simu_reward = 0;
-            _max_real_reward = 0;
+            _max_reward = -std::numeric_limits<double>::max();
+            _max_simu_reward = -std::numeric_limits<double>::max();
+            _max_real_reward = -std::numeric_limits<double>::max();
             if (_boundary == 0) {
                 std::cout << "Optimizing policy... " << std::flush;
                 params_star = policy_optimizer(
-                    std::bind(&Medrops::_optimize_policy, this, std::placeholders::_1, std::placeholders::_2),
+                    std::bind(&BlackDROPS::_optimize_policy, this, std::placeholders::_1, std::placeholders::_2),
                     params_starting,
                     false);
             }
             else {
                 std::cout << "Optimizing policy bounded to [-" << _boundary << ", " << _boundary << "]... " << std::flush;
                 params_star = policy_optimizer(
-                    std::bind(&Medrops::_optimize_policy, this, std::placeholders::_1, std::placeholders::_2),
+                    std::bind(&BlackDROPS::_optimize_policy, this, std::placeholders::_1, std::placeholders::_2),
                     params_starting,
                     true);
             }
-            if (Params::verbose())
+            if (Params::blackdrops::verbose())
                 std::cout << _opt_iters << "(" << _max_reward << ")" << std::endl; //", " << _max_simu_reward << ", " << _max_real_reward << ") " << std::endl;
             else
                 std::cout << std::endl;
@@ -93,7 +93,7 @@ namespace medrops {
             // if (Params::opt_cmaes::elitism() == 0)
             //     params_star = _max_params;
 
-            _policy.normalize(_model);
+            // _policy.normalize(_model);
             _policy.set_params(params_star);
 
             // std::cout << "Best parameters: " << _policy.params().transpose() << std::endl;
@@ -101,7 +101,7 @@ namespace medrops {
 
             std::vector<double> R;
             RewardFunction world;
-            _robot.execute_dummy(_policy, _model, world, Params::medrops::rollout_steps(), R);
+            _robot.execute_dummy(_policy, _model, world, Params::blackdrops::rollout_steps(), R);
             std::cout << "Dummy reward: " << std::accumulate(R.begin(), R.end(), 0.0) << std::endl;
 
             for (auto r : R)
@@ -111,15 +111,23 @@ namespace medrops {
 
         void learn(size_t init, size_t iterations, bool random_policies = false)
         {
-            _boundary = Params::medrops::boundary();
+            _boundary = Params::blackdrops::boundary();
             _random_policies = random_policies;
             _ofs.open("results.dat");
             _ofs_opt.open("times.dat");
             _ofs_model.open("times_model.dat");
             _policy.set_random_policy();
-            // Eigen::VectorXd pp = limbo::tools::random_vector(_policy.params().size()).array() * 2.0 * _boundary - _boundary;
-            // Eigen::read_binary("policy_params_1.bin", pp);
-            // _policy.set_params(pp);
+
+#ifdef MEAN
+            _random_policies = true;
+            Eigen::VectorXd pp = limbo::tools::random_vector(_policy.params().size()).array() * 2.0 * _boundary - _boundary;
+            _policy.set_params(pp);
+            _params_starting = pp;
+            optimize_policy(0);
+            _params_starting = _policy.params();
+            optimize_policy(0);
+            execute_and_record_data();
+#else
 
             std::cout << "Executing random actions..." << std::endl;
             for (size_t i = 0; i < init; i++) {
@@ -130,6 +138,7 @@ namespace medrops {
                 }
                 execute_and_record_data();
             }
+#endif
 
             std::chrono::steady_clock::time_point time_start;
             std::cout << "Starting learning..." << std::endl;
@@ -143,10 +152,10 @@ namespace medrops {
                 _ofs_model << learn_model_ms << std::endl;
                 _model.save_data("gp_learn_" + std::to_string(i) + ".dat");
 
-                _policy.normalize(_model);
+                // _policy.normalize(_model);
                 std::cout << "Learned model..." << std::endl;
 
-                if (Params::verbose()) {
+                if (Params::blackdrops::verbose()) {
                     Eigen::VectorXd errors, sigmas;
                     std::tie(errors, sigmas) = get_accuracy();
                     std::cout << "Errors: " << errors.transpose() << std::endl;
@@ -188,21 +197,21 @@ namespace medrops {
             Policy policy;
 
             policy.set_params(params.array());
-            policy.normalize(_model);
+            // policy.normalize(_model);
 
             // std::vector<double> R;
-            // _robot.execute(policy, world, Params::medrops::rollout_steps(), R, false);
+            // _robot.execute(policy, world, Params::blackdrops::rollout_steps(), R, false);
             //
             // double r = std::accumulate(R.begin(), R.end(), 0.0);
-            double r = _robot.predict_policy(policy, _model, world, Params::medrops::rollout_steps());
+            double r = _robot.predict_policy(policy, _model, world, Params::blackdrops::rollout_steps());
 
             _opt_iters++;
             if (_max_reward < r) {
-                // if (Params::verbose()) {
+                // if (Params::blackdrops::verbose()) {
                 //     std::vector<double> R;
-                //     _robot.execute_dummy(policy, _model, world, Params::medrops::rollout_steps(), R, false);
+                //     _robot.execute_dummy(policy, _model, world, Params::blackdrops::rollout_steps(), R, false);
                 //     double simu_reward = std::accumulate(R.begin(), R.end(), 0.0);
-                //     _robot.execute(policy, world, Params::medrops::rollout_steps(), R, false);
+                //     _robot.execute(policy, world, Params::blackdrops::rollout_steps(), R, false);
                 //     double real_reward = std::accumulate(R.begin(), R.end(), 0.0);
                 //
                 //     _max_simu_reward = simu_reward;
@@ -216,7 +225,7 @@ namespace medrops {
             // if (_opt_iters % 500 == 0)
             //     std::cout << _opt_iters << "(" << _max_reward << ") " << std::flush;
 
-            // if (Params::verbose() && _opt_iters % 1000 == 0) {
+            // if (Params::blackdrops::verbose() && _opt_iters % 1000 == 0) {
             //     std::cout << _opt_iters << "(" << _max_reward << ", " << _max_simu_reward << ", " << _max_real_reward << ") " << std::flush;
             // }
 
@@ -263,8 +272,8 @@ namespace medrops {
             model.learn(training_samples);
 
             // Get errors and sigmas
-            Eigen::VectorXd errors = Eigen::VectorXd::Zero(Params::model_pred_dim());
-            Eigen::VectorXd sigmas = Eigen::VectorXd::Zero(Params::model_pred_dim());
+            Eigen::VectorXd errors = Eigen::VectorXd::Zero(Params::blackdrops::model_pred_dim());
+            Eigen::VectorXd sigmas = Eigen::VectorXd::Zero(Params::blackdrops::model_pred_dim());
 
             for (size_t i = 0; i < test_samples.size(); i++) {
                 Eigen::VectorXd st, act, pred;
@@ -287,63 +296,6 @@ namespace medrops {
 
             return std::make_tuple(errors, sigmas);
         }
-
-        // std::tuple<Eigen::VectorXd, Eigen::VectorXd> get_accuracy(int evaluations = 100000) const
-        // {
-        //     Eigen::VectorXd bounds(5);
-        //     bounds << 3, 5, 6, M_PI, 10;
-        //     std::vector<Eigen::VectorXd> rvs = random_vectors(5, evaluations, bounds);
-        //
-        //     Eigen::VectorXd errors(4);
-        //     Eigen::VectorXd sigmas(4);
-        //     for (size_t i = 0; i < rvs.size(); i++) {
-        //         Eigen::VectorXd s;
-        //         Eigen::VectorXd m;
-        //         Eigen::VectorXd cm = comp_predict(rvs[i]);
-        //         Eigen::VectorXd gp_query(6);
-        //         gp_query.segment(0, 3) = rvs[i].segment(0, 3);
-        //         gp_query(3) = std::cos(rvs[i](3));
-        //         gp_query(4) = std::sin(rvs[i](3));
-        //         gp_query(5) = rvs[i](4);
-        //         std::tie(m, s) = _model.predictm(gp_query);
-        //
-        //         errors.array() += (m - cm).array().abs();
-        //         sigmas.array() += s.array();
-        //     }
-        //
-        //     return std::make_tuple(
-        //         errors.array() / evaluations * 1.0,
-        //         sigmas.array() / evaluations * 1.0);
-        // }
-        //
-        // Eigen::VectorXd comp_predict(const Eigen::VectorXd& v) const
-        // {
-        //     double dt = 0.1, t = 0.0;
-        //
-        //     boost::numeric::odeint::runge_kutta4<std::vector<double>> ode_stepper;
-        //     std::vector<double> state(4);
-        //     state[0] = v(0);
-        //     state[1] = v(1);
-        //     state[2] = v(2);
-        //     state[3] = v(3);
-        //
-        //     boost::numeric::odeint::integrate_const(ode_stepper,
-        //         std::bind(&Medrops::dynamics, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, v(4)),
-        //         state, t, dt, dt / 2.0);
-        //
-        //     Eigen::VectorXd new_state = Eigen::VectorXd::Map(state.data(), state.size());
-        //     return (new_state.array() - v.segment(0, 4).array());
-        // }
-        //
-        // void dynamics(const std::vector<double>& x, std::vector<double>& dx, double t, double u) const
-        // {
-        //     double l = 0.5, m = 0.5, M = 0.5, g = 9.82, b = 0.1;
-        //
-        //     dx[0] = x[1];
-        //     dx[1] = (2 * m * l * std::pow(x[2], 2.0) * std::sin(x[3]) + 3 * m * g * std::sin(x[3]) * std::cos(x[3]) + 4 * u - 4 * b * x[1]) / (4 * (M + m) - 3 * m * std::pow(std::cos(x[3]), 2.0));
-        //     dx[2] = (-3 * m * l * std::pow(x[2], 2.0) * std::sin(x[3]) * std::cos(x[3]) - 6 * (M + m) * g * std::sin(x[3]) - 6 * (u - b * x[1]) * std::cos(x[3])) / (4 * l * (m + M) - 3 * m * l * std::pow(std::cos(x[3]), 2.0));
-        //     dx[3] = x[2];
-        // }
     };
 }
 

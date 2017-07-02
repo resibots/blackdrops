@@ -2,22 +2,17 @@
 #include <limbo/limbo.hpp>
 #include <limbo/mean/constant.hpp>
 
-#include <medrops/safe_velocity_control.hpp>
+#include <blackdrops/safe_velocity_control.hpp>
 
 #include <boost/program_options.hpp>
 
-#include <medrops/cmaes.hpp>
-// #include <medrops/exp_sq_ard.hpp>
-#include <medrops/exp_ard_noise.hpp>
-#include <medrops/gp.hpp>
-#define MEDROPS_GP
-#include <medrops/gp_model.hpp>
-#include <medrops/gp_multi_model.hpp>
-#include <medrops/gp_policy.hpp>
-#include <medrops/kernel_lf_opt.hpp>
-#include <medrops/linear_policy.hpp>
-#include <medrops/medrops.hpp>
-#include <medrops/sf_nn_policy.hpp>
+#include <blackdrops/gp_model.hpp>
+// #include <blackdrops/gp_multi_model.hpp>
+#include <blackdrops/blackdrops.hpp>
+#include <blackdrops/kernel_lf_opt.hpp>
+#include <blackdrops/parallel_gp.hpp>
+
+#include <blackdrops/nn_policy.hpp>
 
 template <typename T>
 inline T gaussian_rand(T m = 0.0, T v = 1.0)
@@ -31,54 +26,41 @@ inline T gaussian_rand(T m = 0.0, T v = 1.0)
 }
 
 struct Params {
-    BO_PARAM(size_t, action_dim, 4);
-    BO_PARAM(size_t, state_full_dim, 12);
-    BO_PARAM(size_t, model_input_dim, 8);
-    BO_PARAM(size_t, model_pred_dim, 4);
-
     BO_PARAM(double, min_height, 0.1);
 
     BO_DYN_PARAM(size_t, parallel_evaluations);
-    BO_DYN_PARAM(bool, verbose);
 
     struct options {
         BO_PARAM(bool, bounded, true);
     };
 
-    struct medrops {
+    struct blackdrops {
+        BO_PARAM(size_t, action_dim, 4);
+        BO_PARAM(size_t, state_full_dim, 12);
+        BO_PARAM(size_t, model_input_dim, 8);
+        BO_PARAM(size_t, model_pred_dim, 4);
         BO_PARAM(size_t, rollout_steps, 39);
         BO_DYN_PARAM(double, boundary);
+        BO_DYN_PARAM(bool, verbose);
     };
 
     struct gp_model {
-        BO_PARAM(double, noise, 1e-5);
-    };
-    struct model_spgp : public limbo::defaults::model_spgp {
-        BO_PARAM(double, samples_percent, 10);
-        BO_PARAM(double, jitter, 1e-5);
-        BO_PARAM(int, min_m, 100);
-        BO_PARAM(double, sig, 0.001);
-    };
-    struct model_gpmm : public limbo::defaults::model_gpmm {
-        BO_PARAM(int, threshold, 300);
+        BO_PARAM(double, noise, 0.001);
     };
 
-    struct linear_policy {
-        BO_PARAM(int, state_dim, 8);
-        BO_PARAM_ARRAY(double, max_u, 1.0, 1.0, 1.0, 1.0);
-    };
+    // struct model_spgp : public limbo::defaults::model_spgp {
+    //     BO_PARAM(double, samples_percent, 10);
+    //     BO_PARAM(double, jitter, 1e-5);
+    //     BO_PARAM(int, min_m, 100);
+    //     BO_PARAM(double, sig, 0.001);
+    // };
+    // struct model_gpmm : public limbo::defaults::model_gpmm {
+    //     BO_PARAM(int, threshold, 300);
+    // };
 
-    struct nn_policy {
-        BO_PARAM(int, state_dim, 8);
-        BO_PARAM_ARRAY(double, max_u, 1.0, 1.0, 1.0, 1.0);
-        BO_DYN_PARAM(int, hidden_neurons);
-    };
-
-    struct gp_policy {
-        BO_PARAM_ARRAY(double, max_u, 1.0, 1.0, 1.0, 1.0);
-        BO_PARAM(double, pseudo_samples, 10);
-        BO_PARAM(double, noise, 0.01);
-        BO_PARAM(int, state_dim, 8);
+    struct kernel : public limbo::defaults::kernel {
+        BO_PARAM(double, noise, gp_model::noise());
+        BO_PARAM(bool, optimize_noise, true);
     };
 
     struct mean_constant {
@@ -90,12 +72,6 @@ struct Params {
     };
 
     struct kernel_squared_exp_ard : public limbo::defaults::kernel_squared_exp_ard {
-        BO_PARAM(double, sigma_sq, 0.2);
-    };
-
-    struct kernel_exp : public limbo::defaults::kernel_exp {
-        BO_PARAM(double, sigma_sq, 1);
-        BO_PARAM(double, l, 1);
     };
 
     struct opt_rprop : public limbo::defaults::opt_rprop {
@@ -115,10 +91,8 @@ struct Params {
         BO_PARAM(int, variant, aBIPOP_CMAES);
         BO_PARAM(bool, verbose, false);
         BO_PARAM(bool, fun_compute_initial, true);
-        // BO_PARAM(double, fun_target, 30);
         BO_DYN_PARAM(double, ubound);
         BO_DYN_PARAM(double, lbound);
-        BO_DYN_PARAM(int, lambda);
     };
 
     struct opt_nloptnograd : public limbo::defaults::opt_nloptnograd {
@@ -126,9 +100,24 @@ struct Params {
     };
 };
 
+struct PolicyParams {
+    struct blackdrops : public Params::blackdrops {
+    };
+
+    struct nn_policy {
+        BO_PARAM(size_t, state_dim, Params::blackdrops::model_input_dim());
+        BO_PARAM(size_t, action_dim, Params::blackdrops::action_dim());
+        BO_PARAM_ARRAY(double, max_u, 1.0, 1.0, 1.0, 1.0);
+        BO_PARAM_ARRAY(double, limits, 1., 1., 1., 1., 1., 1., 1., 1.);
+        BO_DYN_PARAM(int, hidden_neurons);
+        BO_PARAM(double, af, 1.0);
+    };
+};
+
 struct GPParams {
-    struct mean_constant {
-        BO_PARAM(double, constant, 0.0);
+    struct kernel : public limbo::defaults::kernel {
+        BO_PARAM(double, noise, Params::gp_model::noise());
+        BO_PARAM(bool, optimize_noise, true);
     };
 
     struct kernel_squared_exp_ard : public limbo::defaults::kernel_squared_exp_ard {
@@ -146,18 +135,14 @@ inline double angle_dist(double a, double b)
 }
 
 namespace global {
-#ifndef GPPOLICY
-    using policy_t = medrops::SFNNPolicy<Params>;
-#else
-    using policy_t = medrops::GPPolicy<Params>;
-#endif
+    using policy_t = blackdrops::NNPolicy<PolicyParams>;
 
     Eigen::VectorXd goal(3);
 
-    using kernel_t = medrops::SquaredExpARDNoise<GPParams>; //limbo::kernel::Exp<Params>;
+    using kernel_t = limbo::kernel::SquaredExpARD<GPParams>; //limbo::kernel::Exp<Params>;
     using mean_t = limbo::mean::Data<GPParams>;
 
-    using GP_t = medrops::GP<Params, kernel_t, mean_t, medrops::KernelLFOpt<Params>>; //, limbo::opt::NLOptGrad<Params, nlopt::LD_SLSQP>>>;
+    using GP_t = limbo::model::GP<Params, kernel_t, mean_t, blackdrops::KernelLFOpt<Params>>; //, limbo::opt::NLOptGrad<Params, nlopt::LD_SLSQP>>>;
     GP_t reward_gp(4, 1);
 
     std::shared_ptr<dynamixel::SafeVelocityControl> robot_control;
@@ -334,7 +319,7 @@ struct Omnigrasper {
 
                 // Query policy for next commands
                 Eigen::VectorXd commands = policy.next(full_state);
-                for (size_t i = 0; i < commands.size(); i++) {
+                for (int i = 0; i < commands.size(); i++) {
                     velocities[i + 1] = commands(i);
                 }
 
@@ -406,15 +391,15 @@ struct Omnigrasper {
         std::cout << "#: " << q.size() << std::endl;
         std::cout << "init state: " << q[0].transpose() << std::endl;
         for (size_t id = 0; id < q.size() - 1; id++) {
-            Eigen::VectorXd init(Params::model_pred_dim());
+            Eigen::VectorXd init(Params::blackdrops::model_pred_dim());
             init = q[id];
-            Eigen::VectorXd init_full(Params::model_input_dim());
+            Eigen::VectorXd init_full(Params::blackdrops::model_input_dim());
             for (int i = 0; i < 4; i++) {
                 init_full(2 * i) = std::cos(init(i));
                 init_full(2 * i + 1) = std::sin(init(i));
             }
             Eigen::VectorXd u = coms[id];
-            Eigen::VectorXd final(Params::model_pred_dim());
+            Eigen::VectorXd final(Params::blackdrops::model_pred_dim());
             final = q[id + 1];
 
             // if (display) {
@@ -475,19 +460,19 @@ struct Omnigrasper {
         ActualReward actual_reward;
         R = std::vector<double>();
         // init state
-        Eigen::VectorXd init = Eigen::VectorXd::Zero(Params::model_pred_dim());
+        Eigen::VectorXd init = Eigen::VectorXd::Zero(Params::blackdrops::model_pred_dim());
         std::cout << "init state: " << init.transpose() << std::endl;
         for (size_t j = 0; j < steps; j++) {
-            Eigen::VectorXd query_vec(Params::model_input_dim() + Params::action_dim());
-            Eigen::VectorXd init_full(Params::model_input_dim());
+            Eigen::VectorXd query_vec(Params::blackdrops::model_input_dim() + Params::blackdrops::action_dim());
+            Eigen::VectorXd init_full(Params::blackdrops::model_input_dim());
             for (int i = 0; i < 4; i++) {
                 init_full(2 * i) = std::cos(init(i));
                 init_full(2 * i + 1) = std::sin(init(i));
             }
-            // init.tail(Params::model_input_dim()) = init.tail(Params::model_input_dim()).unaryExpr([](double x) { return angle_dist(0,x); });
+            // init.tail(Params::blackdrops::model_input_dim()) = init.tail(Params::blackdrops::model_input_dim()).unaryExpr([](double x) { return angle_dist(0,x); });
             Eigen::VectorXd u = policy.next(init_full);
-            query_vec.head(Params::model_input_dim()) = init_full;
-            query_vec.tail(Params::action_dim()) = u;
+            query_vec.head(Params::blackdrops::model_input_dim()) = init_full;
+            query_vec.tail(Params::blackdrops::action_dim()) = u;
 
             Eigen::VectorXd mu;
             Eigen::VectorXd sigma;
@@ -515,18 +500,18 @@ struct Omnigrasper {
 
             double reward = 0.0;
             // init state
-            Eigen::VectorXd init = Eigen::VectorXd::Zero(Params::model_pred_dim());
+            Eigen::VectorXd init = Eigen::VectorXd::Zero(Params::blackdrops::model_pred_dim());
             // init(5) = 0.58;
             for (size_t j = 0; j < steps; j++) {
-                Eigen::VectorXd query_vec(Params::model_input_dim() + Params::action_dim());
-                Eigen::VectorXd init_full(Params::model_input_dim());
+                Eigen::VectorXd query_vec(Params::blackdrops::model_input_dim() + Params::blackdrops::action_dim());
+                Eigen::VectorXd init_full(Params::blackdrops::model_input_dim());
                 for (int i = 0; i < 4; i++) {
                     init_full(2 * i) = std::cos(init(i));
                     init_full(2 * i + 1) = std::sin(init(i));
                 }
                 Eigen::VectorXd u = policy.next(init_full);
-                query_vec.head(Params::model_input_dim()) = init_full;
-                query_vec.tail(Params::action_dim()) = u;
+                query_vec.head(Params::blackdrops::model_input_dim()) = init_full;
+                query_vec.tail(Params::blackdrops::action_dim()) = u;
 
                 Eigen::VectorXd mu;
                 Eigen::VectorXd sigma;
@@ -542,7 +527,7 @@ struct Omnigrasper {
                 }
 
                 Eigen::VectorXd final = init + mu;
-                // final.tail(Params::model_input_dim()) = final.tail(Params::model_input_dim()).unaryExpr([](double x) { return angle_dist(0,x); });
+                // final.tail(Params::blackdrops::model_input_dim()) = final.tail(Params::blackdrops::model_input_dim()).unaryExpr([](double x) { return angle_dist(0,x); });
 
                 reward += world(init, u, final);
                 init = final;
@@ -581,22 +566,15 @@ struct RewardFunction {
     }
 };
 
-using kernel_t = medrops::SquaredExpARDNoise<Params>;
-using mean_t = limbo::mean::Constant<Params>;
-
-using GP_t = medrops::GP<Params, kernel_t, mean_t, medrops::KernelLFOpt<Params, limbo::opt::NLOptGrad<Params, nlopt::LD_SLSQP>>>;
-using SPGP_t = limbo::model::SPGP<Params, kernel_t, mean_t>;
-
 BO_DECLARE_DYN_PARAM(size_t, Params, parallel_evaluations);
-BO_DECLARE_DYN_PARAM(int, Params::nn_policy, hidden_neurons);
-BO_DECLARE_DYN_PARAM(double, Params::medrops, boundary);
-BO_DECLARE_DYN_PARAM(bool, Params, verbose);
+BO_DECLARE_DYN_PARAM(int, PolicyParams::nn_policy, hidden_neurons);
+BO_DECLARE_DYN_PARAM(double, Params::blackdrops, boundary);
+BO_DECLARE_DYN_PARAM(bool, Params::blackdrops, verbose);
 
 BO_DECLARE_DYN_PARAM(double, Params::opt_cmaes, max_fun_evals);
 BO_DECLARE_DYN_PARAM(double, Params::opt_cmaes, fun_tolerance);
 BO_DECLARE_DYN_PARAM(double, Params::opt_cmaes, lbound);
 BO_DECLARE_DYN_PARAM(double, Params::opt_cmaes, ubound);
-BO_DECLARE_DYN_PARAM(int, Params::opt_cmaes, lambda);
 BO_DECLARE_DYN_PARAM(int, Params::opt_cmaes, restarts);
 BO_DECLARE_DYN_PARAM(int, Params::opt_cmaes, elitism);
 BO_DECLARE_DYN_PARAM(bool, Params::opt_cmaes, handle_uncertainty);
@@ -615,7 +593,6 @@ int main(int argc, char** argv)
     ("parallel_evaluations,p", po::value<int>(), "Number of parallel monte carlo evaluations for policy reward estimation.")
     ("hidden_neurons,n", po::value<int>(), "Number of hidden neurons in NN policy.")
     ("boundary,b", po::value<double>(), "Boundary of the values during the optimization.")
-    ("lambda,l", po::value<int>(), "Initial population in CMA-ES (-1 to default)")
     ("max_evals,m", po::value<int>(), "Max function evaluations to optimize the policy.")
     ("tolerance,t", po::value<double>(), "Maximum tolerance to continue optimizing the function.")
     ("restarts,r", po::value<int>(), "Max number of restarts to use during optimization.")
@@ -655,30 +632,24 @@ int main(int argc, char** argv)
             int c = vm["hidden_neurons"].as<int>();
             if (c < 1)
                 c = 1;
-            Params::nn_policy::set_hidden_neurons(c);
+            PolicyParams::nn_policy::set_hidden_neurons(c);
         }
         else {
-            Params::nn_policy::set_hidden_neurons(5);
+            PolicyParams::nn_policy::set_hidden_neurons(5);
         }
         if (vm.count("boundary")) {
             double c = vm["boundary"].as<double>();
             if (c < 0)
                 c = 0;
-            Params::medrops::set_boundary(c);
+            Params::blackdrops::set_boundary(c);
             Params::opt_cmaes::set_lbound(-c);
             Params::opt_cmaes::set_ubound(c);
         }
         else {
-            Params::medrops::set_boundary(0);
+            Params::blackdrops::set_boundary(0);
             Params::opt_cmaes::set_lbound(-6);
             Params::opt_cmaes::set_ubound(6);
         }
-
-        int lambda = -1;
-        if (vm.count("lambda")) {
-            lambda = vm["lambda"].as<int>();
-        }
-        Params::opt_cmaes::set_lambda(lambda);
 
         // Cmaes parameters
         if (vm.count("max_evals")) {
@@ -725,7 +696,7 @@ int main(int argc, char** argv)
     static tbb::task_scheduler_init init(threads);
 #endif
 
-    Params::set_verbose(verbose);
+    Params::blackdrops::set_verbose(verbose);
     Params::opt_cmaes::set_handle_uncertainty(uncertainty);
 
     std::cout << std::endl;
@@ -735,8 +706,7 @@ int main(int argc, char** argv)
     std::cout << "  restarts = " << Params::opt_cmaes::restarts() << std::endl;
     std::cout << "  elitism = " << Params::opt_cmaes::elitism() << std::endl;
     std::cout << "  handle_uncertainty = " << Params::opt_cmaes::handle_uncertainty() << std::endl;
-    std::cout << "  lambda (CMA-ES population) = " << Params::opt_cmaes::lambda() << std::endl;
-    std::cout << "  boundary = " << Params::medrops::boundary() << std::endl;
+    std::cout << "  boundary = " << Params::blackdrops::boundary() << std::endl;
     std::cout << "  tbb threads = " << threads << std::endl;
     std::cout << std::endl;
 
@@ -774,20 +744,22 @@ int main(int argc, char** argv)
     //     // std::cout << std::endl;
     // }
 
-    using policy_opt_t = limbo::opt::CustomCmaes<Params>;
-//using policy_opt_t = limbo::opt::NLOptGrad<Params>;
-#ifdef SPGPS
-    using GPMM_t = limbo::model::GPMultiModel<Params, mean_t, GP_t, SPGP_t>;
-    using MGP_t = medrops::GPModel<Params, GPMM_t>;
-#else
-    using MGP_t = medrops::GPModel<Params, GP_t>;
-#endif
+    using policy_opt_t = limbo::opt::Cmaes<Params>;
+    // #ifdef SPGPS
+    //     using GPMM_t = limbo::model::GPMultiModel<Params, mean_t, GP_t, SPGP_t>;
+    //     using MGP_t = blackdrops::GPModel<Params, GPMM_t>;
+    // #else
+    //     using MGP_t = blackdrops::GPModel<Params, GP_t>;
+    // #endif
+    using kernel_t = limbo::kernel::SquaredExpARD<Params>;
+    using mean_t = limbo::mean::Constant<Params>;
 
-#ifndef GPPOLICY
-    medrops::Medrops<Params, MGP_t, Omnigrasper, medrops::SFNNPolicy<Params>, policy_opt_t, RewardFunction> cp_system;
-#else
-    medrops::Medrops<Params, MGP_t, Omnigrasper, medrops::GPPolicy<Params>, policy_opt_t, RewardFunction> cp_system;
-#endif
+    using GP_t = blackdrops::ParallelGP<Params, limbo::model::GP, kernel_t, mean_t, blackdrops::KernelLFOpt<Params, limbo::opt::NLOptGrad<Params, nlopt::LD_SLSQP>>>;
+    // using SPGP_t = limbo::model::SPGP<Params, kernel_t, mean_t>;
+
+    using MGP_t = blackdrops::GPModel<Params, GP_t>;
+
+    blackdrops::BlackDROPS<Params, MGP_t, Omnigrasper, blackdrops::NNPolicy<PolicyParams>, policy_opt_t, RewardFunction> cp_system;
 
     cp_system.learn(1, 15, true);
 

@@ -31,8 +31,7 @@ namespace dynamixel {
               _min_height(min_height)
         {
             _servos = auto_detect_map<Protocol1>(_serial_interface);
-            if(_servos.size() < 4)
-            {
+            if (_servos.size() < 4) {
                 std::stringstream message;
                 message << "Detected only " << _servos.size()
                         << " servos instead of 4.";
@@ -210,19 +209,16 @@ namespace dynamixel {
 
             if (h_prev <= _min_height && !ignore_height) {
                 double dt = 0.05;
-                for(auto angle : angles)
-                {
-                    angles.at(angle.first) = angle.second + vels[angle.first]*dt;
+                for (auto angle : angles) {
+                    angles.at(angle.first) = angle.second + vels[angle.first] * dt;
                 }
 
                 double h = height_reached(angles);
-                if ((h-h_prev) <= 0.0)
-                {
+                if ((h - h_prev) <= 0.0) {
                     for (auto servo : _servos)
-                      vels[servo.first] = 0.0;
+                        vels[servo.first] = 0.0;
                 }
             }
-
 
             StatusPacket<Protocol1> status;
             for (auto servo : _servos) {

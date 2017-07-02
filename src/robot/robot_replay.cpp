@@ -1,22 +1,18 @@
 #include <limbo/limbo.hpp>
 #include <limbo/mean/constant.hpp>
 
-#include <medrops/safe_velocity_control.hpp>
+#include <blackdrops/safe_velocity_control.hpp>
 
 #include <boost/program_options.hpp>
 
-#include <medrops/cmaes.hpp>
-// #include <medrops/exp_sq_ard.hpp>
-#include <medrops/exp_ard_noise.hpp>
-#include <medrops/gp.hpp>
-#define MEDROPS_GP
-#include <medrops/gp_model.hpp>
-#include <medrops/gp_multi_model.hpp>
-#include <medrops/gp_policy.hpp>
-#include <medrops/kernel_lf_opt.hpp>
-#include <medrops/linear_policy.hpp>
-#include <medrops/medrops.hpp>
-#include <medrops/sf_nn_policy.hpp>
+#include <blackdrops/gp_model.hpp>
+// #include <blackdrops/gp_multi_model.hpp>
+#include <blackdrops/blackdrops.hpp>
+#include <blackdrops/kernel_lf_opt.hpp>
+#include <blackdrops/parallel_gp.hpp>
+
+#include <blackdrops/nn_policy.hpp>
+
 #include <sstream>
 
 template <typename T>
@@ -41,30 +37,28 @@ inline double angle_dist(double a, double b)
 }
 
 struct Params {
-    BO_PARAM(size_t, action_dim, 4);
-    BO_PARAM(size_t, state_full_dim, 12);
-    BO_PARAM(size_t, model_input_dim, 8);
-    BO_PARAM(size_t, model_pred_dim, 4);
-
     BO_PARAM(double, min_height, 0.1);
 
     struct gp_model {
-        BO_PARAM(double, noise, 1e-5);
+        BO_PARAM(double, noise, 0.01);
     };
 
-    struct medrops {
+    struct blackdrops {
+        BO_PARAM(size_t, action_dim, 4);
+        BO_PARAM(size_t, state_full_dim, 12);
+        BO_PARAM(size_t, model_input_dim, 8);
+        BO_PARAM(size_t, model_pred_dim, 4);
         BO_PARAM(size_t, rollout_steps, 39);
         BO_PARAM(double, boundary, 1.0);
     };
 
-    struct nn_policy {
-        BO_PARAM(int, state_dim, 8);
-        BO_PARAM_ARRAY(double, max_u, 1.0, 1.0, 1.0, 1.0);
-        BO_DYN_PARAM(int, hidden_neurons);
-    };
-
     struct mean_constant {
         BO_PARAM(double, constant, 0.0);
+    };
+
+    struct kernel : public limbo::defaults::kernel {
+        BO_PARAM(double, noise, gp_model::noise());
+        BO_PARAM(bool, optimize_noise, false);
     };
 
     struct kernel_squared_exp_ard : public limbo::defaults::kernel_squared_exp_ard {
@@ -76,8 +70,22 @@ struct Params {
     };
 };
 
+struct PolicyParams {
+    struct blackdrops : public Params::blackdrops {
+    };
+
+    struct nn_policy {
+        BO_PARAM(size_t, state_dim, Params::blackdrops::model_input_dim());
+        BO_PARAM(size_t, action_dim, Params::blackdrops::action_dim());
+        BO_PARAM_ARRAY(double, max_u, 1.0, 1.0, 1.0, 1.0);
+        BO_PARAM_ARRAY(double, limits, 1., 1., 1., 1., 1., 1., 1., 1.);
+        BO_DYN_PARAM(int, hidden_neurons);
+        BO_PARAM(double, af, 1.0);
+    };
+};
+
 namespace global {
-    using policy_t = medrops::SFNNPolicy<Params>;
+    using policy_t = blackdrops::NNPolicy<PolicyParams>;
 
     Eigen::VectorXd goal(3);
     std::shared_ptr<dynamixel::SafeVelocityControl> robot_control;
@@ -291,15 +299,15 @@ double execute_policy(const Policy& policy)
     std::cout << "#: " << q.size() << std::endl;
     std::cout << "init state: " << q[0].transpose() << std::endl;
     for (size_t id = 0; id < q.size() - 1; id++) {
-        Eigen::VectorXd init(Params::model_pred_dim());
+        Eigen::VectorXd init(Params::blackdrops::model_pred_dim());
         init = q[id];
-        Eigen::VectorXd init_full(Params::model_input_dim());
+        Eigen::VectorXd init_full(Params::blackdrops::model_input_dim());
         for (int i = 0; i < 4; i++) {
             init_full(2 * i) = std::cos(init(i));
             init_full(2 * i + 1) = std::sin(init(i));
         }
         Eigen::VectorXd u = coms[id];
-        Eigen::VectorXd final(Params::model_pred_dim());
+        Eigen::VectorXd final(Params::blackdrops::model_pred_dim());
         final = q[id + 1];
 
         // if (display) {
@@ -333,27 +341,27 @@ std::vector<std::tuple<Eigen::VectorXd, Eigen::VectorXd, Eigen::VectorXd>> read_
 
     std::string line;
     std::ifstream ifs(filename);
-    // Params::model_input_dim()
+    // Params::blackdrops::model_input_dim()
     while (getline(ifs, line)) // same as: while (getline( myfile, line ).good())
     {
         std::stringstream ss(line);
-        Eigen::VectorXd input(Params::model_input_dim());
-        Eigen::VectorXd output(Params::model_pred_dim());
-        Eigen::VectorXd action(Params::action_dim());
+        Eigen::VectorXd input(Params::blackdrops::model_input_dim());
+        Eigen::VectorXd output(Params::blackdrops::model_pred_dim());
+        Eigen::VectorXd action(Params::blackdrops::action_dim());
 
-        for (size_t i = 0; i < Params::model_input_dim(); i++) {
+        for (size_t i = 0; i < Params::blackdrops::model_input_dim(); i++) {
             double d;
             ss >> d;
             input(i) = d;
         }
 
-        for (size_t i = 0; i < Params::action_dim(); i++) {
+        for (size_t i = 0; i < Params::blackdrops::action_dim(); i++) {
             double d;
             ss >> d;
             action(i) = d;
         }
 
-        for (size_t i = 0; i < Params::model_pred_dim(); i++) {
+        for (size_t i = 0; i < Params::blackdrops::model_pred_dim(); i++) {
             double d;
             ss >> d;
             output(i) = d;
@@ -365,11 +373,7 @@ std::vector<std::tuple<Eigen::VectorXd, Eigen::VectorXd, Eigen::VectorXd>> read_
     return data;
 }
 
-using kernel_t = medrops::SquaredExpARDNoise<Params>;
-using mean_t = limbo::mean::Constant<Params>;
-using GP_t = medrops::GP<Params, kernel_t, mean_t, medrops::KernelLFOpt<Params, limbo::opt::NLOptGrad<Params, nlopt::LD_SLSQP>>>;
-
-BO_DECLARE_DYN_PARAM(int, Params::nn_policy, hidden_neurons);
+BO_DECLARE_DYN_PARAM(int, PolicyParams::nn_policy, hidden_neurons);
 
 int main(int argc, char** argv)
 {
@@ -407,10 +411,10 @@ int main(int argc, char** argv)
             int c = vm["hidden_neurons"].as<int>();
             if (c < 1)
                 c = 1;
-            Params::nn_policy::set_hidden_neurons(c);
+            PolicyParams::nn_policy::set_hidden_neurons(c);
         }
         else {
-            Params::nn_policy::set_hidden_neurons(10);
+            PolicyParams::nn_policy::set_hidden_neurons(10);
         }
     }
     catch (po::error& e) {
@@ -432,17 +436,21 @@ int main(int argc, char** argv)
     size_t random_trials = 1;
     size_t learning_trials = 15;
 
-    using MGP_t = medrops::GPModel<Params, GP_t>;
+    using kernel_t = limbo::kernel::SquaredExpARD<Params>;
+    using mean_t = limbo::mean::Constant<Params>;
+    using GP_t = blackdrops::ParallelGP<Params, limbo::model::GP, kernel_t, mean_t, blackdrops::KernelLFOpt<Params, limbo::opt::NLOptGrad<Params, nlopt::LD_SLSQP>>>;
+
+    using MGP_t = blackdrops::GPModel<Params, GP_t>;
 
     double best_r = -std::numeric_limits<double>::max();
     size_t best = 0;
-    // medrops::Medrops<Params, MGP_t, Omnigrasper, medrops::SFNNPolicy<Params>, policy_opt_t, RewardFunction> cp_system;
+    // blackdrops::BlackDROPS<Params, MGP_t, Omnigrasper, blackdrops::NNPolicy<PolicyParams>, policy_opt_t, RewardFunction> cp_system;
     for (size_t i = 0; i < random_trials; i++) {
         std::cout << "Random trial #" << (i + 1) << std::endl;
         // Load policy
         Eigen::VectorXd policy_params;
         Eigen::read_binary(random_file + std::to_string(i) + ".bin", policy_params);
-        medrops::SFNNPolicy<Params> policy;
+        blackdrops::NNPolicy<PolicyParams> policy;
         policy.set_params(policy_params);
         double r = execute_policy(policy);
         if (r > best_r) {
@@ -459,7 +467,7 @@ int main(int argc, char** argv)
         // Load policy
         Eigen::VectorXd policy_params;
         Eigen::read_binary(policy_file + std::to_string(i + 1) + ".bin", policy_params);
-        medrops::SFNNPolicy<Params> policy;
+        blackdrops::NNPolicy<PolicyParams> policy;
         policy.set_params(policy_params);
 
         // Load model points
@@ -468,7 +476,7 @@ int main(int argc, char** argv)
         gp.learn(data, true);
 
         // Normalize policy
-        policy.normalize(gp);
+        // policy.normalize(gp);
 
         double r = execute_policy(policy);
         if (r > best_r) {

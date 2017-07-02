@@ -9,87 +9,28 @@ def options(opt):
     opt.load('sdl')
     opt.load('robot_dart')
     opt.load('libdynamixel')
+    opt.load('ros')
+    opt.load('kdl')
+    opt.load('trac_ik')
 
 def configure(conf):
     conf.get_env()['BUILD_ROBOT'] = False
     conf.load('sdl')
     conf.load('robot_dart')
     conf.load('libdynamixel')
+    conf.load('ros')
+    conf.load('kdl')
+    conf.load('trac_ik')
+
     conf.check_sdl()
     conf.check_robot_dart()
     conf.check_libdynamixel()
+    conf.check_ros()
+    conf.check_kdl()
+    conf.check_trac_ik()
+
+    conf.env.LIB_THREADS = ['pthread']
 
 
 def build(bld):
-    libs = 'TBB EIGEN BOOST LIMBO LIBCMAES NLOPT SFERES2 BOOST_CHRONO RT SDL '
-    arm_libs = 'TBB EIGEN BOOST LIMBO LIBCMAES NLOPT SFERES2 BOOST_CHRONO RT ROBOT_DART DART BOOST_DART '
-    arm_libs_graphic = arm_libs + 'DART_GRAPHIC'
-    robot_libs = libs + 'LIBDYNAMIXEL'
-    cxxflags = bld.get_env()['CXXFLAGS']
-    cxxflags += ['-D NODSP']
-
-    # limbo.create_variants(bld,
-    #                   source='test.cpp',
-    #                   includes='. ../../src ../ ./include',
-    #                   target='test',
-    #                   uselib=libs,
-    #                   uselib_local='limbo',
-    #                   variants = ['SIMU'])
-
-    limbo.create_variants(bld,
-                      source='test_cp.cpp',
-                      includes='. ../../src ../ ./include',
-                      target='test_cp',
-                      uselib=libs,
-                      uselib_local='limbo',
-                      variants = ['SIMU', 'SIMU GPPOLICY'])
-
-    limbo.create_variants(bld,
-                      source='test_arm.cpp',
-                      includes='. ../../src ../ ./include',
-                      target='test_arm',
-                      uselib=arm_libs,
-                      uselib_local='limbo',
-                      variants = ['SIMU', 'SIMU GPPOLICY'])
-
-    if bld.get_env()['BUILD_ROBOT'] == True:
-        limbo.create_variants(bld,
-                          source='robot_arm.cpp',
-                          includes='. ../../src ../ ./include',
-                          target='robot_arm',
-                          uselib=robot_libs,
-                          uselib_local='limbo',
-                          variants = ['SIMU'])
-
-        limbo.create_variants(bld,
-                          source='robot_replay.cpp',
-                          includes='. ../../src ../ ./include',
-                          target='robot_replay',
-                          uselib=robot_libs,
-                          uselib_local='limbo',
-                          variants = ['SIMU'])
-
-    if bld.get_env()['BUILD_GRAPHIC'] == True:
-        limbo.create_variants(bld,
-                          source='test_arm.cpp',
-                          includes='. ../../src ../ ./include',
-                          target='test_arm',
-                          uselib=arm_libs_graphic,
-                          uselib_local='limbo',
-                          variants = ['GRAPHIC', 'GRAPHIC GPPOLICY'])
-
-    limbo.create_variants(bld,
-                      source='test.cpp',
-                      includes='. ../../src ../ ./include',
-                      target='test',
-                      uselib=libs,
-                      uselib_local='limbo',
-                      variants = ['SIMU', 'SIMU GPPOLICY'])
-
-    # limbo.create_variants(bld,
-    #                   source='ode_test.cpp',
-    #                   includes='. ../../src ../ ./include',
-    #                   target='ode_test',
-    #                   uselib=libs,
-    #                   uselib_local='limbo',
-    #                   variants = ['SIMU'])
+    bld.recurse('src/')
