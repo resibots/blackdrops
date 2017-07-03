@@ -3,56 +3,32 @@
 import limbo
 
 def build(bld):
-    dart_libs = 'TBB EIGEN BOOST LIMBO LIBCMAES NLOPT SFERES2 BOOST_CHRONO RT ROBOT_DART DART BOOST_DART THREADS KDL TRAC_IK '
+    dart_libs = 'TBB EIGEN BOOST LIMBO LIBCMAES NLOPT SFERES2 BOOST_CHRONO RT ROBOT_DART DART BOOST_DART THREADS '
     dart_libs_graphic = dart_libs + 'DART_GRAPHIC'
+
+    path = bld.path.abspath()[:-len('src/dart')] + 'res'
+
+    if 'INCLUDES_ROBOT_DART' not in bld.get_env() or 'INCLUDES_DART' not in bld.get_env():
+        Logs.pprint('YELLOW', 'Dart or robot_dart not found in your system. Will not build DART scenarios')
+        return
 
     cxxflags = bld.get_env()['CXXFLAGS']
     
     limbo.create_variants(bld,
-                      source='half_cheetah.cpp',
+                      source='simple_arm.cpp',
                       includes='. ../../../../src ../ ../../include',
-                      target='half_cheetah',
+                      target='simple_arm',
                       uselib=dart_libs,
                       uselib_local='limbo',
-                      variants = ['SIMU SPGPS'])
-
-    limbo.create_variants(bld,
-                      source='door_opening.cpp',
-                      includes='. ../../../../src ../ ../../include',
-                      target='door_opening',
-                      uselib=dart_libs,
-                      uselib_local='limbo',
-                      variants = ['SIMU SPGPS'])
-
-    limbo.create_variants(bld,
-                      source='simu_arm.cpp',
-                      includes='. ../../../../src ../ ../../include',
-                      target='simu_arm',
-                      uselib=dart_libs,
-                      uselib_local='limbo',
+                      cxxflags = cxxflags + ['-DRESPATH="' + path + '"'],
                       variants = ['SIMU'])
 
     if bld.get_env()['BUILD_GRAPHIC'] == True:
         limbo.create_variants(bld,
-                          source='half_cheetah.cpp',
+                          source='simple_arm.cpp',
                           includes='. ../../../../src ../ ../../include',
-                          target='half_cheetah',
+                          target='simple_arm',
                           uselib=dart_libs_graphic,
                           uselib_local='limbo',
-                          variants = ['GRAPHIC SPGPS'])
-
-        limbo.create_variants(bld,
-                          source='door_opening.cpp',
-                          includes='. ../../../../src ../ ../../include',
-                          target='door_opening',
-                          uselib=dart_libs_graphic,
-                          uselib_local='limbo',
-                          variants = ['GRAPHIC SPGPS'])
-
-        limbo.create_variants(bld,
-                      source='simu_arm.cpp',
-                      includes='. ../../../../src ../ ../../include',
-                      target='simu_arm',
-                      uselib=dart_libs_graphic,
-                      uselib_local='limbo',
-                      variants = ['GRAPHIC'])
+                          cxxflags = cxxflags + ['-DRESPATH="' + path + '"'],
+                          variants = ['GRAPHIC'])

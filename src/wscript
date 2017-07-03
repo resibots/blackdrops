@@ -4,4 +4,3 @@
 def build(bld):
     bld.recurse('classic_control/')
     bld.recurse('dart/')
-    bld.recurse('robot/')
