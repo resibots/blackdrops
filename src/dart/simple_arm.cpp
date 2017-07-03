@@ -17,33 +17,13 @@
 
 #include <blackdrops/policy/nn_policy.hpp>
 
-template <typename T>
-inline T gaussian_rand(T m = 0.0, T v = 1.0)
-{
-    static std::random_device rd;
-    static std::mt19937 gen(rd());
-
-    std::normal_distribution<T> gaussian(m, v);
-
-    return gaussian(gen);
-}
-
-inline double angle_dist(double a, double b)
-{
-    double theta = b - a;
-    while (theta < -M_PI)
-        theta += 2 * M_PI;
-    while (theta > M_PI)
-        theta -= 2 * M_PI;
-    return theta;
-}
+#include <utils/utils.hpp>
 
 struct Params {
 #ifdef GRAPHIC
     struct graphics : robot_dart::defaults::graphics {
     };
 #endif
-    BO_DYN_PARAM(size_t, parallel_evaluations);
 
     struct options {
         BO_PARAM(bool, bounded, true);
@@ -485,7 +465,6 @@ void init_simu(const std::string& robot_file)
     std::cout << "Goal is: " << global::goal.transpose() << std::endl;
 }
 
-BO_DECLARE_DYN_PARAM(size_t, Params, parallel_evaluations);
 BO_DECLARE_DYN_PARAM(int, PolicyParams::nn_policy, hidden_neurons);
 BO_DECLARE_DYN_PARAM(double, Params::blackdrops, boundary);
 BO_DECLARE_DYN_PARAM(bool, Params::blackdrops, verbose);
@@ -505,7 +484,7 @@ int main(int argc, char** argv)
     int threads = tbb::task_scheduler_init::automatic;
     namespace po = boost::program_options;
     po::options_description desc("Command line arguments");
-    desc.add_options()("help,h", "Prints this help message")("parallel_evaluations,p", po::value<int>(), "Number of parallel monte carlo evaluations for policy reward estimation.")("hidden_neurons,n", po::value<int>(), "Number of hidden neurons in NN policy.")("boundary,b", po::value<double>(), "Boundary of the values during the optimization.")("max_evals,m", po::value<int>(), "Max function evaluations to optimize the policy.")("tolerance,t", po::value<double>(), "Maximum tolerance to continue optimizing the function.")("restarts,r", po::value<int>(), "Max number of restarts to use during optimization.")("elitism,e", po::value<int>(), "Elitism mode to use [0 to 3].")("uncertainty,u", po::bool_switch(&uncertainty)->default_value(false), "Enable uncertainty handling.")("threads,d", po::value<int>(), "Max number of threads used by TBB")("verbose,v", po::bool_switch(&verbose)->default_value(false), "Enable verbose mode.");
+    desc.add_options()("help,h", "Prints this help message")("hidden_neurons,n", po::value<int>(), "Number of hidden neurons in NN policy.")("boundary,b", po::value<double>(), "Boundary of the values during the optimization.")("max_evals,m", po::value<int>(), "Max function evaluations to optimize the policy.")("tolerance,t", po::value<double>(), "Maximum tolerance to continue optimizing the function.")("restarts,r", po::value<int>(), "Max number of restarts to use during optimization.")("elitism,e", po::value<int>(), "Elitism mode to use [0 to 3].")("uncertainty,u", po::bool_switch(&uncertainty)->default_value(false), "Enable uncertainty handling.")("threads,d", po::value<int>(), "Max number of threads used by TBB")("verbose,v", po::bool_switch(&verbose)->default_value(false), "Enable verbose mode.");
 
     try {
         po::variables_map vm;
@@ -517,15 +496,6 @@ int main(int argc, char** argv)
 
         po::notify(vm);
 
-        if (vm.count("parallel_evaluations")) {
-            int c = vm["parallel_evaluations"].as<int>();
-            if (c < 0)
-                c = 0;
-            Params::set_parallel_evaluations(c);
-        }
-        else {
-            Params::set_parallel_evaluations(100);
-        }
         if (vm.count("threads")) {
             threads = vm["threads"].as<int>();
         }

@@ -13,6 +13,8 @@
 #include <blackdrops/policy/linear_policy.hpp>
 #include <blackdrops/policy/nn_policy.hpp>
 
+#include <utils/utils.hpp>
+
 #if defined(USE_SDL) && !defined(NODSP)
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_image.h>
@@ -93,17 +95,6 @@ void sdl_clean()
     SDL_Quit();
 }
 #endif
-
-template <typename T>
-inline T gaussian_rand(T m = 0.0, T v = 1.0)
-{
-    static std::random_device rd;
-    static std::mt19937 gen(rd());
-
-    std::normal_distribution<T> gaussian(m, v);
-
-    return gaussian(gen);
-}
 
 struct Params {
     BO_DYN_PARAM(size_t, parallel_evaluations);
@@ -200,21 +191,6 @@ struct PolicyParams {
     struct kernel_squared_exp_ard : public limbo::defaults::kernel_squared_exp_ard {
     };
 };
-
-inline double angle_dist(double a, double b)
-{
-    double theta = b - a;
-    while (theta < -M_PI)
-        theta += 2 * M_PI;
-    while (theta > M_PI)
-        theta -= 2 * M_PI;
-    return theta;
-}
-
-// namespace global {
-//     std::vector<Eigen::VectorXd> _tried_policies = std::vector<Eigen::VectorXd>();
-//     std::vector<Eigen::VectorXd> _tried_rewards = std::vector<Eigen::VectorXd>();
-// }
 
 struct Pendulum {
     typedef std::vector<double> ode_state_type;
