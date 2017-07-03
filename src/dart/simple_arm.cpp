@@ -25,10 +25,6 @@ struct Params {
     };
 #endif
 
-    struct options {
-        BO_PARAM(bool, bounded, true);
-    };
-
     struct blackdrops {
         BO_PARAM(size_t, action_dim, 4);
         BO_PARAM(size_t, state_full_dim, 8);

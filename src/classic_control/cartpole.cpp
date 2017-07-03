@@ -117,10 +117,6 @@ struct Params {
         BO_DYN_PARAM(bool, verbose);
     };
 
-    struct options {
-        BO_PARAM(bool, bounded, true);
-    };
-
     struct gp_model {
         BO_PARAM(double, noise, 0.01);
     };

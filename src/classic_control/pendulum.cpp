@@ -112,10 +112,6 @@ struct Params {
         BO_DYN_PARAM(double, boundary);
     };
 
-    struct options {
-        BO_PARAM(bool, bounded, false);
-    };
-
     struct gp_model {
         BO_PARAM(double, noise, 0.01);
     };
