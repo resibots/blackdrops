@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # encoding: utf-8
 import limbo
+import glob
 
 def build(bld):
     dart_libs = 'TBB EIGEN BOOST LIMBO LIBCMAES NLOPT SFERES2 BOOST_CHRONO RT ROBOT_DART DART BOOST_DART THREADS '
@@ -32,3 +33,33 @@ def build(bld):
                           uselib_local='limbo',
                           cxxflags = cxxflags + ['-DRESPATH="' + path + '"'],
                           variants = ['GRAPHIC'])
+
+    # Find new targets
+    files = glob.glob(bld.path.abspath()+"/*.cpp")
+    new_targets = []
+    for f in files:
+        target_name = f[f.rfind('/')+1:-4]
+        # Ignore our sample scenarios
+        if target_name != 'simple_arm':
+            new_targets.append(target_name)
+
+    # Compile new targets
+    for target in new_targets:
+        limbo.create_variants(bld,
+                        source=target+'.cpp',
+                        includes='. ../../../../src ../ ../../include',
+                        target=target,
+                        uselib=dart_libs,
+                        uselib_local='limbo',
+                        cxxflags = cxxflags + ['-DRESPATH="' + path + '"'],
+                        variants = ['SIMU'])
+
+        if bld.get_env()['BUILD_GRAPHIC'] == True:
+            limbo.create_variants(bld,
+                            source=target+'.cpp',
+                            includes='. ../../../../src ../ ../../include',
+                            target=target,
+                            uselib=dart_libs_graphic,
+                            uselib_local='limbo',
+                            cxxflags = cxxflags + ['-DRESPATH="' + path + '"'],
+                            variants = ['GRAPHIC'])

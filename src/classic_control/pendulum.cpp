@@ -146,10 +146,6 @@ struct Params {
         BO_DYN_PARAM(double, ubound);
         BO_DYN_PARAM(double, lbound);
     };
-
-    struct opt_nloptnograd : public limbo::defaults::opt_nloptnograd {
-        BO_PARAM(int, iterations, 20000);
-    };
 };
 
 struct PolicyParams {

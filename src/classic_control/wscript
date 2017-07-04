@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # encoding: utf-8
 import limbo
+import glob
 
 def build(bld):
     libs = 'TBB EIGEN BOOST LIMBO LIBCMAES NLOPT SFERES2 BOOST_CHRONO RT SDL '
@@ -42,3 +43,33 @@ def build(bld):
                         uselib_local='limbo',
                         cxxflags = cxxflags,
                         variants = ['GRAPHIC', 'GRAPHIC GPPOLICY', 'GRAPHIC LINEAR'])
+
+    # Find new targets
+    files = glob.glob(bld.path.abspath()+"/*.cpp")
+    new_targets = []
+    for f in files:
+        target_name = f[f.rfind('/')+1:-4]
+        # Ignore our sample scenarios
+        if target_name != 'cartpole' and target_name != 'pendulum':
+            new_targets.append(target_name)
+
+    # Compile new targets
+    for target in new_targets:
+        limbo.create_variants(bld,
+                        source=target+'.cpp',
+                        includes='. ../../../../src ../ ../../include',
+                        target=target,
+                        uselib=libs,
+                        uselib_local='limbo',
+                        cxxflags = cxxflags + ['-D NODSP'],
+                        variants = ['SIMU'])
+
+        if bld.env.DEFINES_SDL:
+            limbo.create_variants(bld,
+                            source=target+'.cpp',
+                            includes='. ../../../../src ../ ../../include',
+                            target=target,
+                            uselib=libs,
+                            uselib_local='limbo',
+                            cxxflags = cxxflags,
+                            variants = ['GRAPHIC'])
