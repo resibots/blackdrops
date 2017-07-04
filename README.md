@@ -29,7 +29,7 @@ Black-DROPS is partly funded by the ResiBots ERC Project (http://www.resibots.eu
 
 - Clone properly the repo: `git clone --recursive https://github.com/resibots/blackdrops.git` (or `git clone --recursive git@github.com:resibots/blackdrops.git`)
 
-### What you should expect from Black-DROPS?
+### What you should expect from Black-DROPS
 
 The Black-DROPS algorithm is a model-based policy search algorithm (the ICML 2015 [tutorial](http://icml.cc/2015/tutorials/PolicySearch.pdf) on policy search methods for robotics is a good source for reading) with the following main properties:
 
@@ -47,7 +47,7 @@ To get a better idea of how well Black-DROPS works please check the [paper](http
 <img src="./imgs/pendulum_rewards.png" width="400">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<img src="./imgs/cartpole_rewards.png" width="400">
 </center>
 
-### What you should NOT expect from Black-DROPS?
+### What you should NOT expect from Black-DROPS
 
 In short, you should:
 
