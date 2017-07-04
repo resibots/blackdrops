@@ -1,7 +1,7 @@
 #!/bin/bash
 sudo apt-get -qq update
 # install Eigen 3, Boost and TBB
-sudo apt-get -qq --yes --force-yes install cmake libeigen3-dev libtbb-dev libboost-serialization-dev libboost-filesystem-dev libboost-test-dev libboost-program-options-dev libboost-thread-dev
+sudo apt-get -qq --yes --force-yes install cmake libeigen3-dev libtbb-dev libboost-serialization-dev libboost-filesystem-dev libboost-test-dev libboost-program-options-dev libboost-thread-dev libboost-regex-dev
 # install google tests for libcmaes
 sudo apt-get -qq --yes --force-yes install libgtest-dev autoconf automake libtool libgoogle-glog-dev libgflags-dev
 
