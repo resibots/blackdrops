@@ -1,0 +1,9 @@
+[submodule "limbo"]
+	path = limbo
+	url = https://github.com/resibots/limbo.git
+[submodule "dart"]
+	path = dart
+	url = https://github.com/dartsim/dart.git
+[submodule "libcmaes"]
+	path = libcmaes
+	url = https://github.com/resibots/libcmaes.git
