@@ -47,7 +47,7 @@ Black-DROPS is partly funded by the ResiBots ERC Project (http://www.resibots.eu
 
 #### Install dependencies
 
-Some of the dependencies (libcmaes, DART) require specific installation steps (e.g., compilation from sources). As such, we provide some scripts for fast installation of the dependencies (3 different categories):
+Some of the dependencies (libcmaes, DART) require specific installation steps (e.g., compilation from sources). As such, we provide some scripts (undert the `scripts` folder) for fast installation of the dependencies (3 different categories):
 
 ##### Install the recommended dependencies
 
@@ -63,7 +63,7 @@ Run the script `install_deps_req.sh`
 
 #### Compilation
 
-As the Black-DROPS code is a `limbo` experiment (check the [docs](http://www.resibots.eu/limbo/index.html) of limbo for details) and can sometimes be a bit tricky to compile, we provide the `compile.sh` script. This should compile all the Black-DROPS code. Even your own new scenarios should be compiled with this script (if the files are in the correct folders --- check *''How to create your own scenario''*).
+As the Black-DROPS code is a `limbo` experiment (check the [docs](http://www.resibots.eu/limbo/index.html) of limbo for details) and can sometimes be a bit tricky to compile, we provide the `configure.sh` and `compile.sh` scripts. The former needs to be ran once. The former should compile all the Black-DROPS code. Even your own new scenarios should be compiled with this script (if the files are in the correct folders --- check *''How to create your own scenario''*).
 
 If you want to know in more detail how to compile limbo experiments, please check the quite extensive [documentation](http://www.resibots.eu/limbo/index.html) of limbo. In addition, if you want more fine-tuned compilation of your own scenarios, please check the [advanced tutorial](here).
 
