@@ -39,6 +39,7 @@ Black-DROPS is partly funded by the ResiBots ERC Project (http://www.resibots.eu
 - Boost
 - limbo, https://github.com/resibots/limbo
 - libcmaes, https://github.com/beniz/libcmaes (recommended to use with TBB)
+- NLOpt, http://ab-initio.mit.edu/wiki/index.php/NLopt
 
 ##### Optional
 - TBB, https://www.threadingbuildingblocks.org/ (for parallelization) --- highly recommended

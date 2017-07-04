@@ -25,6 +25,19 @@ make install
 # go back to original directory
 cd ../..
 
+# configure paths
+# configure LD_LIBRARY_PATH
+export LD_LIBRARY_PATH=${cwd}/libcmaes/lib/python2.7/dist-packages/:${cwd}/install/lib:${LD_LIBRARY_PATH}
+
+# configure PYTHONPATH
+export PYTHONPATH=${cwd}/libcmaes/lib/python2.7/dist-packages/:${PYTHONPATH}
+
+# installing NLOpt
+wget http://members.loria.fr/JBMouret/mirrors/nlopt-2.4.2.tar.gz
+tar -zxvf nlopt-2.4.2.tar.gz && cd nlopt-2.4.2
+./configure -with-cxx --enable-shared --without-python --without-matlab --without-octave --prefix=${cwd}/install
+make install
+
 # install DART dependencies
 sudo apt-add-repository ppa:libccd-debs/ppa -y
 sudo apt-add-repository ppa:fcl-debs/ppa -y
@@ -43,13 +56,6 @@ cd ../..
 
 # just as fail-safe
 sudo ldconfig
-
-# configure paths
-# configure LD_LIBRARY_PATH
-export LD_LIBRARY_PATH=${cwd}/libcmaes/lib/python2.7/dist-packages/:${cwd}/install/lib:${LD_LIBRARY_PATH}
-
-# configure PYTHONPATH
-export PYTHONPATH=${cwd}/libcmaes/lib/python2.7/dist-packages/:${PYTHONPATH}
 
 # install robot_dart
 cd robot_dart
