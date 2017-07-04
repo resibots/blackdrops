@@ -37,6 +37,15 @@ mkdir build && cd build
 cmake -DBUILD_PYTHON=ON -DCMAKE_INSTALL_PREFIX=${cwd}/install ..
 make -j4
 make install
+# go back to original directory
+cd ../..
+
+# install robot_dart
+cd robot_dart
+./waf configure --dart=${cwd}/install
+./waf install
+# go back to original directory
+cd ..
 
 # just as fail-safe
 sudo ldconfig

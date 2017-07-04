@@ -43,6 +43,7 @@ Black-DROPS is partly funded by the ResiBots ERC Project (http://www.resibots.eu
 ##### Optional
 - TBB, https://www.threadingbuildingblocks.org/ (for parallelization) --- highly recommended
 - DART, http://dartsim.github.io/ (for scenarios based on DART) --- recommended
+- robot\_dart, https://github.com/resibots/robot_dart (for scenarios based on DART) --- recommended
 - SDL2 (for visualization of standard control scenarios; e.g., cart-pole)
 
 #### Install dependencies
