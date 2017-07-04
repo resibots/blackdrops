@@ -7,3 +7,6 @@
 [submodule "libcmaes"]
 	path = libcmaes
 	url = https://github.com/resibots/libcmaes.git
+[submodule "robot_dart"]
+	path = robot_dart
+	url = https://github.com/resibots/robot_dart.git
