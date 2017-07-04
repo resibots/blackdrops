@@ -480,7 +480,18 @@ int main(int argc, char** argv)
     int threads = tbb::task_scheduler_init::automatic;
     namespace po = boost::program_options;
     po::options_description desc("Command line arguments");
-    desc.add_options()("help,h", "Prints this help message")("hidden_neurons,n", po::value<int>(), "Number of hidden neurons in NN policy.")("boundary,b", po::value<double>(), "Boundary of the values during the optimization.")("max_evals,m", po::value<int>(), "Max function evaluations to optimize the policy.")("tolerance,t", po::value<double>(), "Maximum tolerance to continue optimizing the function.")("restarts,r", po::value<int>(), "Max number of restarts to use during optimization.")("elitism,e", po::value<int>(), "Elitism mode to use [0 to 3].")("uncertainty,u", po::bool_switch(&uncertainty)->default_value(false), "Enable uncertainty handling.")("threads,d", po::value<int>(), "Max number of threads used by TBB")("verbose,v", po::bool_switch(&verbose)->default_value(false), "Enable verbose mode.");
+    // clang-format off
+    desc.add_options()("help,h", "Prints this help message")
+                      ("hidden_neurons,n", po::value<int>(), "Number of hidden neurons in NN policy.")
+                      ("boundary,b", po::value<double>(), "Boundary of the values during the optimization.")
+                      ("max_evals,m", po::value<int>(), "Max function evaluations to optimize the policy.")
+                      ("tolerance,t", po::value<double>(), "Maximum tolerance to continue optimizing the function.")
+                      ("restarts,r", po::value<int>(), "Max number of restarts to use during optimization.")
+                      ("elitism,e", po::value<int>(), "Elitism mode to use [0 to 3].")
+                      ("uncertainty,u", po::bool_switch(&uncertainty)->default_value(false), "Enable uncertainty handling.")
+                      ("threads,d", po::value<int>(), "Max number of threads used by TBB")
+                      ("verbose,v", po::bool_switch(&verbose)->default_value(false), "Enable verbose mode.");
+    // clang-format on
 
     try {
         po::variables_map vm;

@@ -97,8 +97,6 @@ void sdl_clean()
 #endif
 
 struct Params {
-    BO_DYN_PARAM(size_t, parallel_evaluations);
-
     BO_PARAM(double, goal_pos, M_PI);
     BO_PARAM(double, goal_vel, 0.0);
 
@@ -196,7 +194,6 @@ struct Pendulum {
         boost::numeric::odeint::runge_kutta4<ode_state_type> ode_stepper;
         double t = 0.0;
         R = std::vector<double>();
-        // std::cout << "Executing policy: " << policy.params().transpose() << std::endl;
 
         ode_state_type pend_state(2, 0.0);
 
@@ -207,22 +204,14 @@ struct Pendulum {
             init(2) = std::sin(pend_state[1]);
 
             Eigen::VectorXd init_diff = Eigen::VectorXd::Map(pend_state.data(), pend_state.size());
-            // while (init_diff(1) < -M_PI)
-            //     init_diff(1) += 2 * M_PI;
-            // while (init_diff(1) > M_PI)
-            //     init_diff(1) -= 2 * M_PI;
 
             _u = policy.next(init)[0];
-            // ode_stepper.do_step(std::bind(&Pendulum::dynamics, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3), pend_state, t, dt);
             boost::numeric::odeint::integrate_const(ode_stepper,
                 std::bind(&Pendulum::dynamics, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3),
                 pend_state, t, t + dt, dt / 2.0);
             t += dt;
             Eigen::VectorXd final = Eigen::VectorXd::Map(pend_state.data(), pend_state.size());
-            // while (final(1) < -M_PI)
-            //     final(1) += 2 * M_PI;
-            // while (final(1) > M_PI)
-            //     final(1) -= 2 * M_PI;
+
             res.push_back(std::make_tuple(init, limbo::tools::make_vector(_u), final - init_diff));
             double r = world(init, limbo::tools::make_vector(_u), final);
             R.push_back(r);
@@ -252,10 +241,8 @@ struct Pendulum {
         }
 
         if (!policy.random() && display) {
-            // global::_tried_policies.push_back(policy.params());
             double rr = std::accumulate(R.begin(), R.end(), 0.0);
             std::cout << "Reward: " << rr << std::endl;
-            // global::_tried_rewards.push_back(limbo::tools::make_vector(rr));
         }
 
         return res;
@@ -279,21 +266,12 @@ struct Pendulum {
             Eigen::VectorXd mu;
             Eigen::VectorXd sigma;
             std::tie(mu, sigma) = model.predictm(query_vec);
-            // sigma = std::sqrt(sigma);
-            // // std::cout << sigma << std::endl;
-            // for (int i = 0; i < mu.size(); i++) {
-            //     double s = gaussian_rand(mu(i), sigma);
-            //     mu(i) = std::max(mu(i) - sigma, std::min(s, mu(i) + sigma));
-            // }
 
             Eigen::VectorXd final = init_diff + mu;
-            // while (final(1) < -M_PI)
-            //     final(1) += 2 * M_PI;
-            // while (final(1) > M_PI)
-            //     final(1) -= 2 * M_PI;
+
             double r = world(init_diff, mu, final);
             R.push_back(r);
-            // reward += world(init_diff, u, final);
+
             init_diff = final;
             init(0) = final(0);
             init(1) = std::cos(final(1));
@@ -329,65 +307,41 @@ struct Pendulum {
     template <typename Policy, typename Model, typename Reward>
     double predict_policy(const Policy& policy, const Model& model, const Reward& world, size_t steps) const
     {
-        size_t N = Params::parallel_evaluations();
+        double reward = 0.0;
+        // init state
+        Eigen::VectorXd init_diff = Eigen::VectorXd::Zero(Params::blackdrops::model_pred_dim());
+        Eigen::VectorXd init = Eigen::VectorXd::Zero(Params::blackdrops::model_input_dim());
+        init(1) = std::cos(0.0);
+        init(2) = std::sin(0.0);
+        for (size_t j = 0; j < steps; j++) {
+            Eigen::VectorXd query_vec(Params::blackdrops::model_input_dim() + Params::blackdrops::action_dim());
+            Eigen::VectorXd u = policy.next(init);
+            query_vec.head(Params::blackdrops::model_input_dim()) = init;
+            query_vec.tail(Params::blackdrops::action_dim()) = u;
 
-        Eigen::VectorXd rews(N);
+            Eigen::VectorXd mu;
+            Eigen::VectorXd sigma;
+            std::tie(mu, sigma) = model.predictm(query_vec);
 
-        tbb::parallel_for(size_t(0), N, size_t(1), [&](size_t i) {
-            double reward = 0.0;
-            // init state
-            Eigen::VectorXd init_diff = Eigen::VectorXd::Zero(Params::blackdrops::model_pred_dim());
-            Eigen::VectorXd init = Eigen::VectorXd::Zero(Params::blackdrops::model_input_dim());
-            init(1) = std::cos(0.0);
-            init(2) = std::sin(0.0);
-            for (size_t j = 0; j < steps; j++) {
-                Eigen::VectorXd query_vec(Params::blackdrops::model_input_dim() + Params::blackdrops::action_dim());
-                Eigen::VectorXd u = policy.next(init);
-                query_vec.head(Params::blackdrops::model_input_dim()) = init;
-                query_vec.tail(Params::blackdrops::action_dim()) = u;
-
-                Eigen::VectorXd mu;
-                Eigen::VectorXd sigma;
-                std::tie(mu, sigma) = model.predictm(query_vec);
-
-                if (Params::parallel_evaluations() > 1 || Params::opt_cmaes::handle_uncertainty()) {
-                    // if (Params::opt_cmaes::handle_uncertainty()) {
-                    //     sigma = sigma.array();
-                    // }
-                    // else {
-                    sigma = sigma.array().sqrt();
-                    // }
-                    for (int i = 0; i < mu.size(); i++) {
-                        double s = gaussian_rand(mu(i), sigma(i));
-                        mu(i) = std::max(mu(i) - sigma(i),
-                            std::min(s, mu(i) + sigma(i)));
-                    }
+            if (Params::opt_cmaes::handle_uncertainty()) {
+                sigma = sigma.array().sqrt();
+                for (int i = 0; i < mu.size(); i++) {
+                    double s = gaussian_rand(mu(i), sigma(i));
+                    mu(i) = std::max(mu(i) - sigma(i),
+                        std::min(s, mu(i) + sigma(i)));
                 }
-
-                Eigen::VectorXd final = init_diff + mu;
-                // while (final(1) < -M_PI)
-                //     final(1) += 2 * M_PI;
-                // while (final(1) > M_PI)
-                //     final(1) -= 2 * M_PI;
-                reward += world(init_diff, u, final);
-                init_diff = final;
-                init(0) = final(0);
-                init(1) = std::cos(final(1));
-                init(2) = std::sin(final(1));
             }
-            rews(i) = reward;
-        });
 
-        double r = rews(0);
-        if (Params::parallel_evaluations() > 1) {
-#ifdef MEDIAN
-            r = Eigen::percentile_v(rews, 25) + Eigen::percentile_v(rews, 50) + Eigen::percentile_v(rews, 75);
-#else
-            r = rews.mean();
-#endif
+            Eigen::VectorXd final = init_diff + mu;
+
+            reward += world(init_diff, u, final);
+            init_diff = final;
+            init(0) = final(0);
+            init(1) = std::cos(final(1));
+            init(2) = std::sin(final(1));
         }
 
-        return r;
+        return reward;
     }
 
     /* The rhs of x' = f(x) */
@@ -413,12 +367,9 @@ struct RewardFunction {
         double derr = dcos * dcos + dsin * dsin;
 
         return std::exp(-0.5 / s_c_sq * derr);
-
-        // return std::exp(-0.5 / s_c_sq * (dx * dx)); // + dy * dy));
     }
 };
 
-BO_DECLARE_DYN_PARAM(size_t, Params, parallel_evaluations);
 BO_DECLARE_DYN_PARAM(int, PolicyParams::nn_policy, hidden_neurons);
 BO_DECLARE_DYN_PARAM(bool, Params::blackdrops, verbose);
 BO_DECLARE_DYN_PARAM(double, Params::blackdrops, boundary);
@@ -438,7 +389,18 @@ int main(int argc, char** argv)
     bool verbose = false;
     namespace po = boost::program_options;
     po::options_description desc("Command line arguments");
-    desc.add_options()("help,h", "Prints this help message")("parallel_evaluations,p", po::value<int>(), "Number of parallel monte carlo evaluations for policy reward estimation.")("hidden_neurons,n", po::value<int>(), "Number of hidden neurons in NN policy.")("boundary,b", po::value<double>(), "Boundary of the values during the optimization.")("max_evals,m", po::value<int>(), "Max function evaluations to optimize the policy.")("tolerance,t", po::value<double>(), "Maximum tolerance to continue optimizing the function.")("restarts,r", po::value<int>(), "Max number of restarts to use during optimization.")("elitism,e", po::value<int>(), "Elitism mode to use [0 to 3].")("uncertainty,u", po::bool_switch(&uncertainty)->default_value(false), "Enable uncertainty handling.")("threads,d", po::value<int>(), "Max number of threads used by TBB")("verbose,v", po::bool_switch(&verbose)->default_value(false), "Enable verbose mode.");
+    // clang-format off
+    desc.add_options()("help,h", "Prints this help message")
+                      ("hidden_neurons,n", po::value<int>(), "Number of hidden neurons in NN policy.")
+                      ("boundary,b", po::value<double>(), "Boundary of the values during the optimization.")
+                      ("max_evals,m", po::value<int>(), "Max function evaluations to optimize the policy.")
+                      ("tolerance,t", po::value<double>(), "Maximum tolerance to continue optimizing the function.")
+                      ("restarts,r", po::value<int>(), "Max number of restarts to use during optimization.")
+                      ("elitism,e", po::value<int>(), "Elitism mode to use [0 to 3].")
+                      ("uncertainty,u", po::bool_switch(&uncertainty)->default_value(false), "Enable uncertainty handling.")
+                      ("threads,d", po::value<int>(), "Max number of threads used by TBB")
+                      ("verbose,v", po::bool_switch(&verbose)->default_value(false), "Enable verbose mode.");
+    // clang-format on
 
     try {
         po::variables_map vm;
@@ -450,15 +412,6 @@ int main(int argc, char** argv)
 
         po::notify(vm);
 
-        if (vm.count("parallel_evaluations")) {
-            int c = vm["parallel_evaluations"].as<int>();
-            if (c < 0)
-                c = 0;
-            Params::set_parallel_evaluations(c);
-        }
-        else {
-            Params::set_parallel_evaluations(100);
-        }
         if (vm.count("threads"))
             threads = vm["threads"].as<int>();
         if (vm.count("hidden_neurons")) {

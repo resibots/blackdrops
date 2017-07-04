@@ -99,8 +99,6 @@ void sdl_clean()
 #endif
 
 struct Params {
-    BO_DYN_PARAM(size_t, parallel_evaluations);
-
     BO_PARAM(double, goal_pos, M_PI);
     BO_PARAM(double, goal_vel, 0.0);
     BO_PARAM(double, goal_pos_x, 0.0);
@@ -212,10 +210,6 @@ struct CartPole {
         R = std::vector<double>();
 
         ode_state_type cp_state(4, 0.0);
-        // Policy policy;
-        // Eigen::VectorXd params(6);
-        // params << 0.6717, 0.2685, 0.0066, 0.6987, 0.4845, 3.1517;
-        // policy.set_params(params);
 
         for (size_t i = 0; i < steps; i++) {
             Eigen::VectorXd init(Params::blackdrops::model_input_dim());
@@ -226,41 +220,21 @@ struct CartPole {
             init(4) = std::sin(cp_state[3]);
 
             Eigen::VectorXd init_diff = Eigen::VectorXd::Map(cp_state.data(), cp_state.size());
-            // while (init_diff(1) < -M_PI)
-            //     init_diff(1) += 2 * M_PI;
-            // while (init_diff(1) > M_PI)
-            //     init_diff(1) -= 2 * M_PI;
 
             _u = policy.next(init)[0];
-            // ode_stepper.do_step(std::bind(&CartPole::dynamics, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3), cp_state, t, dt);
             boost::numeric::odeint::integrate_const(ode_stepper,
                 std::bind(&CartPole::dynamics, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3),
                 cp_state, t, t + dt, dt / 2.0);
             t += dt;
-            // if (cp_state[0] < -2)
-            //     cp_state[0] = -2;
-            // if (cp_state[0] > 2)
-            //     cp_state[0] = 2;
 
-            // TODO: Revisar como el cos y el sin estan siendo usando
             Eigen::VectorXd final = Eigen::VectorXd::Map(cp_state.data(), cp_state.size());
-            // while (final(1) < -M_PI)
-            //     final(1) += 2 * M_PI;
-            // while (final(1) > M_PI)
-            //     final(1) -= 2 * M_PI;
+
             Eigen::VectorXd pred = final - init_diff;
             while (final(3) < -M_PI)
                 final(3) += 2 * M_PI;
             while (final(3) > M_PI)
                 final(3) -= 2 * M_PI;
             res.push_back(std::make_tuple(init, limbo::tools::make_vector(_u), pred));
-
-            // MeanIntact<Params> m;
-            // Eigen::VectorXd q(6);
-            // q.segment(0,5) = init.segment(0,5);
-            // q(5) = _u;
-            // Eigen::VectorXd kk = m.eval(q);
-            // std::cout << "diff " << (final-init_diff).transpose() - kk.transpose() << std::endl;
 
             double r = world(init, limbo::tools::make_vector(_u), final);
             R.push_back(r);
@@ -290,10 +264,8 @@ struct CartPole {
         }
 
         if (!policy.random() && display) {
-            // global::_tried_policies.push_back(policy.params());
             double rr = std::accumulate(R.begin(), R.end(), 0.0);
             std::cout << "Reward: " << rr << std::endl;
-            // global::_tried_rewards.push_back(limbo::tools::make_vector(rr));
         }
 
         return res;
@@ -317,24 +289,12 @@ struct CartPole {
             Eigen::VectorXd mu;
             Eigen::VectorXd sigma;
             std::tie(mu, sigma) = model.predictm(query_vec);
-            // sigma = std::sqrt(sigma);
-            // for (int i = 0; i < mu.size(); i++) {
-            //     double s = gaussian_rand(mu(i), sigma);
-            //     mu(i) = std::max(mu(i) - sigma, std::min(s, mu(i) + sigma));
-            // }
 
             Eigen::VectorXd final = init_diff + mu;
-            // if (final(0) < -2)
-            //     final(0) = -2;
-            // if (final(0) > 2)
-            //     final(0) = 2;
-            // while (final(1) < -M_PI)
-            //     final(1) += 2 * M_PI;
-            // while (final(1) > M_PI)
-            //     final(1) -= 2 * M_PI;
+
             double r = world(init_diff, mu, final);
             R.push_back(r);
-            // reward += world(init_diff, u, final);
+
             init_diff = final;
             init(0) = final(0);
             init(1) = final(1);
@@ -372,74 +332,47 @@ struct CartPole {
     template <typename Policy, typename Model, typename Reward>
     double predict_policy(const Policy& policy, const Model& model, const Reward& world, size_t steps) const
     {
-        size_t N = Params::parallel_evaluations();
+        double reward = 0.0;
+        // init state
+        Eigen::VectorXd init_diff = Eigen::VectorXd::Zero(Params::blackdrops::model_pred_dim());
+        Eigen::VectorXd init = Eigen::VectorXd::Zero(Params::blackdrops::model_input_dim());
+        init(3) = std::cos(0.0);
+        init(4) = std::sin(0.0);
+        for (size_t j = 0; j < steps; j++) {
+            if (init.norm() > 1000)
+                break;
+            Eigen::VectorXd query_vec(Params::blackdrops::model_input_dim() + Params::blackdrops::action_dim());
+            Eigen::VectorXd u = policy.next(init);
+            query_vec.head(Params::blackdrops::model_input_dim()) = init;
+            query_vec.tail(Params::blackdrops::action_dim()) = u;
 
-        Eigen::VectorXd rews(N);
-        tbb::parallel_for(size_t(0), N, size_t(1), [&](size_t i) {
-            // std::chrono::steady_clock::time_point time_start = std::chrono::steady_clock::now();
+            Eigen::VectorXd mu;
+            Eigen::VectorXd sigma;
+            std::tie(mu, sigma) = model.predictm(query_vec);
 
-            double reward = 0.0;
-            // init state
-            Eigen::VectorXd init_diff = Eigen::VectorXd::Zero(Params::blackdrops::model_pred_dim());
-            Eigen::VectorXd init = Eigen::VectorXd::Zero(Params::blackdrops::model_input_dim());
-            init(3) = std::cos(0.0);
-            init(4) = std::sin(0.0);
-            for (size_t j = 0; j < steps; j++) {
-                if (init.norm() > 1000)
-                    break;
-                Eigen::VectorXd query_vec(Params::blackdrops::model_input_dim() + Params::blackdrops::action_dim());
-                Eigen::VectorXd u = policy.next(init);
-                query_vec.head(Params::blackdrops::model_input_dim()) = init;
-                query_vec.tail(Params::blackdrops::action_dim()) = u;
-
-                Eigen::VectorXd mu;
-                Eigen::VectorXd sigma;
-                std::tie(mu, sigma) = model.predictm(query_vec);
-
-                if (Params::parallel_evaluations() > 1 || Params::opt_cmaes::handle_uncertainty()) {
-                    sigma = sigma.array().sqrt();
-                    for (int i = 0; i < mu.size(); i++) {
-                        if (sigma(i) < 1e-6)
-                            continue;
-                        double s = gaussian_rand(mu(i), sigma(i));
-                        mu(i) = std::max(mu(i) - sigma(i),
-                            std::min(s, mu(i) + sigma(i)));
-                    }
+            if (Params::opt_cmaes::handle_uncertainty()) {
+                sigma = sigma.array().sqrt();
+                for (int i = 0; i < mu.size(); i++) {
+                    if (sigma(i) < 1e-6)
+                        continue;
+                    double s = gaussian_rand(mu(i), sigma(i));
+                    mu(i) = std::max(mu(i) - sigma(i),
+                        std::min(s, mu(i) + sigma(i)));
                 }
-
-                Eigen::VectorXd final = init_diff + mu;
-                // if(final(0) < -2)
-                //     final(0) = -2;
-                // if(final(0) > 2)
-                //     final(0) = 2;
-                // while (final(1) < -M_PI)
-                //     final(1) += 2 * M_PI;
-                // while (final(1) > M_PI)
-                //     final(1) -= 2 * M_PI;
-                reward += world(init_diff, u, final);
-                init_diff = final;
-                init(0) = final(0);
-                init(1) = final(1);
-                init(2) = final(2);
-                init(3) = std::cos(final(3));
-                init(4) = std::sin(final(3));
             }
-            rews(i) = reward;
 
-            // double rollout_ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - time_start).count();
-            //std::cout << "Rollout finished, took " << rollout_ms << "ms" << std::endl;
-        });
+            Eigen::VectorXd final = init_diff + mu;
 
-        double r = rews(0);
-        if (Params::parallel_evaluations() > 1) {
-#ifdef MEDIAN
-            r = Eigen::percentile_v(rews, 25) + Eigen::percentile_v(rews, 50) + Eigen::percentile_v(rews, 75);
-#else
-            r = rews.mean();
-#endif
+            reward += world(init_diff, u, final);
+            init_diff = final;
+            init(0) = final(0);
+            init(1) = final(1);
+            init(2) = final(2);
+            init(3) = std::cos(final(3));
+            init(4) = std::sin(final(3));
         }
 
-        return r;
+        return reward;
     }
 
     /* The rhs of x' = f(x) */
@@ -489,7 +422,6 @@ struct RewardFunction {
     }
 };
 
-BO_DECLARE_DYN_PARAM(size_t, Params, parallel_evaluations);
 BO_DECLARE_DYN_PARAM(int, PolicyParams::nn_policy, hidden_neurons);
 BO_DECLARE_DYN_PARAM(double, Params::blackdrops, boundary);
 BO_DECLARE_DYN_PARAM(bool, Params::blackdrops, verbose);
@@ -511,7 +443,6 @@ int main(int argc, char** argv)
     po::options_description desc("Command line arguments");
     // clang-format off
     desc.add_options()("help,h", "Prints this help message")
-                      ("parallel_evaluations,p", po::value<int>(), "Number of parallel monte carlo evaluations for policy reward estimation.")
                       ("hidden_neurons,n", po::value<int>(), "Number of hidden neurons in NN policy.")
                       ("boundary,b", po::value<double>(), "Boundary of the values during the optimization.")
                       ("max_evals,m", po::value<int>(), "Max function evaluations to optimize the policy.")
@@ -533,15 +464,6 @@ int main(int argc, char** argv)
 
         po::notify(vm);
 
-        if (vm.count("parallel_evaluations")) {
-            int c = vm["parallel_evaluations"].as<int>();
-            if (c < 0)
-                c = 0;
-            Params::set_parallel_evaluations(c);
-        }
-        else {
-            Params::set_parallel_evaluations(100);
-        }
         if (vm.count("threads")) {
             threads = vm["threads"].as<int>();
         }
