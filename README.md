@@ -72,8 +72,38 @@ If you want to know in more detail how to compile limbo experiments, please chec
 - All the executables including your own new scenarios (assuming the compilation produced no errors) should be located in the `limbo/build` folder
 - For example if we want to run the cartpole scenario without any visualization, we should use: `./limbo/build/src/classic_control/cartpole_simu [args]` (you can get help on what arguments to use, with `/path/to/binary --help`)
 
-### What should you expect from Black-DROPS?
+### What you should expect from Black-DROPS?
+
+The Black-DROPS algorithm is a model-based policy search algorithm (the ICML 2015 [tutorial](http://icml.cc/2015/tutorials/PolicySearch.pdf) on policy search methods for robotics is a good source for reading) with the following main properties:
+
+- uses Gaussian processes (GPs) to model the dynamics of the robot/system
+- takes into account the uncertainty of the dynamical model when searching for a policy
+- is data-efficient or sample-efficient; i.e., it requires very small *interaction time* with the system to find a working policy (e.g., around 16-20 seconds to learn a policy for the cart-pole swing up task)
+- when several cores are available, it can be faster than analytical approaches (e.g., [PILCO](http://mlg.eng.cam.ac.uk/pilco/))
+- it imposes no constraints on the type of the reward function (more specifically we have an example where the reward function is learned from data)
+- it imposes no constraints on the type of the policy representation (any parameterized policy can be used --- for example, dynamic movement primitives)
+
+To get a better idea of how well Black-DROPS works please check the [paper](https://arxiv.org/abs/1703.07261). Here are the main figures of the paper for quick reference:
+
+TO-DO: ADD FIGURES
+
+### What you should NOT expect from Black-DROPS?
+
+In short, you should:
+
+- NOT expect Black-DROPS to find very fast (in interaction time) high performing policies at every run: in the cart-pole swing up task, for example, the main trend (median) is that Black-DROPS finds a high performing policy after 16-20 seconds of interaction with the system, but it does fail sometimes completely to find any working policy after 15 episodes (60 seconds of interaction time); this also holds for analytical approaches like PILCO (see the [paper](https://arxiv.org/abs/1703.07261) for more details)
+- NOT expect Black-DROPS to find high performing policies very fast (in interaction time) when dealing with high dimensional state/action spaces (e.g., less than 8-10 episodes for a 15-D state/action space); the number of points needed to have a good model of the dynamics increases exponentially with the dimensions of the state/action space (this is something we are working on)
+- NOT expect Black-DROPS to run fast (in computation time) in small computers; our results suggest that at least 12-24 cores are needed to get reasonable computation times for Black-DROPS (Black-DROPS heavily utilizes parallelization to improve its performance)
 
 ### How to create your own scenario
 
 Please look at the [basic tutorial](here). You will find detailed comments on how to create, compile and run your own scenarios.
+
+
+<!--### Python Code
+
+We provide an implementation of Black-DROPS in python that is still in alpha version:
+
+- The core of the algorithm is implemented
+- Parallelization is not still working
+- Further investigation needs to be done concerning the accuracy of the GP models-->
