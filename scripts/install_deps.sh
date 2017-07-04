@@ -53,7 +53,7 @@ export PYTHONPATH=${cwd}/libcmaes/lib/python2.7/dist-packages/:${PYTHONPATH}
 
 # install robot_dart
 cd robot_dart
-./waf configure --dart=${cwd}/install
+./waf configure --dart=${cwd}/install --prefix=${cwd}/install
 ./waf install
 # go back to original directory
 cd ..
