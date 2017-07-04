@@ -12,13 +12,13 @@ mkdir install
 
 # do libgtest fix for libcmaes
 cd /usr/src/gtest
-sudo mkdir build && cd build
+sudo mkdir -p build && cd build
 sudo cmake ..
 sudo make
 sudo cp *.a /usr/lib
 # install libcmaes
 cd ${cwd}/libcmaes
-mkdir build && cd build
+mkdir -p build && cd build
 cmake -DUSE_TBB=ON -DUSE_OPENMP=OFF -DBUILD_PYTHON=ON -DCMAKE_INSTALL_PREFIX=${cwd}/install ..
 make -j4
 make install
