@@ -12,7 +12,7 @@ export PYTHONPATH=${cwd}/libcmaes/lib/python2.7/dist-packages/:${PYTHONPATH}
 cd limbo
 
 # save current directory
-./waf --libcmaes=${cwd}/install --dart=${cwd}/install --robot_dart=${cwd}/install --exp blackdrops
+./waf --libcmaes=${cwd}/install --nlopt=${cwd}/install --dart=${cwd}/install --robot_dart=${cwd}/install --exp blackdrops
 
 # go back to original directory
 cd ..

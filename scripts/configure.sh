@@ -17,7 +17,7 @@ ln -s ../../ blackdrops
 cd ..
 
 # save current directory
-./waf configure --libcmaes=${cwd}/install --dart=${cwd}/install --robot_dart=${cwd}/install --exp blackdrops
+./waf configure --libcmaes=${cwd}/install --nlopt=${cwd}/install --dart=${cwd}/install --robot_dart=${cwd}/install --exp blackdrops
 
 # go back to original directory
 cd ..
