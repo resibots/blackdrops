@@ -8,7 +8,7 @@ sudo apt-get -qq --yes --force-yes install libgtest-dev autoconf automake libtoo
 # save current directory
 cwd=$(pwd)
 # create install dir
-mkdir install
+mkdir -p install
 
 # do libgtest fix for libcmaes
 cd /usr/src/gtest

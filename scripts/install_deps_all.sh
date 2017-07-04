@@ -8,7 +8,7 @@ sudo apt-get -qq --yes --force-yes install libgtest-dev autoconf automake libtoo
 # save current directory
 cwd=$(pwd)
 # create install dir
-mkdir install
+mkdir -p install
 
 # do libgtest fix for libcmaes
 cd /usr/src/gtest
@@ -33,7 +33,7 @@ sudo apt-get -qq update
 sudo apt-get -qq --yes --force-yes install libnlopt-dev libbullet-dev libtinyxml-dev libtinyxml2-dev liburdfdom-dev liburdfdom-headers-dev libxi-dev libxmu-dev freeglut3-dev libopenscenegraph-dev
 # install DART
 cd dart
-mkdir build && cd build
+mkdir -p build && cd build
 cmake -DBUILD_PYTHON=ON -DCMAKE_INSTALL_PREFIX=${cwd}/install ..
 make -j4
 make install
