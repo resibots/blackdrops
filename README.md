@@ -56,15 +56,15 @@ Run the script `install_deps_req.sh`
 
 #### Compilation
 
-As the Black-DROPS code is a `limbo` experiment (check the [docs](http://www.resibots.eu/limbo/index.html) of limbo for details) and can sometimes be a bit tricky, we provide the `compile.sh` script. This should compile all the Black-DROPS code. Even your own new scenarios should be compiled with this script (if the files are in the correct folders).
+As the Black-DROPS code is a `limbo` experiment (check the [docs](http://www.resibots.eu/limbo/index.html) of limbo for details) and can sometimes be a bit tricky to compile, we provide the `compile.sh` script. This should compile all the Black-DROPS code. Even your own new scenarios should be compiled with this script (if the files are in the correct folders --- check *''How to create your own scenario''*).
 
 If you want to know in more detail how to compile limbo experiments, please check the quite extensive [documentation](http://www.resibots.eu/limbo/index.html) of limbo. In addition, if you want more fine-tuned compilation of your own scenarios, please check the [advanced tutorial](here).
 
-#### Run already existing scenarios
+#### Run scenarios
 
 - All the executables including your own new scenarios (assuming the compilation produced no errors) should be located in the `limbo/build` folder
 - For example if we want to run the cartpole scenario without any visualization, we should use: `./limbo/build/src/classic_control/cartpole_simu [args]` (you can get help on what arguments to use, with `/path/to/binary --help`)
 
 #### How to create your own scenario
 
-Please look at the [tutorial](here). You will find detailed comments on how to create your own scenario.
+Please look at the [basic tutorial](here). You will find detailed comments on how to create, compile and run your own scenarios.
