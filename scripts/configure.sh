@@ -5,10 +5,10 @@ cwd=$(pwd)
 source ./scripts/paths.sh
 
 # go to limbo
-cd limbo
+cd deps/limbo
 mkdir -p exp
 cd exp
-ln -s ../../ blackdrops
+ln -s ../../../ blackdrops
 # go back to limbo
 cd ..
 
@@ -16,4 +16,4 @@ cd ..
 ./waf configure --libcmaes=${cwd}/install --nlopt=${cwd}/install --dart=${cwd}/install --robot_dart=${cwd}/install --exp blackdrops
 
 # go back to original directory
-cd ..
+cd ../..

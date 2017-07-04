@@ -17,22 +17,25 @@ sudo cmake ..
 sudo make
 sudo cp *.a /usr/lib
 # install libcmaes
-cd ${cwd}/libcmaes
+cd ${cwd}/deps/libcmaes
 mkdir -p build && cd build
 cmake -DUSE_TBB=ON -DUSE_OPENMP=OFF -DBUILD_PYTHON=ON -DCMAKE_INSTALL_PREFIX=${cwd}/install ..
 make -j4
 make install
 # go back to original directory
-cd ../..
+cd ../../..
 
 # configure paths
 source ./scripts/paths.sh
 
 # installing NLOpt
+cd deps
 wget http://members.loria.fr/JBMouret/mirrors/nlopt-2.4.2.tar.gz
 tar -zxvf nlopt-2.4.2.tar.gz && cd nlopt-2.4.2
 ./configure -with-cxx --enable-shared --without-python --without-matlab --without-octave --prefix=${cwd}/install
 make install
+# go back to original directory
+cd ../..
 
 # install DART dependencies
 sudo apt-add-repository ppa:libccd-debs/ppa -y
@@ -42,20 +45,20 @@ sudo apt-get -qq update
 sudo apt-get -qq --yes --force-yes install build-essential pkg-config libassimp-dev libccd-dev libfcl-dev
 sudo apt-get -qq --yes --force-yes install libnlopt-dev libbullet-dev libtinyxml-dev libtinyxml2-dev liburdfdom-dev liburdfdom-headers-dev libxi-dev libxmu-dev freeglut3-dev libopenscenegraph-dev
 # install DART
-cd dart
+cd deps/dart
 mkdir -p build && cd build
 cmake -DBUILD_PYTHON=ON -DCMAKE_INSTALL_PREFIX=${cwd}/install ..
 make -j4
 make install
 # go back to original directory
-cd ../..
+cd ../../..
 
 # just as fail-safe
 sudo ldconfig
 
 # install robot_dart
-cd robot_dart
+cd deps/robot_dart
 ./waf configure --dart=${cwd}/install --prefix=${cwd}/install
 ./waf install
 # go back to original directory
-cd ..
+cd ../..

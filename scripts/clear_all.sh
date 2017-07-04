@@ -3,22 +3,22 @@
 git checkout -- .
 git clean -df
 
-cd limbo
+cd deps/limbo
 git checkout -- .
 git clean -df
-cd ..
+cd ../..
 
-cd libcmaes
+cd deps/libcmaes
 git checkout -- .
 git clean -df
-cd ..
+cd ../..
 
-cd dart
+cd deps/dart
 git checkout -- .
 git clean -df
-cd ..
+cd ../..
 
-cd robot_dart
+cd deps/robot_dart
 git checkout -- .
 git clean -df
-cd ..
+cd ../..
