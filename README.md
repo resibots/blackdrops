@@ -35,11 +35,11 @@ Black-DROPS is partly funded by the ResiBots ERC Project (http://www.resibots.eu
 
 ##### Required
 - Ubuntu (it should work on versions >= 14.04)
-- Eigen 3, http://eigen.tuxfamily.org/
-- Boost
-- limbo, https://github.com/resibots/limbo
-- libcmaes, https://github.com/beniz/libcmaes (recommended to use with TBB)
-- NLOpt, http://ab-initio.mit.edu/wiki/index.php/NLopt
+- limbo, https://github.com/resibots/limbo (for high-performing Gaussian process regression)
+- libcmaes, https://github.com/beniz/libcmaes (for high-quality implementations of CMA-ES variants) --- recommended to use with TBB
+- Eigen3 (needed by limbo and libcmaes)
+- Boost (needed by limbo)
+- NLOpt, http://ab-initio.mit.edu/wiki/index.php/NLopt (needed by limbo)
 
 ##### Optional
 - TBB, https://www.threadingbuildingblocks.org/ (for parallelization) --- highly recommended
