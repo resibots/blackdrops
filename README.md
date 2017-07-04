@@ -49,31 +49,41 @@ Black-DROPS is partly funded by the ResiBots ERC Project (http://www.resibots.eu
 
 #### Install dependencies
 
-Some of the dependencies (libcmaes, DART) require specific installation steps (e.g., compilation from sources). As such, we provide some scripts (undert the `scripts` folder) for fast installation of the dependencies (3 different categories):
+Some of the dependencies (libcmaes, DART, NLOpt, robot\_dart) require specific installation steps (e.g., compilation from sources). As such, we provide some scripts (undert the `scripts` folder) for automatic installation of the dependencies (3 different categories):
 
 ##### Install the recommended dependencies
 
-Run the script, `install_deps.sh`
+- `cd /path/to/repo/root` **(this is very important as the script assumes that you are in the root of the repo)**
+- `./scripts/install_deps.sh`
 
 ##### Install all dependencies
 
-Run the script, `install_deps_all.sh`
+- `cd /path/to/repo/root` **(this is very important as the script assumes that you are in the root of the repo)**
+- `./scripts/install_deps_all.sh`
 
 ##### Install only the required dependencies
 
-Run the script `install_deps_req.sh`
+- `cd /path/to/repo/root` **(this is very important as the script assumes that you are in the root of the repo)**
+- `./scripts/install_deps_req.sh`
 
 #### Compilation
 
-As the Black-DROPS code is a `limbo` experiment (check the [docs](http://www.resibots.eu/limbo/index.html) of limbo for details) and can sometimes be a bit tricky to compile, we provide the `configure.sh` and `compile.sh` scripts. The former needs to be ran once. The former should compile all the Black-DROPS code. Even your own new scenarios should be compiled with this script (if the files are in the correct folders --- check *''How to create your own scenario''*).
+As the Black-DROPS code is a `limbo` experiment (check the [docs](http://www.resibots.eu/limbo/index.html) of limbo for details) and can sometimes be a bit tricky to compile, we provide the `configure.sh` and `compile.sh` scripts. The former needs to be ran once. The former should compile all the Black-DROPS code. Even your own new scenarios should be compiled with this script (if the files are in the correct folders --- check *''How to create your own scenario''*). In short you should do the following:
+
+- `cd /path/to/repo/root` **(this is very important as the scripts assume that you are in the root of the repo)**
+- `./scripts/configure.sh`
+- `./scripts/compile.sh`
+
+And then every time you make a change to a source file (*\*.hpp or \*.cpp*), you should re-run the compilation script.
 
 If you want to know in more detail how to compile limbo experiments, please check the quite extensive [documentation](http://www.resibots.eu/limbo/index.html) of limbo.
 <!--In addition, if you want more fine-tuned compilation of your own scenarios, please check the [advanced tutorial](here).-->
 
 #### Running scenarios
 
-- All the executables including your own new scenarios (assuming the compilation produced no errors) should be located in the `limbo/build` folder
-- For example if we want to run the cartpole scenario without any visualization, we should use: `./limbo/build/src/classic_control/cartpole_simu [args]` (you can get help on what arguments to use, with `/path/to/binary --help`)
+- Before running any executable you should source the proper paths: `source ./scripts/paths.sh`
+- All the executables including your own new scenarios (assuming the compilation produced no errors) should be located in the `deps/limbo/build` folder
+- For example if we want to run the cartpole scenario without any visualization, we should use: `./deps/limbo/build/src/classic_control/cartpole_simu [args]` (you can get help on what arguments to use, with `/path/to/binary --help`)
 
 ### What you should expect from Black-DROPS?
 
