@@ -30,6 +30,7 @@ sudo apt-add-repository ppa:libccd-debs/ppa -y
 sudo apt-add-repository ppa:fcl-debs/ppa -y
 sudo apt-add-repository ppa:dartsim/ppa -y
 sudo apt-get -qq update
+sudo apt-get -qq --yes --force-yes install build-essential pkg-config libassimp-dev libccd-dev libfcl-dev
 sudo apt-get -qq --yes --force-yes install libnlopt-dev libbullet-dev libtinyxml-dev libtinyxml2-dev liburdfdom-dev liburdfdom-headers-dev libxi-dev libxmu-dev freeglut3-dev libopenscenegraph-dev
 # install DART
 cd dart
