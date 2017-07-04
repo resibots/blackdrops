@@ -41,13 +41,6 @@ make install
 # go back to original directory
 cd ../..
 
-# install robot_dart
-cd robot_dart
-./waf configure --dart=${cwd}/install
-./waf install
-# go back to original directory
-cd ..
-
 # just as fail-safe
 sudo ldconfig
 
@@ -57,3 +50,10 @@ export LD_LIBRARY_PATH=${cwd}/libcmaes/lib/python2.7/dist-packages/:${cwd}/insta
 
 # configure PYTHONPATH
 export PYTHONPATH=${cwd}/libcmaes/lib/python2.7/dist-packages/:${PYTHONPATH}
+
+# install robot_dart
+cd robot_dart
+./waf configure --dart=${cwd}/install
+./waf install
+# go back to original directory
+cd ..
