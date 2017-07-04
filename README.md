@@ -65,7 +65,8 @@ Run the script `install_deps_req.sh`
 
 As the Black-DROPS code is a `limbo` experiment (check the [docs](http://www.resibots.eu/limbo/index.html) of limbo for details) and can sometimes be a bit tricky to compile, we provide the `configure.sh` and `compile.sh` scripts. The former needs to be ran once. The former should compile all the Black-DROPS code. Even your own new scenarios should be compiled with this script (if the files are in the correct folders --- check *''How to create your own scenario''*).
 
-If you want to know in more detail how to compile limbo experiments, please check the quite extensive [documentation](http://www.resibots.eu/limbo/index.html) of limbo. In addition, if you want more fine-tuned compilation of your own scenarios, please check the [advanced tutorial](here).
+If you want to know in more detail how to compile limbo experiments, please check the quite extensive [documentation](http://www.resibots.eu/limbo/index.html) of limbo.
+<!--In addition, if you want more fine-tuned compilation of your own scenarios, please check the [advanced tutorial](here).-->
 
 #### Running scenarios
 
@@ -83,9 +84,12 @@ The Black-DROPS algorithm is a model-based policy search algorithm (the ICML 201
 - it imposes no constraints on the type of the reward function (more specifically we have an example where the reward function is learned from data)
 - it imposes no constraints on the type of the policy representation (any parameterized policy can be used --- for example, dynamic movement primitives)
 
-To get a better idea of how well Black-DROPS works please check the [paper](https://arxiv.org/abs/1703.07261). Here are the main figures of the paper for quick reference:
+To get a better idea of how well Black-DROPS works please check the [paper](https://arxiv.org/abs/1703.07261). Here are the main figures of the paper for quick reference (the "No var" variants are variants of Black-DROPS without taking into account the uncertainty of the model):
 
-TO-DO: ADD FIGURES
+<!--![Cart-pole swing-up task](./imgs/cartpole_rewards.png "Cart-pole swing-up task" =100x)-->
+<center>
+<img src="./imgs/pendulum_rewards.png" width="400">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<img src="./imgs/cartpole_rewards.png" width="400">
+</center>
 
 ### What you should NOT expect from Black-DROPS?
 
