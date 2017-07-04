@@ -26,11 +26,7 @@ make install
 cd ../..
 
 # configure paths
-# configure LD_LIBRARY_PATH
-export LD_LIBRARY_PATH=${cwd}/libcmaes/lib/python2.7/dist-packages/:${cwd}/install/lib:${LD_LIBRARY_PATH}
-
-# configure PYTHONPATH
-export PYTHONPATH=${cwd}/libcmaes/lib/python2.7/dist-packages/:${PYTHONPATH}
+source ./scripts/paths.sh
 
 # installing NLOpt
 wget http://members.loria.fr/JBMouret/mirrors/nlopt-2.4.2.tar.gz
