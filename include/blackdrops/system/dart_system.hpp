@@ -23,6 +23,9 @@ namespace blackdrops {
             template <typename Policy, typename Reward>
             std::vector<std::tuple<Eigen::VectorXd, Eigen::VectorXd, Eigen::VectorXd>> execute(const Policy& policy, const Reward& world, double T, std::vector<double>& R, bool display = true)
             {
+                // Make sure that the simulation step is smaller than the sampling/control rate
+                assert(Params::dart_system::sim_step() < Params::blackdrops::dt());
+
                 std::vector<std::tuple<Eigen::VectorXd, Eigen::VectorXd, Eigen::VectorXd>> res;
 
                 Eigen::VectorXd pp = policy.params();
@@ -35,8 +38,7 @@ namespace blackdrops {
 
                 robot_simu_t simu(params, simulated_robot);
                 // simulation step different from sampling rate -- we need a stable simulation
-                // TO-DO: Get this from parameters
-                simu.set_step(0.001);
+                simu.set_step(Params::dart_system::sim_step());
 
                 Eigen::VectorXd init_diff = this->init_state();
                 this->set_robot_state(simulated_robot, init_diff);
@@ -198,8 +200,7 @@ namespace blackdrops {
                 for (size_t i = _start_dof; i < _dof; i++) {
                     auto j = _robot->skeleton()->getDof(i)->getJoint();
                     indices.push_back(_robot->skeleton()->getIndexOf(j));
-                    // TO-DO: Get type of joint from Params
-                    types.push_back(dart::dynamics::Joint::SERVO);
+                    types.push_back(Params::dart_policy_control::joint_type());
                 }
                 _robot->set_actuator_types(indices, types);
 

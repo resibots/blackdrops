@@ -36,6 +36,14 @@ struct Params {
         BO_DYN_PARAM(bool, verbose);
     };
 
+    struct dart_system {
+        BO_PARAM(double, sim_step, 0.001);
+    };
+
+    struct dart_policy_control {
+        BO_PARAM(dart::dynamics::Joint::ActuatorType, joint_type, dart::dynamics::Joint::SERVO);
+    };
+
     struct gp_model {
         BO_PARAM(double, noise, 0.01);
     };
