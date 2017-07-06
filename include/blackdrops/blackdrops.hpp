@@ -12,15 +12,6 @@ namespace blackdrops {
     template <typename Params, typename Model, typename Robot, typename Policy, typename PolicyOptimizer, typename RewardFunction>
     class BlackDROPS {
     public:
-        int _opt_iters;
-        double _max_reward;
-        double _max_simu_reward;
-        double _max_real_reward;
-        Eigen::VectorXd _max_params;
-        double _boundary;
-        Eigen::VectorXd old_params;
-        Eigen::VectorXd old_starting;
-
         BlackDROPS() : _best(-std::numeric_limits<double>::max()) {}
         ~BlackDROPS() {}
 
@@ -56,17 +47,14 @@ namespace blackdrops {
         {
             PolicyOptimizer policy_optimizer;
 
-            // For now optimize policy without gradients
             Eigen::VectorXd params_star;
-            Eigen::VectorXd params_starting = _policy.params(); //_params_starting;
+            Eigen::VectorXd params_starting = _policy.params();
             if (_random_policies)
                 params_starting = _params_starting;
             Eigen::write_binary("policy_params_starting_" + std::to_string(i) + ".bin", params_starting);
 
             _opt_iters = 0;
             _max_reward = -std::numeric_limits<double>::max();
-            _max_simu_reward = -std::numeric_limits<double>::max();
-            _max_real_reward = -std::numeric_limits<double>::max();
             if (_boundary == 0) {
                 std::cout << "Optimizing policy... " << std::flush;
                 params_star = policy_optimizer(
@@ -82,21 +70,17 @@ namespace blackdrops {
                     true);
             }
             if (Params::blackdrops::verbose())
-                std::cout << _opt_iters << "(" << _max_reward << ")" << std::endl; //", " << _max_simu_reward << ", " << _max_real_reward << ") " << std::endl;
+                std::cout << _opt_iters << "(" << _max_reward << ")" << std::endl;
             else
                 std::cout << std::endl;
-            // std::cout << _opt_iters << "(" << _max_reward << ") " << std::endl;
             std::cout << "Optimization iterations: " << _opt_iters << std::endl;
-            // std::cout << "Max parameters: " << _max_params.transpose() << std::endl;
 
             // Since we are optimizing a noisy function, it is not good to keep the best ever found
             // if (Params::opt_cmaes::elitism() == 0)
             //     params_star = _max_params;
 
-            // _policy.normalize(_model);
             _policy.set_params(params_star);
 
-            // std::cout << "Best parameters: " << _policy.params().transpose() << std::endl;
             Eigen::write_binary("policy_params_" + std::to_string(i) + ".bin", _policy.params());
 
             std::vector<double> R;
@@ -117,6 +101,7 @@ namespace blackdrops {
             _ofs_opt.open("times.dat");
             _ofs_model.open("times_model.dat");
             _policy.set_random_policy();
+            _best = -std::numeric_limits<double>::max();
 
 #ifdef MEAN
             _random_policies = true;
@@ -152,7 +137,6 @@ namespace blackdrops {
                 _ofs_model << learn_model_ms << std::endl;
                 _model.save_data("gp_learn_" + std::to_string(i) + ".dat");
 
-                // _policy.normalize(_model);
                 std::cout << "Learned model..." << std::endl;
 
                 if (Params::blackdrops::verbose()) {
@@ -187,6 +171,10 @@ namespace blackdrops {
         Eigen::VectorXd _params_starting;
         double _best;
         bool _random_policies;
+        int _opt_iters;
+        double _max_reward;
+        Eigen::VectorXd _max_params;
+        double _boundary;
 
         // state, action, prediction
         std::vector<std::tuple<Eigen::VectorXd, Eigen::VectorXd, Eigen::VectorXd>> _observations;
@@ -197,59 +185,26 @@ namespace blackdrops {
             Policy policy;
 
             policy.set_params(params.array());
-            // policy.normalize(_model);
 
             // std::vector<double> R;
-            // _robot.execute(policy, world, Params::blackdrops::rollout_steps(), R, false);
+            // _robot.execute(policy, world, Params::blackdrops::T(), R, false);
             //
             // double r = std::accumulate(R.begin(), R.end(), 0.0);
             double r = _robot.predict_policy(policy, _model, world, Params::blackdrops::T());
 
             _opt_iters++;
             if (_max_reward < r) {
-                // if (Params::blackdrops::verbose()) {
-                //     std::vector<double> R;
-                //     _robot.execute_dummy(policy, _model, world, Params::blackdrops::rollout_steps(), R, false);
-                //     double simu_reward = std::accumulate(R.begin(), R.end(), 0.0);
-                //     _robot.execute(policy, world, Params::blackdrops::rollout_steps(), R, false);
-                //     double real_reward = std::accumulate(R.begin(), R.end(), 0.0);
-                //
-                //     _max_simu_reward = simu_reward;
-                //     _max_real_reward = real_reward;
-                // }
                 _max_reward = r;
                 _max_params = policy.params().array();
                 // Eigen::write_binary("max_params.bin", policy.params());
             }
 
-            // if (_opt_iters % 500 == 0)
-            //     std::cout << _opt_iters << "(" << _max_reward << ") " << std::flush;
-
-            // if (Params::blackdrops::verbose() && _opt_iters % 1000 == 0) {
-            //     std::cout << _opt_iters << "(" << _max_reward << ", " << _max_simu_reward << ", " << _max_real_reward << ") " << std::flush;
-            // }
-
             return limbo::opt::no_grad(r);
-        }
-
-        Eigen::VectorXd get_random_vector(size_t dim, Eigen::VectorXd bounds) const
-        {
-            Eigen::VectorXd rv = (limbo::tools::random_vector(dim).array() * 2 - 1);
-            // rv(0) *= 3; rv(1) *= 5; rv(2) *= 6; rv(3) *= M_PI; rv(4) *= 10;
-            return rv.cwiseProduct(bounds);
-        }
-
-        std::vector<Eigen::VectorXd> random_vectors(size_t dim, size_t q, Eigen::VectorXd bounds) const
-        {
-            std::vector<Eigen::VectorXd> result(q);
-            for (size_t i = 0; i < q; i++) {
-                result[i] = get_random_vector(dim, bounds);
-            }
-            return result;
         }
 
         std::tuple<Eigen::VectorXd, Eigen::VectorXd> get_accuracy(double perc = 0.75) const
         {
+            // TO-DO: Fix this
             // get data
             int sample_size = _observations.size();
             int training_size = perc * sample_size;
