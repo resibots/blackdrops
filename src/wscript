@@ -2,5 +2,6 @@
 # encoding: utf-8
 
 def build(bld):
+    bld.recurse('tutorials/')
     bld.recurse('classic_control/')
     bld.recurse('dart/')
