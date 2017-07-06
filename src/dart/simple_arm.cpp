@@ -10,6 +10,7 @@
 #endif
 
 #include <blackdrops/blackdrops.hpp>
+#include <blackdrops/dart_system.hpp>
 #include <blackdrops/gp_model.hpp>
 #include <blackdrops/model/gp/kernel_lf_opt.hpp>
 #include <blackdrops/model/multi_gp.hpp>
@@ -141,7 +142,7 @@ Eigen::VectorXd get_robot_state(const std::shared_ptr<robot_dart::Robot>& robot,
 }
 
 struct ActualReward {
-    double operator()(const Eigen::VectorXd& to_state) const
+    double operator()(const Eigen::VectorXd& from_state, const Eigen::VectorXd& action, const Eigen::VectorXd& to_state) const
     {
         using robot_simu_t = robot_dart::RobotDARTSimu<robot_dart::robot_control<robot_dart::PositionControl>>;
 
@@ -180,97 +181,48 @@ std::vector<Eigen::VectorXd> random_vectors(size_t dim, size_t q, Eigen::VectorX
     return result;
 }
 
-struct SimpleArm {
-    template <typename Policy, typename Reward>
-    std::vector<std::tuple<Eigen::VectorXd, Eigen::VectorXd, Eigen::VectorXd>> execute(const Policy& policy, const Reward& world, double T, std::vector<double>& R, bool display = true)
-    {
-        static int n_iter = 0;
-        std::vector<std::tuple<Eigen::VectorXd, Eigen::VectorXd, Eigen::VectorXd>> res;
-        Eigen::VectorXd pp = policy.params();
-        std::vector<double> params(pp.size());
-        Eigen::VectorXd::Map(params.data(), pp.size()) = pp;
+struct PolicyControl : public blackdrops::BasePolicyControl<Params, global::policy_t> {
+    using base_t = blackdrops::BasePolicyControl<Params, global::policy_t>;
 
+    PolicyControl() : base_t() {}
+    PolicyControl(const std::vector<double>& ctrl, base_t::robot_t robot) : base_t(ctrl, robot) {}
+
+    Eigen::VectorXd get_state(const robot_t& robot, bool full) const
+    {
+        return get_robot_state(robot, full);
+    }
+};
+
+struct SimpleArm : public blackdrops::DARTSystem<Params, PolicyControl> {
+    using base_t = blackdrops::DARTSystem<Params, PolicyControl>;
+
+    Eigen::VectorXd init_state() const
+    {
+        return Eigen::VectorXd::Zero(Params::blackdrops::model_pred_dim());
+    }
+
+    Eigen::VectorXd transform_state(const Eigen::VectorXd& original_state) const
+    {
+        Eigen::VectorXd ret = Eigen::VectorXd::Zero(Params::blackdrops::model_input_dim());
+        for (int j = 0; j < original_state.size(); j++) {
+            ret(2 * j) = std::cos(original_state(j));
+            ret(2 * j + 1) = std::sin(original_state(j));
+        }
+
+        return ret;
+    }
+
+    std::shared_ptr<robot_dart::Robot> get_robot() const
+    {
         std::shared_ptr<robot_dart::Robot> simulated_robot = global::global_robot->clone();
         simulated_robot->fix_to_world();
         simulated_robot->set_position_enforced(true);
 
-        std::vector<Eigen::VectorXd> coms, qs;
+        return simulated_robot;
+    }
 
-        class PolicyControl : public robot_dart::RobotControl {
-        public:
-            using robot_t = std::shared_ptr<robot_dart::Robot>;
-
-            PolicyControl() {}
-            PolicyControl(const std::vector<double>& ctrl, robot_t robot)
-                : robot_dart::RobotControl(ctrl, robot)
-            {
-                size_t _start_dof = 0;
-                if (!_robot->fixed_to_world()) {
-                    _start_dof = 6;
-                }
-                std::vector<size_t> indices;
-                std::vector<dart::dynamics::Joint::ActuatorType> types;
-                for (size_t i = _start_dof; i < _dof; i++) {
-                    auto j = _robot->skeleton()->getDof(i)->getJoint();
-                    indices.push_back(_robot->skeleton()->getIndexOf(j));
-                    types.push_back(dart::dynamics::Joint::SERVO);
-                }
-                _robot->set_actuator_types(indices, types);
-
-                _prev_time = 0.0;
-                _t = 0.0;
-            }
-
-            void update(double t)
-            {
-                _t = t;
-                set_commands();
-            }
-
-            void set_commands()
-            {
-                double dt = Params::blackdrops::dt();
-                // double ds = 0.1;
-
-                if (_t == 0.0 || (_t - _prev_time) >= dt) {
-                    Eigen::VectorXd commands = _policy.next(get_robot_state(_robot, true));
-                    Eigen::VectorXd q = get_robot_state(_robot);
-                    qs->push_back(q);
-                    coms->push_back(commands);
-
-                    assert(_dof == (size_t)commands.size());
-                    _robot->skeleton()->setCommands(commands);
-                    _prev_commands = commands;
-                    _prev_time = _t; //int(_t / dt) * dt;
-                }
-                else
-                    _robot->skeleton()->setCommands(_prev_commands);
-            }
-
-            global::policy_t _policy;
-            std::vector<Eigen::VectorXd>* coms;
-            std::vector<Eigen::VectorXd>* qs;
-
-        protected:
-            double _prev_time;
-            double _t;
-            Eigen::VectorXd _prev_commands;
-        };
-
-#ifdef GRAPHIC
-        using robot_simu_t = robot_dart::RobotDARTSimu<robot_dart::robot_control<PolicyControl>, robot_dart::graphics<robot_dart::Graphics<Params>>>;
-#else
-        using robot_simu_t = robot_dart::RobotDARTSimu<robot_dart::robot_control<PolicyControl>>;
-#endif
-
-        robot_simu_t simu(params, simulated_robot);
-        // simulation step different from sampling rate -- we need a stable simulation
-        simu.set_step(0.001);
-
-        simu.controller()._policy = policy;
-        simu.controller().coms = &coms;
-        simu.controller().qs = &qs;
-
+    void add_extra_to_simu(base_t::robot_simu_t& simu) const
+    {
         // Add goal marker
         Eigen::Vector6d goal_pose = Eigen::Vector6d::Zero();
         goal_pose.tail(3) = global::goal;
@@ -278,37 +230,20 @@ struct SimpleArm {
         simu.add_ellipsoid(goal_pose, {0.1, 0.1, 0.1}, "fixed", 1., dart::Color::Green(1.0), "goal_marker");
         // remove collisions from goal marker
         simu.world()->getSkeleton("goal_marker")->getRootBodyNode()->setCollidable(false);
+    }
 
-        R = std::vector<double>();
-
-        simu.run(T + Params::blackdrops::dt());
-
+    template <typename Policy, typename Reward>
+    std::vector<std::tuple<Eigen::VectorXd, Eigen::VectorXd, Eigen::VectorXd>> execute(const Policy& policy, const Reward& world, double T, std::vector<double>& R, bool display = true)
+    {
+        static int n_iter = 0;
         ActualReward actual_reward;
+        std::vector<std::tuple<Eigen::VectorXd, Eigen::VectorXd, Eigen::VectorXd>> ret = blackdrops::DARTSystem<Params, PolicyControl>::execute(policy, actual_reward, T, R, display);
 
-        for (size_t j = 0; j < qs.size() - 1; j++) {
-            size_t id = j; // * step;
-            Eigen::VectorXd init(Params::blackdrops::model_pred_dim());
-            init = qs[id];
-
-            Eigen::VectorXd init_full(Params::blackdrops::model_input_dim());
-            for (int i = 0; i < init.size(); i++) {
-                init_full(2 * i) = std::cos(init(i));
-                init_full(2 * i + 1) = std::sin(init(i));
-            }
-
-            Eigen::VectorXd u = coms[id];
-            Eigen::VectorXd final(Params::blackdrops::model_pred_dim());
-            final = qs[id + 1];
-            double r = actual_reward(final);
+        std::vector<Eigen::VectorXd> states = this->get_last_states();
+        for (size_t i = 0; i < R.size(); i++) {
+            double r = R[i];
+            Eigen::VectorXd final = states[i + 1];
             global::reward_gp.add_sample(final, limbo::tools::make_vector(r));
-            R.push_back(r);
-            res.push_back(std::make_tuple(init_full, u, final - init));
-            // std::cout << final.transpose() << ": " << r << std::endl;
-        }
-
-        if (!policy.random() && display) {
-            double rr = std::accumulate(R.begin(), R.end(), 0.0);
-            std::cout << "Reward: " << rr << std::endl;
         }
 
         global::reward_gp.optimize_hyperparams();
@@ -331,7 +266,7 @@ struct SimpleArm {
             for (int j = 0; j < to_state.size(); j++)
                 ofs << to_state[j] << " ";
             double r_b = world(to_state, to_state, to_state, true);
-            double r_w = actual_reward(to_state);
+            double r_w = actual_reward(to_state, to_state, to_state);
             ofs << r_b << " " << r_w << std::endl;
             mse += (r_b - r_w) * (r_b - r_w);
         }
@@ -339,85 +274,7 @@ struct SimpleArm {
         std::cout << "MSE: " << mse / double(eval) << std::endl;
         n_iter++;
 
-        return res;
-    }
-
-    template <typename Policy, typename Model, typename Reward>
-    void execute_dummy(const Policy& policy, const Model& model, const Reward& world, double T, std::vector<double>& R, bool display = true) const
-    {
-        double dt = Params::blackdrops::dt();
-        R = std::vector<double>();
-        // init state
-        Eigen::VectorXd init = Eigen::VectorXd::Zero(Params::blackdrops::model_pred_dim());
-
-        for (double t = 0.; t <= T; t += dt) {
-            Eigen::VectorXd query_vec(Params::blackdrops::model_input_dim() + Params::blackdrops::action_dim());
-            Eigen::VectorXd init_full(Params::blackdrops::model_input_dim());
-            for (int i = 0; i < init.size(); i++) {
-                init_full(2 * i) = std::cos(init(i));
-                init_full(2 * i + 1) = std::sin(init(i));
-            }
-
-            Eigen::VectorXd u = policy.next(init_full);
-            query_vec.head(Params::blackdrops::model_input_dim()) = init_full;
-            query_vec.tail(Params::blackdrops::action_dim()) = u;
-
-            Eigen::VectorXd mu;
-            Eigen::VectorXd sigma;
-            std::tie(mu, sigma) = model.predictm(query_vec);
-
-            Eigen::VectorXd final = init + mu;
-
-            double r = world(init, mu, final, true);
-            R.push_back(r);
-            init = final;
-
-            // std::cout << final.transpose() << " ---> " << r << std::endl;
-        }
-        // std::cout << "------------------" << std::endl;
-    }
-
-    template <typename Policy, typename Model, typename Reward>
-    double predict_policy(const Policy& policy, const Model& model, const Reward& world, double T) const
-    {
-        double dt = Params::blackdrops::dt();
-        double reward = 0.0;
-        // init state
-        Eigen::VectorXd init = Eigen::VectorXd::Zero(Params::blackdrops::model_pred_dim());
-        // init(5) = 0.58;
-        for (double t = 0.; t <= T; t += dt) {
-            Eigen::VectorXd query_vec(Params::blackdrops::model_input_dim() + Params::blackdrops::action_dim());
-            Eigen::VectorXd init_full(Params::blackdrops::model_input_dim());
-
-            for (int i = 0; i < init.size(); i++) {
-                init_full(2 * i) = std::cos(init(i));
-                init_full(2 * i + 1) = std::sin(init(i));
-            }
-
-            Eigen::VectorXd u = policy.next(init_full);
-            query_vec.head(Params::blackdrops::model_input_dim()) = init_full;
-            query_vec.tail(Params::blackdrops::action_dim()) = u;
-
-            Eigen::VectorXd mu;
-            Eigen::VectorXd sigma;
-            std::tie(mu, sigma) = model.predictm(query_vec);
-
-            if (Params::opt_cmaes::handle_uncertainty()) {
-                sigma = sigma.array().sqrt();
-                for (int i = 0; i < mu.size(); i++) {
-                    double s = gaussian_rand(mu(i), sigma(i));
-                    mu(i) = std::max(mu(i) - sigma(i),
-                        std::min(s, mu(i) + sigma(i)));
-                }
-            }
-
-            Eigen::VectorXd final = init + mu;
-
-            reward += world(init, u, final);
-            init = final;
-        }
-
-        return reward;
+        return ret;
     }
 };
 
@@ -609,7 +466,7 @@ int main(int argc, char** argv)
         for (int j = 0; j < to_state.size(); j++)
             ofs << to_state[j] << " ";
         Eigen::VectorXd mu = global::reward_gp.mu(to_state);
-        double r = actual_reward(to_state);
+        double r = actual_reward(to_state, to_state, to_state);
         ofs << mu(0) << " " << r;
         ofs << std::endl;
     }
