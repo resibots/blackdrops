@@ -8,14 +8,17 @@ namespace blackdrops {
     struct System {
 
         template <typename Policy, typename Reward>
-        std::vector<std::tuple<Eigen::VectorXd, Eigen::VectorXd, Eigen::VectorXd>> execute(const Policy& policy, const Reward& world, double T, std::vector<double>& R, bool display = true) const
+        std::vector<std::tuple<Eigen::VectorXd, Eigen::VectorXd, Eigen::VectorXd>> execute(const Policy& policy, const Reward& world, double T, std::vector<double>& R, bool display = true)
         {
             double dt = Params::blackdrops::dt();
             std::vector<std::tuple<Eigen::VectorXd, Eigen::VectorXd, Eigen::VectorXd>> res;
 
             R = std::vector<double>();
+            _last_states.clear();
+            _last_commands.clear();
 
             Eigen::VectorXd init_diff = this->init_state();
+            _last_states.push_back(init_diff);
 
             for (double t = 0.0; t <= T; t += dt) {
                 Eigen::VectorXd init = this->transform_state(init_diff);
@@ -23,6 +26,8 @@ namespace blackdrops {
                 Eigen::VectorXd u = policy.next(init);
 
                 Eigen::VectorXd final = this->execute_single(init_diff, u, t, display);
+                _last_states.push_back(final);
+                _last_commands.push_back(u);
 
                 res.push_back(std::make_tuple(init, u, final - init_diff));
                 double r = world(init, u, final);
@@ -122,7 +127,22 @@ namespace blackdrops {
             return Eigen::VectorXd::Zero(Params::blackdrops::model_pred_dim());
         }
 
+        // get states from last execution
+        std::vector<Eigen::VectorXd> get_last_states() const
+        {
+            return _last_states;
+        }
+
+        // get commands from last execution
+        std::vector<Eigen::VectorXd> get_last_commands() const
+        {
+            return _last_commands;
+        }
+
         virtual Eigen::VectorXd execute_single(const Eigen::VectorXd& state, const Eigen::VectorXd& u, double t, bool display = true) const = 0;
+
+    protected:
+        std::vector<Eigen::VectorXd> _last_states, _last_commands;
     };
 }
 

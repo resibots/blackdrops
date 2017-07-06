@@ -48,6 +48,7 @@ namespace blackdrops {
             std::vector<Eigen::VectorXd> states = simu.controller().get_states();
             _last_states = states;
             std::vector<Eigen::VectorXd> commands = simu.controller().get_commands();
+            _last_commands = commands;
 
             for (size_t j = 0; j < states.size() - 1; j++) {
                 Eigen::VectorXd init = states[j];
@@ -139,6 +140,7 @@ namespace blackdrops {
             return reward;
         }
 
+        // override this to add extra stuff to the robot_dart simulator
         virtual void add_extra_to_simu(robot_simu_t& simu) const {}
 
         // transform the state input to the GPs and policy if needed
@@ -155,17 +157,26 @@ namespace blackdrops {
             return Eigen::VectorXd::Zero(Params::blackdrops::model_pred_dim());
         }
 
+        // get states from last execution
         std::vector<Eigen::VectorXd> get_last_states() const
         {
             return _last_states;
         }
 
+        // get commands from last execution
+        std::vector<Eigen::VectorXd> get_last_commands() const
+        {
+            return _last_commands;
+        }
+
+        // you should override this, to define how your simulated robot_dart::Robot will be constructed
         virtual std::shared_ptr<robot_dart::Robot> get_robot() const = 0;
 
+        // override this if you want to set in a specific way the initial state of your robot
         virtual void set_robot_state(const std::shared_ptr<robot_dart::Robot>& robot, const Eigen::VectorXd& state) const {}
 
     protected:
-        std::vector<Eigen::VectorXd> _last_states;
+        std::vector<Eigen::VectorXd> _last_states, _last_commands;
     };
 
     template <typename Params, typename Policy>
@@ -219,7 +230,7 @@ namespace blackdrops {
                 assert(_dof == (size_t)commands.size());
                 _robot->skeleton()->setCommands(commands);
                 _prev_commands = commands;
-                _prev_time = _t; //int(_t / dt) * dt;
+                _prev_time = _t;
             }
             else
                 _robot->skeleton()->setCommands(_prev_commands);
