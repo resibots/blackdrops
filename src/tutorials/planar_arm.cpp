@@ -235,14 +235,12 @@ struct PlanarArm : public blackdrops::system::ODESystem<Params> {
 struct RewardFunction {
     double operator()(const Eigen::VectorXd& from_state, const Eigen::VectorXd& action, const Eigen::VectorXd& to_state) const
     {
-        double s_c_sq = 0.5 * 0.5;
-
         Eigen::VectorXd tip_pos = tip(to_state(2), to_state(3));
         Eigen::VectorXd tip_goal(2);
         tip_goal << 0., 1.;
-        double derr = (tip_goal - tip_pos).squaredNorm();
+        double derr = (tip_goal - tip_pos).norm();
 
-        return std::exp(-0.5 / s_c_sq * derr);
+        return -derr;
     }
 };
 
