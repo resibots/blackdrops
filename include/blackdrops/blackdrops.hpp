@@ -29,7 +29,7 @@ namespace blackdrops {
             std::vector<double> R;
             RewardFunction world;
             // Execute best policy so far on robot
-            auto obs_new = _robot.execute(_policy, world, Params::blackdrops::rollout_steps(), R);
+            auto obs_new = _robot.execute(_policy, world, Params::blackdrops::T(), R);
 
             // Check if it is better than the previous best
             double r_new = std::accumulate(R.begin(), R.end(), 0.0);
@@ -101,7 +101,7 @@ namespace blackdrops {
 
             std::vector<double> R;
             RewardFunction world;
-            _robot.execute_dummy(_policy, _model, world, Params::blackdrops::rollout_steps(), R);
+            _robot.execute_dummy(_policy, _model, world, Params::blackdrops::T(), R);
             std::cout << "Dummy reward: " << std::accumulate(R.begin(), R.end(), 0.0) << std::endl;
 
             for (auto r : R)
@@ -203,7 +203,7 @@ namespace blackdrops {
             // _robot.execute(policy, world, Params::blackdrops::rollout_steps(), R, false);
             //
             // double r = std::accumulate(R.begin(), R.end(), 0.0);
-            double r = _robot.predict_policy(policy, _model, world, Params::blackdrops::rollout_steps());
+            double r = _robot.predict_policy(policy, _model, world, Params::blackdrops::T());
 
             _opt_iters++;
             if (_max_reward < r) {

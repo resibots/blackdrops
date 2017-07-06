@@ -10,6 +10,7 @@
 #include <blackdrops/model/gp/kernel_lf_opt.hpp>
 #include <blackdrops/model/multi_gp.hpp>
 #include <blackdrops/model/multi_gp/multi_gp_parallel_opt.hpp>
+#include <blackdrops/system.hpp>
 #include <limbo/experimental/model/poegp.hpp>
 #include <limbo/experimental/model/poegp/poegp_lf_opt.hpp>
 
@@ -80,7 +81,7 @@ bool draw_cartpole(double x, double theta, bool red = false)
 
 bool draw_goal(double x, double y)
 {
-    SDL_Rect outlineRect = {static_cast<int>(SCREEN_WIDTH / 2 - 0.05 * SCREEN_HEIGHT / 4 + x * SCREEN_HEIGHT / 4), static_cast<int>((1 - y) * SCREEN_HEIGHT / 4 - 0.05 * SCREEN_HEIGHT / 4), static_cast<int>(0.1 * SCREEN_HEIGHT / 4), static_cast<int>(0.1 * SCREEN_HEIGHT / 4)};
+    SDL_Rect outlineRect = {static_cast<int>(SCREEN_WIDTH / 2 + x * SCREEN_WIDTH / 4 - 0.05 * SCREEN_HEIGHT / 4), static_cast<int>(SCREEN_HEIGHT / 2 - y * SCREEN_HEIGHT / 4 - 0.05 * SCREEN_HEIGHT / 4), static_cast<int>(0.1 * SCREEN_HEIGHT / 4), static_cast<int>(0.1 * SCREEN_HEIGHT / 4)};
     SDL_SetRenderDrawColor(renderer, 0xFF, 0x00, 0x00, 0xFF);
     SDL_RenderFillRect(renderer, &outlineRect);
 
@@ -106,10 +107,10 @@ struct Params {
 
     struct blackdrops {
         BO_PARAM(size_t, action_dim, 1);
-        BO_PARAM(size_t, state_full_dim, 6);
         BO_PARAM(size_t, model_input_dim, 5);
         BO_PARAM(size_t, model_pred_dim, 4);
-        BO_PARAM(size_t, rollout_steps, 40);
+        BO_PARAM(double, dt, 0.1);
+        BO_PARAM(double, T, 4.0);
         BO_DYN_PARAM(double, boundary);
         BO_DYN_PARAM(bool, verbose);
     };
@@ -131,10 +132,6 @@ struct Params {
         BO_PARAM(double, constant, 0.0);
     };
 
-    struct opt_nloptgrad : public limbo::defaults::opt_nloptgrad {
-        BO_PARAM(int, iterations, 1000);
-    };
-
     struct kernel : public limbo::defaults::kernel {
         BO_PARAM(double, noise, gp_model::noise());
         BO_PARAM(bool, optimize_noise, true);
@@ -144,11 +141,12 @@ struct Params {
     };
 
     struct opt_rprop : public limbo::defaults::opt_rprop {
-        BO_PARAM(int, iterations, 150);
+        BO_PARAM(int, iterations, 300);
+        BO_PARAM(double, eps_stop, 1e-4);
     };
 
     struct opt_parallelrepeater : public limbo::defaults::opt_parallelrepeater {
-        BO_PARAM(int, repeats, 2);
+        BO_PARAM(int, repeats, 3);
     };
 
     struct opt_cmaes : public limbo::defaults::opt_cmaes {
@@ -196,202 +194,68 @@ struct PolicyParams {
     };
 };
 
-struct CartPole {
+struct CartPole : public blackdrops::System<Params> {
     typedef std::vector<double> ode_state_type;
 
-    template <typename Policy, typename Reward>
-    std::vector<std::tuple<Eigen::VectorXd, Eigen::VectorXd, Eigen::VectorXd>> execute(const Policy& policy, const Reward& world, size_t steps, std::vector<double>& R, bool display = true)
+    Eigen::VectorXd init_state() const
     {
-        double dt = 0.1;
-        std::vector<std::tuple<Eigen::VectorXd, Eigen::VectorXd, Eigen::VectorXd>> res;
+        return Eigen::VectorXd::Zero(4);
+    }
 
-        boost::numeric::odeint::runge_kutta4<ode_state_type> ode_stepper;
-        double t = 0.0;
-        R = std::vector<double>();
+    Eigen::VectorXd transform_state(const Eigen::VectorXd& original_state) const
+    {
+        Eigen::VectorXd trans_state = Eigen::VectorXd::Zero(5);
+        trans_state.head(3) = original_state.head(3);
+        trans_state(3) = std::cos(original_state(3));
+        trans_state(4) = std::sin(original_state(3));
+
+        return trans_state;
+    }
+
+    Eigen::VectorXd execute_single(const Eigen::VectorXd& state, const Eigen::VectorXd& u, double t, bool display = true) const
+    {
+        double dt = Params::blackdrops::dt();
 
         ode_state_type cp_state(4, 0.0);
+        Eigen::VectorXd::Map(cp_state.data(), cp_state.size()) = state;
 
-        for (size_t i = 0; i < steps; i++) {
-            Eigen::VectorXd init(Params::blackdrops::model_input_dim());
-            init(0) = cp_state[0];
-            init(1) = cp_state[1];
-            init(2) = cp_state[2];
-            init(3) = std::cos(cp_state[3]);
-            init(4) = std::sin(cp_state[3]);
-
-            Eigen::VectorXd init_diff = Eigen::VectorXd::Map(cp_state.data(), cp_state.size());
-
-            _u = policy.next(init)[0];
-            boost::numeric::odeint::integrate_const(ode_stepper,
-                std::bind(&CartPole::dynamics, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3),
-                cp_state, t, t + dt, dt / 2.0);
-            t += dt;
-
-            Eigen::VectorXd final = Eigen::VectorXd::Map(cp_state.data(), cp_state.size());
-
-            Eigen::VectorXd pred = final - init_diff;
-            while (final(3) < -M_PI)
-                final(3) += 2 * M_PI;
-            while (final(3) > M_PI)
-                final(3) -= 2 * M_PI;
-            res.push_back(std::make_tuple(init, limbo::tools::make_vector(_u), pred));
-
-            double r = world(init, limbo::tools::make_vector(_u), final);
-            R.push_back(r);
-#if defined(USE_SDL) && !defined(NODSP)
-            if (display) {
-                //Clear screen
-                SDL_SetRenderDrawColor(renderer, 0xFF, 0xFF, 0xFF, 0xFF);
-                SDL_RenderClear(renderer);
-
-                draw_cartpole(cp_state[0], cp_state[3]);
-                draw_goal(0, -0.5);
-
-                SDL_SetRenderDrawColor(renderer, 0x00, 0xFF, 0x00, 0xFF);
-                SDL_Rect outlineRect = {static_cast<int>(SCREEN_WIDTH / 2 + 0.05 * SCREEN_HEIGHT / 4), static_cast<int>(SCREEN_HEIGHT / 4 + 2.05 * SCREEN_HEIGHT / 4), static_cast<int>(_u / 10.0 * SCREEN_HEIGHT / 4), static_cast<int>(0.1 * SCREEN_HEIGHT / 4)};
-                SDL_RenderFillRect(renderer, &outlineRect);
-
-                SDL_SetRenderDrawColor(renderer, 0x00, 0xFF, 0xFF, 0xFF);
-                outlineRect = {static_cast<int>(SCREEN_WIDTH / 2 + 0.05 * SCREEN_HEIGHT / 4), static_cast<int>(SCREEN_HEIGHT / 4 + 2.55 * SCREEN_HEIGHT / 4), static_cast<int>(r * SCREEN_HEIGHT / 4), static_cast<int>(0.1 * SCREEN_HEIGHT / 4)};
-                SDL_RenderFillRect(renderer, &outlineRect);
-
-                //Update screen
-                SDL_RenderPresent(renderer);
-
-                SDL_Delay(dt * 1000);
-            }
-#endif
-        }
-
-        if (!policy.random() && display) {
-            double rr = std::accumulate(R.begin(), R.end(), 0.0);
-            std::cout << "Reward: " << rr << std::endl;
-        }
-
-        return res;
-    }
-
-    template <typename Policy, typename Model, typename Reward>
-    void execute_dummy(const Policy& policy, const Model& model, const Reward& world, size_t steps, std::vector<double>& R, bool display = true) const
-    {
-        R = std::vector<double>();
-        // init state
-        Eigen::VectorXd init_diff = Eigen::VectorXd::Zero(Params::blackdrops::model_pred_dim());
-        Eigen::VectorXd init = Eigen::VectorXd::Zero(Params::blackdrops::model_input_dim());
-        init(3) = std::cos(0.0);
-        init(4) = std::sin(0.0);
-        for (size_t j = 0; j < steps; j++) {
-            Eigen::VectorXd query_vec(Params::blackdrops::model_input_dim() + Params::blackdrops::action_dim());
-            Eigen::VectorXd u = policy.next(init);
-            query_vec.head(Params::blackdrops::model_input_dim()) = init;
-            query_vec.tail(Params::blackdrops::action_dim()) = u;
-
-            Eigen::VectorXd mu;
-            Eigen::VectorXd sigma;
-            std::tie(mu, sigma) = model.predictm(query_vec);
-
-            Eigen::VectorXd final = init_diff + mu;
-
-            double r = world(init_diff, mu, final);
-            R.push_back(r);
-
-            init_diff = final;
-            init(0) = final(0);
-            init(1) = final(1);
-            init(2) = final(2);
-            init(3) = std::cos(final(3));
-            init(4) = std::sin(final(3));
+        boost::numeric::odeint::integrate_const(boost::numeric::odeint::make_dense_output(1.0e-12, 1.0e-12, boost::numeric::odeint::runge_kutta_dopri5<ode_state_type>()),
+            std::bind(&CartPole::dynamics, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, u(0)),
+            cp_state, t, t + dt, dt / 2.0);
+        Eigen::VectorXd final = Eigen::VectorXd::Map(cp_state.data(), cp_state.size());
 
 #if defined(USE_SDL) && !defined(NODSP)
-            if (display) {
-                double dt = 0.1;
-                //Clear screen
-                SDL_SetRenderDrawColor(renderer, 0xFF, 0xFF, 0xFF, 0xFF);
-                SDL_RenderClear(renderer);
+        if (display) {
+            //Clear screen
+            SDL_SetRenderDrawColor(renderer, 0xFF, 0xFF, 0xFF, 0xFF);
+            SDL_RenderClear(renderer);
 
-                draw_cartpole(init_diff[0], init_diff[3], true);
-                draw_goal(0, -0.5);
+            draw_cartpole(cp_state[0], cp_state[3]);
+            draw_goal(0, 0.5);
 
-                SDL_SetRenderDrawColor(renderer, 0x00, 0xFF, 0x00, 0xFF);
-                SDL_Rect outlineRect = {static_cast<int>(SCREEN_WIDTH / 2 + 0.05 * SCREEN_HEIGHT / 4), static_cast<int>(SCREEN_HEIGHT / 4 + 2.05 * SCREEN_HEIGHT / 4), static_cast<int>(u[0] / 10.0 * SCREEN_HEIGHT / 4), static_cast<int>(0.1 * SCREEN_HEIGHT / 4)};
-                SDL_RenderFillRect(renderer, &outlineRect);
+            //Update screen
+            SDL_RenderPresent(renderer);
 
-                SDL_SetRenderDrawColor(renderer, 0x00, 0xFF, 0xFF, 0xFF);
-                outlineRect = {static_cast<int>(SCREEN_WIDTH / 2 + 0.05 * SCREEN_HEIGHT / 4), static_cast<int>(SCREEN_HEIGHT / 4 + 2.55 * SCREEN_HEIGHT / 4), static_cast<int>(r * SCREEN_HEIGHT / 4), static_cast<int>(0.1 * SCREEN_HEIGHT / 4)};
-                SDL_RenderFillRect(renderer, &outlineRect);
-
-                //Update screen
-                SDL_RenderPresent(renderer);
-
-                SDL_Delay(dt * 1000);
-            }
+            SDL_Delay(dt * 1000);
+        }
 #endif
-        }
-    }
-
-    template <typename Policy, typename Model, typename Reward>
-    double predict_policy(const Policy& policy, const Model& model, const Reward& world, size_t steps) const
-    {
-        double reward = 0.0;
-        // init state
-        Eigen::VectorXd init_diff = Eigen::VectorXd::Zero(Params::blackdrops::model_pred_dim());
-        Eigen::VectorXd init = Eigen::VectorXd::Zero(Params::blackdrops::model_input_dim());
-        init(3) = std::cos(0.0);
-        init(4) = std::sin(0.0);
-        for (size_t j = 0; j < steps; j++) {
-            if (init.norm() > 1000)
-                break;
-            Eigen::VectorXd query_vec(Params::blackdrops::model_input_dim() + Params::blackdrops::action_dim());
-            Eigen::VectorXd u = policy.next(init);
-            query_vec.head(Params::blackdrops::model_input_dim()) = init;
-            query_vec.tail(Params::blackdrops::action_dim()) = u;
-
-            Eigen::VectorXd mu;
-            Eigen::VectorXd sigma;
-            std::tie(mu, sigma) = model.predictm(query_vec);
-
-            if (Params::opt_cmaes::handle_uncertainty()) {
-                sigma = sigma.array().sqrt();
-                for (int i = 0; i < mu.size(); i++) {
-                    if (sigma(i) < 1e-6)
-                        continue;
-                    double s = gaussian_rand(mu(i), sigma(i));
-                    mu(i) = std::max(mu(i) - sigma(i),
-                        std::min(s, mu(i) + sigma(i)));
-                }
-            }
-
-            Eigen::VectorXd final = init_diff + mu;
-
-            reward += world(init_diff, u, final);
-            init_diff = final;
-            init(0) = final(0);
-            init(1) = final(1);
-            init(2) = final(2);
-            init(3) = std::cos(final(3));
-            init(4) = std::sin(final(3));
-        }
-
-        return reward;
+        return final;
     }
 
     /* The rhs of x' = f(x) */
-    void dynamics(const ode_state_type& x, ode_state_type& dx, double t)
+    void dynamics(const ode_state_type& x, ode_state_type& dx, double t, double u) const
     {
         double l = 0.5, m = 0.5, M = 0.5, g = 9.82, b = 0.1;
 
         dx[0] = x[1];
-        dx[1] = (2 * m * l * std::pow(x[2], 2.0) * std::sin(x[3]) + 3 * m * g * std::sin(x[3]) * std::cos(x[3]) + 4 * _u - 4 * b * x[1]) / (4 * (M + m) - 3 * m * std::pow(std::cos(x[3]), 2.0));
-        dx[2] = (-3 * m * l * std::pow(x[2], 2.0) * std::sin(x[3]) * std::cos(x[3]) - 6 * (M + m) * g * std::sin(x[3]) - 6 * (_u - b * x[1]) * std::cos(x[3])) / (4 * l * (m + M) - 3 * m * l * std::pow(std::cos(x[3]), 2.0));
+        dx[1] = (2 * m * l * std::pow(x[2], 2.0) * std::sin(x[3]) + 3 * m * g * std::sin(x[3]) * std::cos(x[3]) + 4 * u - 4 * b * x[1]) / (4 * (M + m) - 3 * m * std::pow(std::cos(x[3]), 2.0));
+        dx[2] = (-3 * m * l * std::pow(x[2], 2.0) * std::sin(x[3]) * std::cos(x[3]) - 6 * (M + m) * g * std::sin(x[3]) - 6 * (u - b * x[1]) * std::cos(x[3])) / (4 * l * (m + M) - 3 * m * l * std::pow(std::cos(x[3]), 2.0));
         dx[3] = x[2];
         // dx[0] = x[1];
         // dx[1] = (_u + m * std::sin(x[3]) * (l * x[2] * x[2] + g * std::cos(x[3]))) / (M + m * std::cos(x[3]) * std::cos(x[3]));
         // dx[2] = (-_u * std::cos(x[3]) - m * l * x[2] * x[2] * std::cos(x[3]) * std::sin(x[3]) - (M + m) * g * std::sin(x[3])) / (l * (M + m * std::sin(x[3]) * std::sin(x[3])));
         // dx[3] = x[2];
     }
-
-protected:
-    double _u;
 };
 
 struct RewardFunction {

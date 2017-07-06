@@ -27,10 +27,10 @@ struct Params {
 
     struct blackdrops {
         BO_PARAM(size_t, action_dim, 4);
-        BO_PARAM(size_t, state_full_dim, 8);
         BO_PARAM(size_t, model_input_dim, 8);
         BO_PARAM(size_t, model_pred_dim, 4);
-        BO_PARAM(size_t, rollout_steps, 39);
+        BO_PARAM(double, dt, 0.1);
+        BO_PARAM(double, T, 4.0);
         BO_DYN_PARAM(double, boundary);
         BO_DYN_PARAM(bool, verbose);
     };
@@ -182,15 +182,13 @@ std::vector<Eigen::VectorXd> random_vectors(size_t dim, size_t q, Eigen::VectorX
 
 struct SimpleArm {
     template <typename Policy, typename Reward>
-    std::vector<std::tuple<Eigen::VectorXd, Eigen::VectorXd, Eigen::VectorXd>> execute(const Policy& policy, const Reward& world, size_t steps, std::vector<double>& R, bool display = true)
+    std::vector<std::tuple<Eigen::VectorXd, Eigen::VectorXd, Eigen::VectorXd>> execute(const Policy& policy, const Reward& world, double T, std::vector<double>& R, bool display = true)
     {
         static int n_iter = 0;
         std::vector<std::tuple<Eigen::VectorXd, Eigen::VectorXd, Eigen::VectorXd>> res;
         Eigen::VectorXd pp = policy.params();
         std::vector<double> params(pp.size());
         Eigen::VectorXd::Map(params.data(), pp.size()) = pp;
-
-        double t = 4.0;
 
         std::shared_ptr<robot_dart::Robot> simulated_robot = global::global_robot->clone();
         simulated_robot->fix_to_world();
@@ -231,7 +229,7 @@ struct SimpleArm {
 
             void set_commands()
             {
-                double dt = 0.1;
+                double dt = Params::blackdrops::dt();
                 // double ds = 0.1;
 
                 if (_t == 0.0 || (_t - _prev_time) >= dt) {
@@ -283,7 +281,7 @@ struct SimpleArm {
 
         R = std::vector<double>();
 
-        simu.run(t);
+        simu.run(T + Params::blackdrops::dt());
 
         ActualReward actual_reward;
 
@@ -345,13 +343,14 @@ struct SimpleArm {
     }
 
     template <typename Policy, typename Model, typename Reward>
-    void execute_dummy(const Policy& policy, const Model& model, const Reward& world, size_t steps, std::vector<double>& R, bool display = true) const
+    void execute_dummy(const Policy& policy, const Model& model, const Reward& world, double T, std::vector<double>& R, bool display = true) const
     {
+        double dt = Params::blackdrops::dt();
         R = std::vector<double>();
         // init state
         Eigen::VectorXd init = Eigen::VectorXd::Zero(Params::blackdrops::model_pred_dim());
 
-        for (size_t j = 0; j < steps; j++) {
+        for (double t = 0.; t <= T; t += dt) {
             Eigen::VectorXd query_vec(Params::blackdrops::model_input_dim() + Params::blackdrops::action_dim());
             Eigen::VectorXd init_full(Params::blackdrops::model_input_dim());
             for (int i = 0; i < init.size(); i++) {
@@ -379,14 +378,14 @@ struct SimpleArm {
     }
 
     template <typename Policy, typename Model, typename Reward>
-    double predict_policy(const Policy& policy, const Model& model, const Reward& world, size_t steps) const
+    double predict_policy(const Policy& policy, const Model& model, const Reward& world, double T) const
     {
-
+        double dt = Params::blackdrops::dt();
         double reward = 0.0;
         // init state
         Eigen::VectorXd init = Eigen::VectorXd::Zero(Params::blackdrops::model_pred_dim());
         // init(5) = 0.58;
-        for (size_t j = 0; j < steps; j++) {
+        for (double t = 0.; t <= T; t += dt) {
             Eigen::VectorXd query_vec(Params::blackdrops::model_input_dim() + Params::blackdrops::action_dim());
             Eigen::VectorXd init_full(Params::blackdrops::model_input_dim());
 

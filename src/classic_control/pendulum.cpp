@@ -8,6 +8,7 @@
 #include <blackdrops/model/gp/kernel_lf_opt.hpp>
 #include <blackdrops/model/multi_gp.hpp>
 #include <blackdrops/model/multi_gp/multi_gp_parallel_opt.hpp>
+#include <blackdrops/system.hpp>
 
 #include <blackdrops/policy/gp_policy.hpp>
 #include <blackdrops/policy/linear_policy.hpp>
@@ -64,7 +65,7 @@ bool draw_pendulum(double theta, bool red = false)
 {
     double x = std::cos(theta), y = std::sin(theta);
 
-    SDL_Rect outlineRect = {static_cast<int>(SCREEN_WIDTH / 2 - 0.05 * SCREEN_HEIGHT / 4), static_cast<int>(SCREEN_HEIGHT / 2 - 0.05 * SCREEN_HEIGHT / 4), static_cast<int>(0.1 * SCREEN_HEIGHT / 4, 0.1 * SCREEN_HEIGHT / 4)};
+    SDL_Rect outlineRect = {static_cast<int>(SCREEN_WIDTH / 2 - 0.05 * SCREEN_HEIGHT / 4), static_cast<int>(SCREEN_HEIGHT / 2 - 0.05 * SCREEN_HEIGHT / 4), static_cast<int>(0.1 * SCREEN_HEIGHT / 4), static_cast<int>(0.1 * SCREEN_HEIGHT / 4)};
     SDL_SetRenderDrawColor(renderer, 0x00, 0x00, 0xFF, 0xFF);
     SDL_RenderFillRect(renderer, &outlineRect);
     //Draw blue horizontal line
@@ -78,7 +79,7 @@ bool draw_pendulum(double theta, bool red = false)
 
 bool draw_goal(double x, double y)
 {
-    SDL_Rect outlineRect = {static_cast<int>(SCREEN_WIDTH / 2 - 0.05 * SCREEN_HEIGHT / 4), static_cast<int>(SCREEN_HEIGHT / 4 - 0.05 * SCREEN_HEIGHT / 4), static_cast<int>(0.1 * SCREEN_HEIGHT / 4, 0.1 * SCREEN_HEIGHT / 4)};
+    SDL_Rect outlineRect = {static_cast<int>(SCREEN_WIDTH / 2 - 0.05 * SCREEN_HEIGHT / 4), static_cast<int>(SCREEN_HEIGHT / 4 - 0.05 * SCREEN_HEIGHT / 4), static_cast<int>(0.1 * SCREEN_HEIGHT / 4), static_cast<int>(0.1 * SCREEN_HEIGHT / 4)};
     SDL_SetRenderDrawColor(renderer, 0xFF, 0x00, 0x00, 0xFF);
     SDL_RenderFillRect(renderer, &outlineRect);
 
@@ -102,10 +103,10 @@ struct Params {
 
     struct blackdrops {
         BO_PARAM(size_t, action_dim, 1);
-        BO_PARAM(size_t, state_full_dim, 4);
         BO_PARAM(size_t, model_input_dim, 3);
         BO_PARAM(size_t, model_pred_dim, 2);
-        BO_PARAM(size_t, rollout_steps, 40);
+        BO_PARAM(double, dt, 0.1);
+        BO_PARAM(double, T, 4.0);
         BO_DYN_PARAM(bool, verbose);
         BO_DYN_PARAM(double, boundary);
     };
@@ -182,179 +183,62 @@ struct PolicyParams {
     };
 };
 
-struct Pendulum {
+struct Pendulum : public blackdrops::System<Params> {
     typedef std::vector<double> ode_state_type;
 
-    template <typename Policy, typename Reward>
-    std::vector<std::tuple<Eigen::VectorXd, Eigen::VectorXd, Eigen::VectorXd>> execute(const Policy& policy, const Reward& world, size_t steps, std::vector<double>& R, bool display = true)
+    Eigen::VectorXd init_state() const
     {
-        double dt = 0.1;
-        std::vector<std::tuple<Eigen::VectorXd, Eigen::VectorXd, Eigen::VectorXd>> res;
+        return Eigen::VectorXd::Zero(2);
+    }
 
-        boost::numeric::odeint::runge_kutta4<ode_state_type> ode_stepper;
-        double t = 0.0;
-        R = std::vector<double>();
+    Eigen::VectorXd transform_state(const Eigen::VectorXd& original_state) const
+    {
+        Eigen::VectorXd trans_state = Eigen::VectorXd::Zero(3);
+        trans_state.head(1) = original_state.head(1);
+        trans_state(1) = std::cos(original_state(1));
+        trans_state(2) = std::sin(original_state(1));
+
+        return trans_state;
+    }
+
+    Eigen::VectorXd execute_single(const Eigen::VectorXd& state, const Eigen::VectorXd& u, double t, bool display = true) const
+    {
+        double dt = Params::blackdrops::dt();
 
         ode_state_type pend_state(2, 0.0);
+        Eigen::VectorXd::Map(pend_state.data(), pend_state.size()) = state;
 
-        for (size_t i = 0; i < steps; i++) {
-            Eigen::VectorXd init(Params::blackdrops::model_input_dim());
-            init(0) = pend_state[0];
-            init(1) = std::cos(pend_state[1]);
-            init(2) = std::sin(pend_state[1]);
-
-            Eigen::VectorXd init_diff = Eigen::VectorXd::Map(pend_state.data(), pend_state.size());
-
-            _u = policy.next(init)[0];
-            boost::numeric::odeint::integrate_const(ode_stepper,
-                std::bind(&Pendulum::dynamics, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3),
-                pend_state, t, t + dt, dt / 2.0);
-            t += dt;
-            Eigen::VectorXd final = Eigen::VectorXd::Map(pend_state.data(), pend_state.size());
-
-            res.push_back(std::make_tuple(init, limbo::tools::make_vector(_u), final - init_diff));
-            double r = world(init, limbo::tools::make_vector(_u), final);
-            R.push_back(r);
-#if defined(USE_SDL) && !defined(NODSP)
-            if (display) {
-                //Clear screen
-                SDL_SetRenderDrawColor(renderer, 0xFF, 0xFF, 0xFF, 0xFF);
-                SDL_RenderClear(renderer);
-
-                draw_pendulum(pend_state[1]);
-                draw_goal(0, -1);
-
-                SDL_SetRenderDrawColor(renderer, 0x00, 0xFF, 0x00, 0xFF);
-                SDL_Rect outlineRect = {static_cast<int>(SCREEN_WIDTH / 2 + 0.05 * SCREEN_HEIGHT / 4), static_cast<int>(SCREEN_HEIGHT / 4 + 2.05 * SCREEN_HEIGHT / 4), static_cast<int>(_u / 2.5 * SCREEN_HEIGHT / 4, 0.1 * SCREEN_HEIGHT / 4)};
-                SDL_RenderFillRect(renderer, &outlineRect);
-
-                SDL_SetRenderDrawColor(renderer, 0x00, 0xFF, 0xFF, 0xFF);
-                outlineRect = {static_cast<int>(SCREEN_WIDTH / 2 + 0.05 * SCREEN_HEIGHT / 4), static_cast<int>(SCREEN_HEIGHT / 4 + 2.55 * SCREEN_HEIGHT / 4), static_cast<int>(r * SCREEN_HEIGHT / 4, 0.1 * SCREEN_HEIGHT / 4)};
-                SDL_RenderFillRect(renderer, &outlineRect);
-
-                //Update screen
-                SDL_RenderPresent(renderer);
-
-                SDL_Delay(dt * 1000);
-            }
-#endif
-        }
-
-        if (!policy.random() && display) {
-            double rr = std::accumulate(R.begin(), R.end(), 0.0);
-            std::cout << "Reward: " << rr << std::endl;
-        }
-
-        return res;
-    }
-
-    template <typename Policy, typename Model, typename Reward>
-    void execute_dummy(const Policy& policy, const Model& model, const Reward& world, size_t steps, std::vector<double>& R, bool display = true) const
-    {
-        R = std::vector<double>();
-        // init state
-        Eigen::VectorXd init_diff = Eigen::VectorXd::Zero(Params::blackdrops::model_pred_dim());
-        Eigen::VectorXd init = Eigen::VectorXd::Zero(Params::blackdrops::model_input_dim());
-        init(1) = std::cos(0.0);
-        init(2) = std::sin(0.0);
-        for (size_t j = 0; j < steps; j++) {
-            Eigen::VectorXd query_vec(Params::blackdrops::model_input_dim() + Params::blackdrops::action_dim());
-            Eigen::VectorXd u = policy.next(init);
-            query_vec.head(Params::blackdrops::model_input_dim()) = init;
-            query_vec.tail(Params::blackdrops::action_dim()) = u;
-
-            Eigen::VectorXd mu;
-            Eigen::VectorXd sigma;
-            std::tie(mu, sigma) = model.predictm(query_vec);
-
-            Eigen::VectorXd final = init_diff + mu;
-
-            double r = world(init_diff, mu, final);
-            R.push_back(r);
-
-            init_diff = final;
-            init(0) = final(0);
-            init(1) = std::cos(final(1));
-            init(2) = std::sin(final(1));
+        boost::numeric::odeint::integrate_const(boost::numeric::odeint::make_dense_output(1.0e-12, 1.0e-12, boost::numeric::odeint::runge_kutta_dopri5<ode_state_type>()),
+            std::bind(&Pendulum::dynamics, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, u(0)),
+            pend_state, t, t + dt, dt / 2.0);
+        Eigen::VectorXd final = Eigen::VectorXd::Map(pend_state.data(), pend_state.size());
 
 #if defined(USE_SDL) && !defined(NODSP)
-            if (display) {
-                double dt = 0.1;
-                //Clear screen
-                SDL_SetRenderDrawColor(renderer, 0xFF, 0xFF, 0xFF, 0xFF);
-                SDL_RenderClear(renderer);
+        if (display) {
+            //Clear screen
+            SDL_SetRenderDrawColor(renderer, 0xFF, 0xFF, 0xFF, 0xFF);
+            SDL_RenderClear(renderer);
 
-                draw_pendulum(init_diff[1], true);
-                draw_goal(0, -1);
+            draw_pendulum(pend_state[1]);
+            draw_goal(0, 1);
 
-                SDL_SetRenderDrawColor(renderer, 0x00, 0xFF, 0x00, 0xFF);
-                SDL_Rect outlineRect = {static_cast<int>(SCREEN_WIDTH / 2 + 0.05 * SCREEN_HEIGHT / 4), static_cast<int>(SCREEN_HEIGHT / 4 + 2.05 * SCREEN_HEIGHT / 4), static_cast<int>(u[0] / 2.5 * SCREEN_HEIGHT / 4, 0.1 * SCREEN_HEIGHT / 4)};
-                SDL_RenderFillRect(renderer, &outlineRect);
+            //Update screen
+            SDL_RenderPresent(renderer);
 
-                SDL_SetRenderDrawColor(renderer, 0x00, 0xFF, 0xFF, 0xFF);
-                outlineRect = {static_cast<int>(SCREEN_WIDTH / 2 + 0.05 * SCREEN_HEIGHT / 4), static_cast<int>(SCREEN_HEIGHT / 4 + 2.55 * SCREEN_HEIGHT / 4), static_cast<int>(r * SCREEN_HEIGHT / 4, 0.1 * SCREEN_HEIGHT / 4)};
-                SDL_RenderFillRect(renderer, &outlineRect);
-
-                //Update screen
-                SDL_RenderPresent(renderer);
-
-                SDL_Delay(dt * 1000);
-            }
+            SDL_Delay(dt * 1000);
+        }
 #endif
-        }
-    }
-
-    template <typename Policy, typename Model, typename Reward>
-    double predict_policy(const Policy& policy, const Model& model, const Reward& world, size_t steps) const
-    {
-        double reward = 0.0;
-        // init state
-        Eigen::VectorXd init_diff = Eigen::VectorXd::Zero(Params::blackdrops::model_pred_dim());
-        Eigen::VectorXd init = Eigen::VectorXd::Zero(Params::blackdrops::model_input_dim());
-        init(1) = std::cos(0.0);
-        init(2) = std::sin(0.0);
-        for (size_t j = 0; j < steps; j++) {
-            Eigen::VectorXd query_vec(Params::blackdrops::model_input_dim() + Params::blackdrops::action_dim());
-            Eigen::VectorXd u = policy.next(init);
-            query_vec.head(Params::blackdrops::model_input_dim()) = init;
-            query_vec.tail(Params::blackdrops::action_dim()) = u;
-
-            Eigen::VectorXd mu;
-            Eigen::VectorXd sigma;
-            std::tie(mu, sigma) = model.predictm(query_vec);
-
-            if (Params::opt_cmaes::handle_uncertainty()) {
-                sigma = sigma.array().sqrt();
-                for (int i = 0; i < mu.size(); i++) {
-                    double s = gaussian_rand(mu(i), sigma(i));
-                    mu(i) = std::max(mu(i) - sigma(i),
-                        std::min(s, mu(i) + sigma(i)));
-                }
-            }
-
-            Eigen::VectorXd final = init_diff + mu;
-
-            reward += world(init_diff, u, final);
-            init_diff = final;
-            init(0) = final(0);
-            init(1) = std::cos(final(1));
-            init(2) = std::sin(final(1));
-        }
-
-        return reward;
+        return final;
     }
 
     /* The rhs of x' = f(x) */
-    void dynamics(const ode_state_type& x, ode_state_type& dx, double t)
+    void dynamics(const ode_state_type& x, ode_state_type& dx, double t, double u) const
     {
         double l = 1, m = 1, g = 9.82, b = 0.01;
 
-        dx[0] = (_u - b * x[0] - m * g * l * std::sin(x[1]) / 2.0) / (m * std::pow(l, 2) / 3.0);
+        dx[0] = (u - b * x[0] - m * g * l * std::sin(x[1]) / 2.0) / (m * std::pow(l, 2.) / 3.0);
         dx[1] = x[0];
     }
-
-protected:
-    double _u;
 };
 
 struct RewardFunction {

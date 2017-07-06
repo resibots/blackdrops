@@ -42,7 +42,6 @@ The Black-DROPS algorithm is a model-based policy search algorithm (the ICML 201
 
 To get a better idea of how well Black-DROPS works please check the [paper](https://arxiv.org/abs/1703.07261). Here are the main figures of the paper for quick reference (the "No var" variants are variants of Black-DROPS without taking into account the uncertainty of the model):
 
-<!--![Cart-pole swing-up task](./imgs/cartpole_rewards.png "Cart-pole swing-up task" =100x)-->
 <center>
 <img src="./imgs/pendulum_rewards.png" width="400">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<img src="./imgs/cartpole_rewards.png" width="400">
 </center>
@@ -111,7 +110,7 @@ And then every time you make a change to a source file (*\*.hpp or \*.cpp*), you
 
 ### How to create your own scenario
 
-Please look at the [basic tutorial](here). You will find detailed comments on how to create, compile and run your own scenarios.
+Please look at the [basic tutorial](basic_tutorial.md). You will find detailed comments on how to create, compile and run your own scenarios.
 
 
 <!--### Python Code
