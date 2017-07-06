@@ -9,7 +9,7 @@
 #include <blackdrops/model/gp/kernel_lf_opt.hpp>
 #include <blackdrops/model/multi_gp.hpp>
 #include <blackdrops/model/multi_gp/multi_gp_parallel_opt.hpp>
-#include <blackdrops/ode_system.hpp>
+#include <blackdrops/system/ode_system.hpp>
 #include <limbo/experimental/model/poegp.hpp>
 #include <limbo/experimental/model/poegp/poegp_lf_opt.hpp>
 
@@ -193,9 +193,7 @@ struct PolicyParams {
     };
 };
 
-struct CartPole : public blackdrops::ODESystem<Params> {
-    typedef std::vector<double> ode_state_type;
-
+struct CartPole : public blackdrops::system::ODESystem<Params> {
     Eigen::VectorXd init_state() const
     {
         return Eigen::VectorXd::Zero(4);
@@ -230,7 +228,7 @@ struct CartPole : public blackdrops::ODESystem<Params> {
     }
 
     /* The rhs of x' = f(x) */
-    void dynamics(const ode_state_type& x, ode_state_type& dx, double t, const Eigen::VectorXd& u) const
+    void dynamics(const std::vector<double>& x, std::vector<double>& dx, double t, const Eigen::VectorXd& u) const
     {
         double l = 0.5, m = 0.5, M = 0.5, g = 9.82, b = 0.1;
 

@@ -10,11 +10,11 @@
 #endif
 
 #include <blackdrops/blackdrops.hpp>
-#include <blackdrops/dart_system.hpp>
 #include <blackdrops/gp_model.hpp>
 #include <blackdrops/model/gp/kernel_lf_opt.hpp>
 #include <blackdrops/model/multi_gp.hpp>
 #include <blackdrops/model/multi_gp/multi_gp_parallel_opt.hpp>
+#include <blackdrops/system/dart_system.hpp>
 
 #include <blackdrops/policy/nn_policy.hpp>
 
@@ -181,8 +181,8 @@ std::vector<Eigen::VectorXd> random_vectors(size_t dim, size_t q, Eigen::VectorX
     return result;
 }
 
-struct PolicyControl : public blackdrops::BasePolicyControl<Params, global::policy_t> {
-    using base_t = blackdrops::BasePolicyControl<Params, global::policy_t>;
+struct PolicyControl : public blackdrops::system::BaseDARTPolicyControl<Params, global::policy_t> {
+    using base_t = blackdrops::system::BaseDARTPolicyControl<Params, global::policy_t>;
 
     PolicyControl() : base_t() {}
     PolicyControl(const std::vector<double>& ctrl, base_t::robot_t robot) : base_t(ctrl, robot) {}
@@ -193,8 +193,8 @@ struct PolicyControl : public blackdrops::BasePolicyControl<Params, global::poli
     }
 };
 
-struct SimpleArm : public blackdrops::DARTSystem<Params, PolicyControl> {
-    using base_t = blackdrops::DARTSystem<Params, PolicyControl>;
+struct SimpleArm : public blackdrops::system::DARTSystem<Params, PolicyControl> {
+    using base_t = blackdrops::system::DARTSystem<Params, PolicyControl>;
 
     Eigen::VectorXd init_state() const
     {
@@ -237,7 +237,7 @@ struct SimpleArm : public blackdrops::DARTSystem<Params, PolicyControl> {
     {
         static int n_iter = 0;
         ActualReward actual_reward;
-        std::vector<std::tuple<Eigen::VectorXd, Eigen::VectorXd, Eigen::VectorXd>> ret = blackdrops::DARTSystem<Params, PolicyControl>::execute(policy, actual_reward, T, R, display);
+        std::vector<std::tuple<Eigen::VectorXd, Eigen::VectorXd, Eigen::VectorXd>> ret = blackdrops::system::DARTSystem<Params, PolicyControl>::execute(policy, actual_reward, T, R, display);
 
         std::vector<Eigen::VectorXd> states = this->get_last_states();
         for (size_t i = 0; i < R.size(); i++) {

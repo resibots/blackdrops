@@ -7,7 +7,7 @@
 #include <blackdrops/model/gp/kernel_lf_opt.hpp>
 #include <blackdrops/model/multi_gp.hpp>
 #include <blackdrops/model/multi_gp/multi_gp_parallel_opt.hpp>
-#include <blackdrops/ode_system.hpp>
+#include <blackdrops/system/ode_system.hpp>
 
 #include <blackdrops/policy/nn_policy.hpp>
 
@@ -181,9 +181,7 @@ Eigen::VectorXd tip(double theta1, double theta2)
     return ret;
 }
 
-struct PlanarArm : public blackdrops::ODESystem<Params> {
-    typedef std::vector<double> ode_state_type;
-
+struct PlanarArm : public blackdrops::system::ODESystem<Params> {
     Eigen::VectorXd init_state() const
     {
         Eigen::VectorXd init = Eigen::VectorXd::Zero(4);
@@ -223,7 +221,7 @@ struct PlanarArm : public blackdrops::ODESystem<Params> {
     }
 
     /* The rhs of x' = f(x) */
-    void dynamics(const ode_state_type& x, ode_state_type& dx, double t, const Eigen::VectorXd& u) const
+    void dynamics(const std::vector<double>& x, std::vector<double>& dx, double t, const Eigen::VectorXd& u) const
     {
         double b1 = 0.1, b2 = 0.1;
 
