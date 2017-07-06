@@ -1,6 +1,5 @@
 #include <limbo/limbo.hpp>
 
-#include <boost/numeric/odeint.hpp>
 #include <boost/program_options.hpp>
 
 #include <blackdrops/blackdrops.hpp>
@@ -8,7 +7,7 @@
 #include <blackdrops/model/gp/kernel_lf_opt.hpp>
 #include <blackdrops/model/multi_gp.hpp>
 #include <blackdrops/model/multi_gp/multi_gp_parallel_opt.hpp>
-#include <blackdrops/system.hpp>
+#include <blackdrops/ode_system.hpp>
 
 #include <blackdrops/policy/gp_policy.hpp>
 #include <blackdrops/policy/linear_policy.hpp>
@@ -183,7 +182,7 @@ struct PolicyParams {
     };
 };
 
-struct Pendulum : public blackdrops::System<Params> {
+struct Pendulum : public blackdrops::ODESystem<Params> {
     typedef std::vector<double> ode_state_type;
 
     Eigen::VectorXd init_state() const
@@ -201,42 +200,30 @@ struct Pendulum : public blackdrops::System<Params> {
         return trans_state;
     }
 
-    Eigen::VectorXd execute_single(const Eigen::VectorXd& state, const Eigen::VectorXd& u, double t, bool display = true) const
+    void draw_single(const Eigen::VectorXd& state) const
     {
-        double dt = Params::blackdrops::dt();
-
-        ode_state_type pend_state(2, 0.0);
-        Eigen::VectorXd::Map(pend_state.data(), pend_state.size()) = state;
-
-        boost::numeric::odeint::integrate_const(boost::numeric::odeint::make_dense_output(1.0e-12, 1.0e-12, boost::numeric::odeint::runge_kutta_dopri5<ode_state_type>()),
-            std::bind(&Pendulum::dynamics, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, u(0)),
-            pend_state, t, t + dt, dt / 2.0);
-        Eigen::VectorXd final = Eigen::VectorXd::Map(pend_state.data(), pend_state.size());
-
 #if defined(USE_SDL) && !defined(NODSP)
-        if (display) {
-            //Clear screen
-            SDL_SetRenderDrawColor(renderer, 0xFF, 0xFF, 0xFF, 0xFF);
-            SDL_RenderClear(renderer);
+        double dt = Params::blackdrops::dt();
+        //Clear screen
+        SDL_SetRenderDrawColor(renderer, 0xFF, 0xFF, 0xFF, 0xFF);
+        SDL_RenderClear(renderer);
 
-            draw_pendulum(pend_state[1]);
-            draw_goal(0, 1);
+        draw_pendulum(state(1));
+        draw_goal(0, 1);
 
-            //Update screen
-            SDL_RenderPresent(renderer);
+        //Update screen
+        SDL_RenderPresent(renderer);
 
-            SDL_Delay(dt * 1000);
-        }
+        SDL_Delay(dt * 1000);
 #endif
-        return final;
     }
 
     /* The rhs of x' = f(x) */
-    void dynamics(const ode_state_type& x, ode_state_type& dx, double t, double u) const
+    void dynamics(const ode_state_type& x, ode_state_type& dx, double t, const Eigen::VectorXd& u) const
     {
         double l = 1, m = 1, g = 9.82, b = 0.01;
 
-        dx[0] = (u - b * x[0] - m * g * l * std::sin(x[1]) / 2.0) / (m * std::pow(l, 2.) / 3.0);
+        dx[0] = (u(0) - b * x[0] - m * g * l * std::sin(x[1]) / 2.0) / (m * std::pow(l, 2.) / 3.0);
         dx[1] = x[0];
     }
 };

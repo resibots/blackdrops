@@ -1,11 +1,12 @@
-#ifndef BLACKDROPS_SYSTEM_HPP
-#define BLACKDROPS_SYSTEM_HPP
+#ifndef BLACKDROPS_ODE_SYSTEM_HPP
+#define BLACKDROPS_ODE_SYSTEM_HPP
 
+#include <boost/numeric/odeint.hpp>
 #include <utils/utils.hpp>
 
 namespace blackdrops {
     template <typename Params>
-    struct System {
+    struct ODESystem {
 
         template <typename Policy, typename Reward>
         std::vector<std::tuple<Eigen::VectorXd, Eigen::VectorXd, Eigen::VectorXd>> execute(const Policy& policy, const Reward& world, double T, std::vector<double>& R, bool display = true)
@@ -25,7 +26,17 @@ namespace blackdrops {
 
                 Eigen::VectorXd u = policy.next(init);
 
-                Eigen::VectorXd final = this->execute_single(init_diff, u, t, display);
+                std::vector<double> robot_state(init_diff.size(), 0.0);
+                Eigen::VectorXd::Map(robot_state.data(), robot_state.size()) = init_diff;
+
+                boost::numeric::odeint::integrate_const(boost::numeric::odeint::make_dense_output(1.0e-12, 1.0e-12, boost::numeric::odeint::runge_kutta_dopri5<std::vector<double>>()),
+                    std::bind(&ODESystem::dynamics, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, u),
+                    robot_state, t, t + dt, dt / 4.0);
+                Eigen::VectorXd final = Eigen::VectorXd::Map(robot_state.data(), robot_state.size());
+
+                if (display)
+                    this->draw_single(final);
+
                 _last_states.push_back(final);
                 _last_commands.push_back(u);
 
@@ -139,7 +150,9 @@ namespace blackdrops {
             return _last_commands;
         }
 
-        virtual Eigen::VectorXd execute_single(const Eigen::VectorXd& state, const Eigen::VectorXd& u, double t, bool display = true) const = 0;
+        virtual void draw_single(const Eigen::VectorXd& state) const {}
+
+        virtual void dynamics(const std::vector<double>& x, std::vector<double>& dx, double t, const Eigen::VectorXd& u) const = 0;
 
     protected:
         std::vector<Eigen::VectorXd> _last_states, _last_commands;
