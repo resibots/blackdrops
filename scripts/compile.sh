@@ -8,7 +8,7 @@ source ./scripts/paths.sh
 cd deps/limbo
 
 # save current directory
-./waf --libcmaes=${cwd}/install --nlopt=${cwd}/install --dart=${cwd}/install --robot_dart=${cwd}/install --exp blackdrops
+./waf --libcmaes=${cwd}/install --nlopt=${cwd}/install --dart=${cwd}/install --robot_dart=${cwd}/install --exp blackdrops -j4
 
 # go back to original directory
 cd ../..

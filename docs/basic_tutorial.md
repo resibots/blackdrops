@@ -162,6 +162,8 @@ You should now watch your planar arm learning to reach a point using the Black-D
 
 For more detailed explanation of the command line arguments run: `./deps/limbo/build/exp/blackdrops/src/tutorials/planar_arm_graphic -h`. If you do not have SDL2 installed, use `planar_arm_simu` instead to run the experiment without graphics.
 
-### Where to put the files of my new scenario
+If you are having trouble with completing some parts of the tutorial, you can check the `src/tutorials/planar_arm_finished.cpp` file.
+
+## Where to put the files of my new scenario
 
 When you want to create a new scenario that will use simple integration for simulation (like in this case) and SDL2 for visualization (optionally), you should copy the `templates/ode_template.cpp` file into `src/classic_control/` folder, modify it and then compile using the instructions above. If you want to create a scenario based on the [DART simulator](http://dartsim.github.io/), then look at the [DART scenarios tutorial](dart_tutorial.md). If you require more fine tuned compilation of your program (e.g., link/include more libraries), then please make an issue and we will help you.
