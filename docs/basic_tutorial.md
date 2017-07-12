@@ -39,14 +39,16 @@ You can find the skeleton of the code in the `src/tutorials/planar_arm.cpp` file
 We should first define the parameters of our system:
 
 - Number of dimensions of the state space
+- Number of dimensions of the transformed state space (to the GPs and the policy)
 - Number of dimensions of the action space
 - Sampling/control rate
+- Duration of each episode/trial
 - Bounds of the action space
 - Normalization factors for the neural network policy (this is not strictly needed, but neural networks work better if all the inputs lie in the same bounded space)
 
 Since the planar arm system has 2 state variables that are unbounded angles, it is better for the Gaussian process (GP) model and the policy to pass the cosines and the sines instead of the raw values (see the [Black-DROPS paper](https://arxiv.org/abs/1703.07261) for more details). As such, the state input to the GP and the policy is 6-D (2 angular velocities + 2 sines + 2 cosines), but the GP predicts the actual 4-D state space. Each episode we would like it to have a duration of 4 seconds and the sampling rate should be 10Hz (i.e, steps of 0.1 seconds). Additionally, the torques in the joints should be limited to [-2,2]. Finally, some good normalization factors for the policy should be [5, 5, 1, 1, 1, 1] --- around 5 is a quite big angular velocity and the cosines and sines have maximum values already between [-1,1] and as such we should not change them.
 
-Now you should fill the above values into the appropriate parts of the code (search for the following keywords in the code: `@state_dim`, `@action_dim`, `@T`, `@dt`, `@max_action`, `@normalization_factor`).
+Now you should fill the above values into the appropriate parts of the code (search for the following keywords in the code: `@state_dim`, `@transformed_state`, `@action_dim`, `@T`, `@dt`, `@max_action`, `@normalization_factor`).
 
 #### System struct
 
@@ -89,6 +91,54 @@ For simulating our system, we need to write the (member) function for the transi
         dx[2] = x[0];
         dx[3] = x[1];
     }
+```
+
+#### Reward function
+
+In Black-DROPS the immediate reward function is defined as a struct/class with the following signature:
+
+```cpp
+struct RewardFunction {
+    double operator()(const Eigen::VectorXd& from_state, const Eigen::VectorXd& action, const Eigen::VectorXd& to_state) const
+    {
+        double immediate_reward = ... // compute immediate reward r(x,u,x')
+        return immediate_reward;
+    }
+};
+```
+
+In our case, we need to compute the end-effector position given the joint angles of the arm (search for `@end-effector` in the code):
+
+```cpp
+Eigen::VectorXd tip(double theta1, double theta2)
+{
+    double l = 0.5;
+    double c1 = std::cos(theta1), s1 = std::sin(theta1);
+    double c2 = std::cos(theta2), s2 = std::sin(theta2);
+
+    double x2 = l * (s2 - s1), y2 = l * (c1 + c2);
+
+    Eigen::VectorXd ret(2);
+    ret << x2, y2;
+
+    return ret;
+}
+```
+
+The goal position of the arm is located at [0,1] and the immediate reward would be the negative distance of the end-effector's position to this goal position (search for `@reward` in the code):
+
+```cpp
+struct RewardFunction {
+    double operator()(const Eigen::VectorXd& from_state, const Eigen::VectorXd& action, const Eigen::VectorXd& to_state) const
+    {
+        Eigen::VectorXd tip_pos = tip(to_state(2), to_state(3));
+        Eigen::VectorXd tip_goal(2);
+        tip_goal << 0., 1.;
+        double derr = (tip_goal - tip_pos).norm();
+
+        return -derr;
+    }
+};
 ```
 
 #### Defining random and learning episodes

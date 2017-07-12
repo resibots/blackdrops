@@ -103,11 +103,11 @@ void sdl_clean()
 
 struct Params {
     struct blackdrops {
-        BO_PARAM(size_t, action_dim, 1); // @action_dim - here you should fill the dimensions of the action space
-        BO_PARAM(size_t, model_input_dim, 1); // @transformed_state - here you should fill the input dimensions to the GPs and the policy
-        BO_PARAM(size_t, model_pred_dim, 1); // @state_dim - here you should fill the actual dimensions of the state
-        BO_PARAM(double, dt, 1.); // @dt - here you should fill the sampling step
-        BO_PARAM(double, T, 1.); // @T - here you should fill the duration time of each episode/trial
+        BO_PARAM(size_t, action_dim, 2);
+        BO_PARAM(size_t, model_input_dim, 6);
+        BO_PARAM(size_t, model_pred_dim, 4);
+        BO_PARAM(double, dt, 0.1);
+        BO_PARAM(double, T, 4.0);
         BO_DYN_PARAM(bool, verbose);
         BO_DYN_PARAM(double, boundary);
     };
@@ -160,23 +160,32 @@ struct PolicyParams {
     struct nn_policy {
         BO_PARAM(size_t, state_dim, Params::blackdrops::model_input_dim());
         BO_PARAM(size_t, action_dim, Params::blackdrops::action_dim());
-        BO_PARAM_ARRAY(double, max_u, 1., 1.); // @max_action - here you should fill the absolute max value for each action dimension
+        BO_PARAM_ARRAY(double, max_u, 2., 2.);
         BO_DYN_PARAM(int, hidden_neurons);
-        BO_PARAM_ARRAY(double, limits, 1., 1., 1., 1., 1., 1.); // @normalization_factor - here you should fill the normalization factors for the inputs of the policy (absolute values)
+        BO_PARAM_ARRAY(double, limits, 5., 5., 1., 1., 1., 1.);
         BO_PARAM(double, af, 1.0);
     };
 };
 
 Eigen::VectorXd tip(double theta1, double theta2)
 {
-    // @end-effector - here you should compute the end-effector position given the joint angles
+    double l = 0.5;
+    double c1 = std::cos(theta1), s1 = std::sin(theta1);
+    double c2 = std::cos(theta2), s2 = std::sin(theta2);
+
+    double x2 = l * (s2 - s1), y2 = l * (c1 + c2);
+
+    Eigen::VectorXd ret(2);
+    ret << x2, y2;
+
+    return ret;
 }
 
 struct PlanarArm : public blackdrops::system::ODESystem<Params> {
     Eigen::VectorXd init_state() const
     {
         Eigen::VectorXd init = Eigen::VectorXd::Zero(4);
-        // @init_state - here you should return the initial state of the system
+        init(2) = init(3) = M_PI;
 
         return init;
     }
@@ -184,7 +193,11 @@ struct PlanarArm : public blackdrops::system::ODESystem<Params> {
     Eigen::VectorXd transform_state(const Eigen::VectorXd& original_state) const
     {
         Eigen::VectorXd trans_state = Eigen::VectorXd::Zero(6);
-        // @transform_state - here you should transform the state to be ready for GPs and the policy
+        trans_state.head(2) = original_state.head(2);
+        trans_state(2) = std::cos(original_state(2));
+        trans_state(3) = std::sin(original_state(2));
+        trans_state(4) = std::cos(original_state(3));
+        trans_state(5) = std::sin(original_state(3));
 
         return trans_state;
     }
@@ -210,14 +223,24 @@ struct PlanarArm : public blackdrops::system::ODESystem<Params> {
     /* The rhs of x' = f(x) */
     void dynamics(const std::vector<double>& x, std::vector<double>& dx, double t, const Eigen::VectorXd& u) const
     {
-        // @dynamics - here you should fill the transition dynamics
+        double b1 = 0.1, b2 = 0.1;
+
+        dx[0] = u(0) - b1 * x[0];
+        dx[1] = u(1) - b2 * x[1];
+        dx[2] = x[0];
+        dx[3] = x[1];
     }
 };
 
 struct RewardFunction {
     double operator()(const Eigen::VectorXd& from_state, const Eigen::VectorXd& action, const Eigen::VectorXd& to_state) const
     {
-        // @reward - here you should compute the immediate reward function
+        Eigen::VectorXd tip_pos = tip(to_state(2), to_state(3));
+        Eigen::VectorXd tip_goal(2);
+        tip_goal << 0., 1.;
+        double derr = (tip_goal - tip_pos).norm();
+
+        return -derr;
     }
 };
 
@@ -362,7 +385,7 @@ int main(int argc, char** argv)
 
     blackdrops::BlackDROPS<Params, MGP_t, PlanarArm, blackdrops::policy::NNPolicy<PolicyParams>, policy_opt_t, RewardFunction> planar_arm_system;
 
-    planar_arm_system.learn(0, 0, true); // learn(@random, @episodes) - here you should fill the number of random and learning episodes
+    planar_arm_system.learn(1, 5, true);
 
 #if defined(USE_SDL) && !defined(NODSP)
     sdl_clean();
