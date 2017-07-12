@@ -72,6 +72,14 @@ struct SystemName : public blackdrops::system::ODESystem<Params> {
     {
         // return the initial state of your robot
     }
+
+    void dynamics(const std::vector<double>& x, std::vector<double>& dx, double t, const Eigen::VectorXd& u) const
+    {
+        // Code for the ODE of our system
+        // x is the input state
+        // dx is where we should store the derivatives
+        // u is the control vector
+    }
 };
 ```
 
@@ -164,6 +172,6 @@ For more detailed explanation of the command line arguments run: `./deps/limbo/b
 
 If you are having trouble with completing some parts of the tutorial, you can check the `src/tutorials/planar_arm_finished.cpp` file.
 
-## Where to put the files of my new scenario
+### Where to put the files of my new scenario
 
 When you want to create a new scenario that will use simple integration for simulation (like in this case) and SDL2 for visualization (optionally), you should copy the `templates/ode_template.cpp` file into `src/classic_control/` folder, modify it and then compile using the instructions above. If you want to create a scenario based on the [DART simulator](http://dartsim.github.io/), then look at the [DART scenarios tutorial](dart_tutorial.md). If you require more fine tuned compilation of your program (e.g., link/include more libraries), then please make an issue and we will help you.
