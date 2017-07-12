@@ -34,8 +34,8 @@ namespace blackdrops {
 
             // _ofs << R << std::endl;
             for (auto r : R)
-                _ofs << r << " ";
-            _ofs << std::endl;
+                _ofs_real << r << " ";
+            _ofs_real << std::endl;
         }
 
         void learn_model()
@@ -89,15 +89,17 @@ namespace blackdrops {
             std::cout << "Dummy reward: " << std::accumulate(R.begin(), R.end(), 0.0) << std::endl;
 
             for (auto r : R)
-                _ofs << r << " ";
-            _ofs << std::endl;
+                _ofs_esti << r << " ";
+            _ofs_esti << std::endl;
         }
 
         void learn(size_t init, size_t iterations, bool random_policies = false)
         {
             _boundary = Params::blackdrops::boundary();
             _random_policies = random_policies;
-            _ofs.open("results.dat");
+            // TO-DO: add prefix
+            _ofs_real.open("results.dat");
+            _ofs_esti.open("estimates.dat");
             _ofs_opt.open("times.dat");
             _ofs_model.open("times_model.dat");
             _policy.set_random_policy();
@@ -157,7 +159,8 @@ namespace blackdrops {
                 std::cout << "Optimization time: " << optimize_ms << std::endl;
                 _ofs_opt << optimize_ms << std::endl;
             }
-            _ofs.close();
+            _ofs_real.close();
+            _ofs_esti.close();
             _ofs_opt.close();
             _ofs_model.close();
             std::cout << "Experiment finished" << std::endl;
@@ -167,7 +170,7 @@ namespace blackdrops {
         Robot _robot;
         Policy _policy;
         Model _model;
-        std::ofstream _ofs, _ofs_opt, _ofs_model;
+        std::ofstream _ofs_real, _ofs_esti, _ofs_opt, _ofs_model;
         Eigen::VectorXd _params_starting;
         double _best;
         bool _random_policies;

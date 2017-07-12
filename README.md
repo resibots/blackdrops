@@ -1,4 +1,4 @@
-### Black-DROPS algorithm
+## Black-DROPS algorithm
 
 Code for the IROS 2017 paper: "Black-Box Data-efficient Policy Search for Robotics"
 
@@ -57,6 +57,10 @@ In short, you should:
 ### Using the code
 
 Please look at the [installation guide](docs/installation.md). You will find detailed guidelines on how to properly install all the dependencies, compile the Black-DROPS code and run scenarios.
+
+### Already implemented scenarios
+
+Please look at the [implemented scenarios page](docs/implemented_scenarios.md). You will find a brief description of all the implemented scenarios and recommended parameters (e.g., number of maximum function evaluations for CMA-ES) for running them.
 
 ### How to create your own scenario
 
