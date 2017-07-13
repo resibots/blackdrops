@@ -8,7 +8,7 @@ In this tutorial we will create a new scenario from scratch and show all the ste
 <img src="../imgs/planar_arm.png" width="400">
 </center>
 
-We want to control a 2-DOF planar arm (i.e., no gravity) where both joints are actuated (see the picture). The system has 2 links (with lengths l1 = l2 = 0.5m) and 2 joints (with torques u1 and u2). The task of this planar arm is to find a policy (a simple feed-forward neural network in this case) such that its end-effector reaches a target position. We assume that the robot starts with zero velocity and angles of π (for both of the joints) and the target point is when both joints are at the zero position (i.e., goal = [0, 1]).
+We want to control a 2-DOF planar arm (i.e., no gravity) where both joints are actuated (see the picture). The system has 2 links (with lengths l1 = l2 = 0.5m) and 2 joints (with torques u1 and u2). The task of this planar arm is to find a policy (a simple feed-forward neural network in this case) such that its end-effector reaches a target position. We assume that the robot starts with zero velocity and angle of π for the first joint and zero for the second one and the target point is when both joints are at the zero position (i.e., goal = [0, 1]).
 
 We deliberately chose a very easy control task for the tutorial, in order for users to focus more on how to create the scenarios and not to understand the system.
 
@@ -122,12 +122,14 @@ Eigen::VectorXd tip(double theta1, double theta2)
 {
     double l = 0.5;
     double c1 = std::cos(theta1), s1 = std::sin(theta1);
-    double c2 = std::cos(theta2), s2 = std::sin(theta2);
 
-    double x2 = l * (s2 - s1), y2 = l * (c1 + c2);
+    double cc1 = std::cos(theta1 + theta2);
+    double ss1 = std::sin(theta1 + theta2);
+    double x = l * ss1 + l * s1;
+    double y = l * cc1 + l * c1;
 
     Eigen::VectorXd ret(2);
-    ret << x2, y2;
+    ret << x, y;
 
     return ret;
 }

@@ -62,10 +62,10 @@ bool draw_pendulum(double theta1, double theta2, bool red = false)
 {
     double l = 0.5;
     double c1 = std::cos(theta1), s1 = std::sin(theta1);
-    double c2 = std::cos(theta2), s2 = std::sin(theta2);
+    double c12 = std::cos(theta1 + theta2), s12 = std::sin(theta1 + theta2);
 
-    double x1 = -l * s1, y1 = l * c1;
-    double x2 = l * (s2 - s1), y2 = l * (c1 + c2);
+    double x1 = l * s1, y1 = l * c1;
+    double x2 = l * s1 + l * s12, y2 = l * c1 + l * c12;
 
     //Draw blue horizontal line
     SDL_SetRenderDrawColor(renderer, 0x00, 0x00, 0xFF, 0xFF);
@@ -171,12 +171,14 @@ Eigen::VectorXd tip(double theta1, double theta2)
 {
     double l = 0.5;
     double c1 = std::cos(theta1), s1 = std::sin(theta1);
-    double c2 = std::cos(theta2), s2 = std::sin(theta2);
 
-    double x2 = l * (s2 - s1), y2 = l * (c1 + c2);
+    double cc1 = std::cos(theta1 + theta2);
+    double ss1 = std::sin(theta1 + theta2);
+    double x = l * ss1 + l * s1;
+    double y = l * cc1 + l * c1;
 
     Eigen::VectorXd ret(2);
-    ret << x2, y2;
+    ret << x, y;
 
     return ret;
 }
@@ -185,7 +187,7 @@ struct PlanarArm : public blackdrops::system::ODESystem<Params> {
     Eigen::VectorXd init_state() const
     {
         Eigen::VectorXd init = Eigen::VectorXd::Zero(4);
-        init(2) = init(3) = M_PI;
+        init(2) = M_PI;
 
         return init;
     }

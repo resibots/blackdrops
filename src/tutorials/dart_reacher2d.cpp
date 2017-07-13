@@ -31,10 +31,10 @@ struct Params {
         BO_PARAM(size_t, action_dim, 2);
         BO_PARAM(size_t, model_input_dim, 6);
         BO_PARAM(size_t, model_pred_dim, 4);
-        BO_PARAM(double, dt, 0.1);
-        BO_PARAM(double, T, 3.0);
-        // BO_PARAM(double, dt, 0.01);
-        // BO_PARAM(double, T, 0.5);
+        // BO_PARAM(double, dt, 0.1);
+        // BO_PARAM(double, T, 3.0);
+        BO_PARAM(double, dt, 0.01);
+        BO_PARAM(double, T, 0.5);
         BO_DYN_PARAM(double, boundary);
         BO_DYN_PARAM(bool, verbose);
     };
@@ -44,8 +44,8 @@ struct Params {
     };
 
     struct dart_policy_control {
-        BO_PARAM(dart::dynamics::Joint::ActuatorType, joint_type, dart::dynamics::Joint::SERVO);
-        // BO_PARAM(dart::dynamics::Joint::ActuatorType, joint_type, dart::dynamics::Joint::FORCE);
+        // BO_PARAM(dart::dynamics::Joint::ActuatorType, joint_type, dart::dynamics::Joint::SERVO);
+        BO_PARAM(dart::dynamics::Joint::ActuatorType, joint_type, dart::dynamics::Joint::FORCE);
     };
 
     struct gp_model {
@@ -95,10 +95,10 @@ struct PolicyParams {
     struct nn_policy {
         BO_PARAM(size_t, state_dim, Params::blackdrops::model_input_dim());
         BO_PARAM(size_t, action_dim, Params::blackdrops::action_dim());
-        BO_PARAM_ARRAY(double, max_u, 10.0, 10.0);
-        BO_PARAM_ARRAY(double, limits, 10., 10., 1.0, 1.0, 1.0, 1.0);
-        // BO_PARAM_ARRAY(double, max_u, 200.0, 200.0);
-        // BO_PARAM_ARRAY(double, limits, 30., 70., 1.0, 1.0, 1.0, 1.0);
+        // BO_PARAM_ARRAY(double, max_u, 10.0, 10.0);
+        // BO_PARAM_ARRAY(double, limits, 10., 10., 1.0, 1.0, 1.0, 1.0);
+        BO_PARAM_ARRAY(double, max_u, 50.0, 50.0);
+        BO_PARAM_ARRAY(double, limits, 30., 70., 1.0, 1.0, 1.0, 1.0);
         BO_DYN_PARAM(int, hidden_neurons);
         BO_PARAM(double, af, 1.0);
     };
@@ -178,6 +178,7 @@ struct ActualReward {
         Eigen::VectorXd gravity(3);
         gravity << 0., -9.81, 0.;
         simu.world()->setGravity(gravity);
+        simu.controller().control_root_joint(true);
 
         simu.run(2);
 
@@ -219,7 +220,7 @@ struct PolicyControl : public blackdrops::system::BaseDARTPolicyControl<Params, 
     }
 };
 
-struct SimpleArm : public blackdrops::system::DARTSystem<Params, PolicyControl> {
+struct DARTReacher : public blackdrops::system::DARTSystem<Params, PolicyControl> {
     using base_t = blackdrops::system::DARTSystem<Params, PolicyControl>;
 
     Eigen::VectorXd init_state() const
@@ -255,7 +256,7 @@ struct SimpleArm : public blackdrops::system::DARTSystem<Params, PolicyControl> 
         Eigen::Vector6d goal_pose = Eigen::Vector6d::Zero();
         goal_pose.tail(3) = global::goal;
         // pose, dims, type, mass, color, name
-        simu.add_ellipsoid(goal_pose, {0.05, 0.05, 0.05}, "fixed", 1., dart::Color::Green(1.0), "goal_marker");
+        simu.add_ellipsoid(goal_pose, {0.025, 0.025, 0.025}, "fixed", 1., dart::Color::Green(1.0), "goal_marker");
         // remove collisions from goal marker
         simu.world()->getSkeleton("goal_marker")->getRootBodyNode()->setCollidable(false);
 
@@ -269,6 +270,8 @@ struct SimpleArm : public blackdrops::system::DARTSystem<Params, PolicyControl> 
         Eigen::Vector3d look_at = Eigen::Vector3d(0., 0., 0.);
         Eigen::Vector3d up = Eigen::Vector3d(0., 1., 0.);
         simu.graphics()->fixed_camera(camera_pos, look_at, up);
+        // slow down visualization because 0.5 seconds is too fast
+        simu.graphics()->set_render_period(0.03);
 #endif
     }
 
@@ -299,7 +302,7 @@ struct SimpleArm : public blackdrops::system::DARTSystem<Params, PolicyControl> 
         // Dump rewards
         int eval = 1000;
         Eigen::VectorXd limits(4);
-        limits << 10., 10., 30., 30.; // / 2.0, M_PI / 2.0, M_PI / 2.0;
+        limits << 10., 10., M_PI, M_PI; // / 2.0, M_PI / 2.0, M_PI / 2.0;
         std::vector<Eigen::VectorXd> rvs = random_vectors(limits.size(), eval, limits);
         // std::vector<Eigen::VectorXd> rvs = global::reward_gp.samples();
 
@@ -489,13 +492,13 @@ int main(int argc, char** argv)
     using kernel_t = limbo::kernel::SquaredExpARD<Params>;
     using mean_t = limbo::mean::Constant<Params>;
 
-    using GP_t = blackdrops::model::MultiGP<Params, limbo::model::GP, kernel_t, mean_t, blackdrops::model::multi_gp::MultiGPParallelLFOpt<Params, blackdrops::model::gp::KernelLFOpt<Params>>>;
+    using GP_t = blackdrops::model::MultiGP<Params, limbo::model::GP, kernel_t, mean_t, blackdrops::model::multi_gp::MultiGPParallelLFOpt<Params, limbo::model::gp::KernelLFOpt<Params>>>;
 
     using MGP_t = blackdrops::GPModel<Params, GP_t>;
 
-    blackdrops::BlackDROPS<Params, MGP_t, SimpleArm, global::policy_t, policy_opt_t, RewardFunction> arm_system;
+    blackdrops::BlackDROPS<Params, MGP_t, DARTReacher, global::policy_t, policy_opt_t, RewardFunction> reacher_system;
 
-    arm_system.learn(2, 15, true);
+    reacher_system.learn(2, 15, true);
 
     ActualReward actual_reward;
     std::ofstream ofs("reward_points.dat");

@@ -1,6 +1,6 @@
 ## How to create your own DART-based scenario using Black-DROPS
 
-In this tutorial we will go through on the basic steps of how to create your own [DART](http://dartsim.github.io/)-based scenario using Black-DROPS. This tutorial builds on the [basic tutorial](basic_tutorial.md) and we assume that you have already gone though that one. As such, we will not provide step by step instructions, but only what is specifically needed for DART-based scenarios. Further more, this scenario was quickly developed and should not be taken as the solution of Black-DROPS to the problem.
+In this tutorial we will go through the basic steps of how to create your own [DART](http://dartsim.github.io/)-based scenario using Black-DROPS. This tutorial builds on the [basic tutorial](basic_tutorial.md) and we assume that you have already gone though that one. As such, we will not provide step by step instructions, but only what is specifically needed for DART-based scenarios. Further more, this scenario was quickly developed and should not be taken as the solution of Black-DROPS to the problem.
 
 ### Scenario
 
@@ -11,7 +11,7 @@ In this tutorial we will go through on the basic steps of how to create your own
 We will create a variant of the [reacher scenario of OpenAI Gym](https://gym.openai.com/envs/Reacher-v1); more specifically we will take the [skeleton file](http://dartsim.github.io/skel_file_format.html) of the task from [DartEnv](https://github.com/DartEnv/dart-env/blob/master/gym/envs/dart/assets/reacher2d.skel). In more detail:
 
 - The state space is 4-D (the angular positions and velocities of the joints)
-- The action space is 2-D (the desired angular velocities applied to the joints)
+- The action space is 2-D (the torques applied to the joints)
 - The reward function is unknown to Black-DROPS and has to learn it from data
 - The reward function is simply the negative distance of the end-effector to the desired location
 - The policy we optimize for is a simple feed-forward neural network with one hidden layer (and the hyperbolic tangent function as the activation function)
@@ -27,10 +27,10 @@ Similarly to the [basic tutorial](basic_tutorial.md), we set the following param
 - Number of dimensions of the state space: 4-D
 - Number of dimensions of the transformed state space (to the GPs and the policy): 6-D (2 angular velocities + 2 sines + 2 cosines of angular positions)
 - Number of dimensions of the action space: 2-D
-- Sampling/control rate: we take the sampling/control rate of the original scenario (i.e., 10Hz)
-- Duration of each episode/trial: 3 secs
-- Bounds of the action space: this should be [-10., 10.]
-- Normalization factors for the neural network policy: [10., 10., 1., 1., 1., 1.]
+- Sampling/control rate: we take the sampling/control rate of the original scenario (i.e., 100Hz)
+- Duration of each episode/trial: 0.5 secs (as in the original OpenAI Gym scenario)
+- Bounds of the action space: this should be [-50., 50.]
+- Normalization factors for the neural network policy: [30., 70., 1., 1., 1., 1.]
 
 #### Loading URDF/SKEL files
 
@@ -58,7 +58,7 @@ void init_simu(const std::string& robot_file)
 
     global::global_floor = utils::load_skel(robot_file, "ground skeleton");
 
-    global::goal = Eigen::Vector3d(0.1, 0.01, -0.1);
+    global::goal = Eigen::Vector3d(0.1, 0.01, -0.1); // this is the goal position (the robot moves only in x,z axes)
 
     std::cout << "Goal is: " << global::goal.transpose() << std::endl;
 }
@@ -83,7 +83,7 @@ struct PolicyControl : public blackdrops::system::BaseDARTPolicyControl<Params, 
     }
 };
 
-struct SimpleArm : public blackdrops::system::DARTSystem<Params, PolicyControl> {
+struct MyDARTSystem : public blackdrops::system::DARTSystem<Params, PolicyControl> {
     using base_t = blackdrops::system::DARTSystem<Params, PolicyControl>;
 
     Eigen::VectorXd init_state() const
@@ -133,7 +133,7 @@ We add some extras to the simulation:
         Eigen::Vector6d goal_pose = Eigen::Vector6d::Zero();
         goal_pose.tail(3) = global::goal;
         // pose, dims, type, mass, color, name
-        simu.add_ellipsoid(goal_pose, {0.015, 0.015, 0.015}, "fixed", 1., dart::Color::Green(1.0), "goal_marker");
+        simu.add_ellipsoid(goal_pose, {0.025, 0.025, 0.025}, "fixed", 1., dart::Color::Green(1.0), "goal_marker");
         // remove collisions from goal marker
         simu.world()->getSkeleton("goal_marker")->getRootBodyNode()->setCollidable(false);
 
@@ -147,11 +147,13 @@ We add some extras to the simulation:
         Eigen::Vector3d look_at = Eigen::Vector3d(0., 0., 0.);
         Eigen::Vector3d up = Eigen::Vector3d(0., 1., 0.);
         simu.graphics()->fixed_camera(camera_pos, look_at, up);
+        // slow down visualization because 0.5 seconds is too fast
+        simu.graphics()->set_render_period(0.03);
 #endif
     }
 ```
 
-Lastly, we need to define what type of actuators we want to use and the simulation time-step (i.e., not the control rate, but the physics engine time-step). In our case we set a very small simulation time-step (i.e., 0.001) to have a stable simulation and use `SERVO` actuators: i.e., velocity controlled actuators that respect torque, position and velocity limits of the joints.
+Lastly, we need to define what type of actuators we want to use and the simulation time-step (i.e., not the control rate, but the physics engine time-step). In our case we set a very small simulation time-step (i.e., 0.001) to have a stable simulation and use `FORCE` actuators: i.e., torque-controlled joints.
 
 ```cpp
 struct Params {
@@ -162,7 +164,7 @@ struct Params {
     };
 
     struct dart_policy_control {
-        BO_PARAM(dart::dynamics::Joint::ActuatorType, joint_type, dart::dynamics::Joint::SERVO);
+        BO_PARAM(dart::dynamics::Joint::ActuatorType, joint_type, dart::dynamics::Joint::FORCE);
     };
 
     // ...
@@ -178,7 +180,7 @@ If we want to learn the reward function from data (both for DART-based and ODE-b
 struct RewardParams {
     struct kernel : public limbo::defaults::kernel {
         BO_PARAM(double, noise, 1e-12);
-        BO_PARAM(bool, optimize_noise, false);
+        BO_PARAM(bool, optimize_noise, true);
     };
 
     struct kernel_squared_exp_ard : public limbo::defaults::kernel_squared_exp_ard {
@@ -221,6 +223,7 @@ struct ActualReward {
         Eigen::VectorXd gravity(3);
         gravity << 0., -9.81, 0.;
         simu.world()->setGravity(gravity);
+        simu.controller().control_root_joint(true);
 
         simu.run(2);
 
@@ -275,7 +278,7 @@ template <typename Policy, typename Reward>
 
 #### Defining random and learning episodes
 
-We should use at least 2 random trials and something like 30 learning episodes.
+Around 2 random trials and 15 learning episodes should be enough to learn the task in most of the cases.
 
 #### Compiling and running your scenario
 
@@ -288,7 +291,7 @@ You should now do the following:
 If there's no error, you should be able to run your scenario:
 
 - `source ./scripts/paths.sh` (this should be done only once for each terminal --- it should be run from the root of the repo)
-- `./deps/limbo/build/exp/blackdrops/src/tutorials/dart_reacher2d_graphic -n 10 -m 40000 -e 1 -r 5 -b 5 -u`
+- `./deps/limbo/build/exp/blackdrops/src/tutorials/dart_reacher2d_graphic -n 10 -m 5000 -e 1 -r 5 -b 1 -u`
 
 You should now watch this simple robot trying to reach the target location. Good rewards are ones >= -1. One minor remark is that this scenario can take quite some time between each episode (depending on your CPU capabilities).
 

@@ -62,10 +62,10 @@ bool draw_pendulum(double theta1, double theta2, bool red = false)
 {
     double l = 0.5;
     double c1 = std::cos(theta1), s1 = std::sin(theta1);
-    double c2 = std::cos(theta2), s2 = std::sin(theta2);
+    double c12 = std::cos(theta1 + theta2), s12 = std::sin(theta1 + theta2);
 
-    double x1 = -l * s1, y1 = l * c1;
-    double x2 = l * (s2 - s1), y2 = l * (c1 + c2);
+    double x1 = l * s1, y1 = l * c1;
+    double x2 = l * s1 + l * s12, y2 = l * c1 + l * c12;
 
     //Draw blue horizontal line
     SDL_SetRenderDrawColor(renderer, 0x00, 0x00, 0xFF, 0xFF);
