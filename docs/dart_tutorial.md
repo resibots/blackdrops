@@ -15,6 +15,7 @@ We will create a variant of the [reacher scenario of OpenAI Gym](https://gym.ope
 - The reward function is unknown to Black-DROPS and has to learn it from data
 - The reward function is simply the negative distance of the end-effector to the desired location
 - The policy we optimize for is a simple feed-forward neural network with one hidden layer (and the hyperbolic tangent function as the activation function)
+- We optimize the policy for just reaching one target and not for any target
 
 ### Tutorial
 

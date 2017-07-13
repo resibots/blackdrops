@@ -66,6 +66,10 @@ Please look at the [implemented scenarios page](docs/implemented_scenarios.md). 
 
 Please look at the [basic tutorial](docs/basic_tutorial.md). You will find detailed comments on how to create, compile and run your own scenarios.
 
+### How to create your own DART-based scenario
+
+Please look at the [DART scenarios tutorial](docs/dart_tutorial.md).
+
 
 <!--### Python Code
 

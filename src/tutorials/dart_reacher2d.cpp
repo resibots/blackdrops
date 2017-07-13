@@ -107,7 +107,7 @@ struct PolicyParams {
 struct RewardParams {
     struct kernel : public limbo::defaults::kernel {
         BO_PARAM(double, noise, 1e-12);
-        BO_PARAM(bool, optimize_noise, false);
+        BO_PARAM(bool, optimize_noise, true);
     };
 
     struct kernel_squared_exp_ard : public limbo::defaults::kernel_squared_exp_ard {
@@ -302,7 +302,7 @@ struct DARTReacher : public blackdrops::system::DARTSystem<Params, PolicyControl
         // Dump rewards
         int eval = 1000;
         Eigen::VectorXd limits(4);
-        limits << 10., 10., M_PI, M_PI; // / 2.0, M_PI / 2.0, M_PI / 2.0;
+        limits << 10., 10., M_PI, M_PI;
         std::vector<Eigen::VectorXd> rvs = random_vectors(limits.size(), eval, limits);
         // std::vector<Eigen::VectorXd> rvs = global::reward_gp.samples();
 
