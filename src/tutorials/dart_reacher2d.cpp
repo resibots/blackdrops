@@ -18,6 +18,7 @@
 
 #include <blackdrops/policy/nn_policy.hpp>
 
+#include <utils/dart_utils.hpp>
 #include <utils/utils.hpp>
 
 struct Params {
@@ -27,11 +28,13 @@ struct Params {
 #endif
 
     struct blackdrops {
-        BO_PARAM(size_t, action_dim, 4);
-        BO_PARAM(size_t, model_input_dim, 8);
+        BO_PARAM(size_t, action_dim, 2);
+        BO_PARAM(size_t, model_input_dim, 6);
         BO_PARAM(size_t, model_pred_dim, 4);
         BO_PARAM(double, dt, 0.1);
-        BO_PARAM(double, T, 4.0);
+        BO_PARAM(double, T, 3.0);
+        // BO_PARAM(double, dt, 0.01);
+        // BO_PARAM(double, T, 0.5);
         BO_DYN_PARAM(double, boundary);
         BO_DYN_PARAM(bool, verbose);
     };
@@ -42,6 +45,7 @@ struct Params {
 
     struct dart_policy_control {
         BO_PARAM(dart::dynamics::Joint::ActuatorType, joint_type, dart::dynamics::Joint::SERVO);
+        // BO_PARAM(dart::dynamics::Joint::ActuatorType, joint_type, dart::dynamics::Joint::FORCE);
     };
 
     struct gp_model {
@@ -76,6 +80,7 @@ struct Params {
 
     struct opt_rprop : public limbo::defaults::opt_rprop {
         BO_PARAM(int, iterations, 300);
+        BO_PARAM(double, eps_stop, 1e-4);
     };
 
     struct opt_parallelrepeater : public limbo::defaults::opt_parallelrepeater {
@@ -90,10 +95,10 @@ struct PolicyParams {
     struct nn_policy {
         BO_PARAM(size_t, state_dim, Params::blackdrops::model_input_dim());
         BO_PARAM(size_t, action_dim, Params::blackdrops::action_dim());
-        // Velocity limits
-        // BO_PARAM_ARRAY(double, max_u, 3.0, 3.0, 3.0, 3.0);
-        BO_PARAM_ARRAY(double, max_u, 1.0, 1.0, 1.0, 1.0);
-        BO_PARAM_ARRAY(double, limits, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0);
+        BO_PARAM_ARRAY(double, max_u, 10.0, 10.0);
+        BO_PARAM_ARRAY(double, limits, 10., 10., 1.0, 1.0, 1.0, 1.0);
+        // BO_PARAM_ARRAY(double, max_u, 200.0, 200.0);
+        // BO_PARAM_ARRAY(double, limits, 30., 70., 1.0, 1.0, 1.0, 1.0);
         BO_DYN_PARAM(int, hidden_neurons);
         BO_PARAM(double, af, 1.0);
     };
@@ -110,6 +115,7 @@ struct RewardParams {
 
     struct opt_rprop : public limbo::defaults::opt_rprop {
         BO_PARAM(int, iterations, 300);
+        BO_PARAM(double, eps_stop, 1e-4);
     };
 
     struct opt_parallelrepeater : public limbo::defaults::opt_parallelrepeater {
@@ -119,6 +125,7 @@ struct RewardParams {
 
 namespace global {
     std::shared_ptr<robot_dart::Robot> global_robot;
+    dart::dynamics::SkeletonPtr global_floor;
 
     using policy_t = blackdrops::policy::NNPolicy<PolicyParams>;
 
@@ -133,17 +140,24 @@ namespace global {
 
 Eigen::VectorXd get_robot_state(const std::shared_ptr<robot_dart::Robot>& robot, bool full = false)
 {
+    Eigen::VectorXd vel = robot->skeleton()->getVelocities();
     Eigen::VectorXd pos = robot->skeleton()->getPositions();
-    size_t size = pos.size();
+
+    size_t size = pos.size() + vel.size();
     if (full)
         size += pos.size();
+
     Eigen::VectorXd state(size);
-    if (!full)
-        state = pos;
+
+    state.head(vel.size()) = vel;
+
+    if (!full) {
+        state.tail(pos.size()) = pos;
+    }
     else {
         for (int i = 0; i < pos.size(); i++) {
-            state(2 * i) = std::cos(pos(i));
-            state(2 * i + 1) = std::sin(pos(i));
+            state(vel.size() + 2 * i) = std::cos(pos(i));
+            state(vel.size() + 2 * i + 1) = std::sin(pos(i));
         }
     }
     return state;
@@ -155,28 +169,32 @@ struct ActualReward {
         using robot_simu_t = robot_dart::RobotDARTSimu<robot_dart::robot_control<robot_dart::PositionControl>>;
 
         std::shared_ptr<robot_dart::Robot> simulated_robot = global::global_robot->clone();
-        simulated_robot->fix_to_world();
-        simulated_robot->set_position_enforced(true);
 
-        std::vector<double> params(4, 1.0);
-        for (int i = 0; i < to_state.size(); i++)
-            params[i] = to_state(i);
+        std::vector<double> params(2, 1.0);
+        for (int i = 0; i < 2; i++)
+            params[i] = to_state(2 + i);
         robot_simu_t simu(params, simulated_robot);
+        // Change gravity
+        Eigen::VectorXd gravity(3);
+        gravity << 0., -9.81, 0.;
+        simu.world()->setGravity(gravity);
+
         simu.run(2);
 
-        auto bd = simulated_robot->skeleton()->getBodyNode("arm_link_5");
+        auto bd = simulated_robot->skeleton()->getBodyNode("link2");
         Eigen::VectorXd eef = bd->getTransform().translation();
-        double s_c_sq = 0.2 * 0.2;
-        double dee = (eef - global::goal).squaredNorm();
+        // double s_c_sq = 0.2 * 0.2;
+        double dee = (eef - global::goal).norm();
 
-        return std::exp(-0.5 / s_c_sq * dee);
+        // return std::exp(-0.5 / s_c_sq * dee);
+        return -dee;
+        //  - action.squaredNorm() / (2. * PolicyParams::nn_policy::max_u(0) * PolicyParams::nn_policy::max_u(0));
     }
 };
 
 Eigen::VectorXd get_random_vector(size_t dim, Eigen::VectorXd bounds)
 {
     Eigen::VectorXd rv = (limbo::tools::random_vector(dim).array() * 2 - 1);
-    // rv(0) *= 3; rv(1) *= 5; rv(2) *= 6; rv(3) *= M_PI; rv(4) *= 10;
     return rv.cwiseProduct(bounds);
 }
 
@@ -195,7 +213,7 @@ struct PolicyControl : public blackdrops::system::BaseDARTPolicyControl<Params, 
     PolicyControl() : base_t() {}
     PolicyControl(const std::vector<double>& ctrl, base_t::robot_t robot) : base_t(ctrl, robot) {}
 
-    Eigen::VectorXd get_state(const robot_t& robot, bool full) const
+    Eigen::VectorXd get_state(const base_t::robot_t& robot, bool full) const
     {
         return get_robot_state(robot, full);
     }
@@ -212,9 +230,9 @@ struct SimpleArm : public blackdrops::system::DARTSystem<Params, PolicyControl> 
     Eigen::VectorXd transform_state(const Eigen::VectorXd& original_state) const
     {
         Eigen::VectorXd ret = Eigen::VectorXd::Zero(Params::blackdrops::model_input_dim());
-        for (int j = 0; j < original_state.size(); j++) {
-            ret(2 * j) = std::cos(original_state(j));
-            ret(2 * j + 1) = std::sin(original_state(j));
+        for (int j = 0; j < 2; j++) {
+            ret(2 + 2 * j) = std::cos(original_state(j + 2));
+            ret(2 + 2 * j + 1) = std::sin(original_state(j + 2));
         }
 
         return ret;
@@ -223,21 +241,35 @@ struct SimpleArm : public blackdrops::system::DARTSystem<Params, PolicyControl> 
     std::shared_ptr<robot_dart::Robot> get_robot() const
     {
         std::shared_ptr<robot_dart::Robot> simulated_robot = global::global_robot->clone();
-        simulated_robot->fix_to_world();
-        simulated_robot->set_position_enforced(true);
 
         return simulated_robot;
     }
 
     void add_extra_to_simu(base_t::robot_simu_t& simu) const
     {
+        // Change gravity
+        Eigen::VectorXd gravity(3);
+        gravity << 0., -9.81, 0.;
+        simu.world()->setGravity(gravity);
         // Add goal marker
         Eigen::Vector6d goal_pose = Eigen::Vector6d::Zero();
         goal_pose.tail(3) = global::goal;
         // pose, dims, type, mass, color, name
-        simu.add_ellipsoid(goal_pose, {0.1, 0.1, 0.1}, "fixed", 1., dart::Color::Green(1.0), "goal_marker");
+        simu.add_ellipsoid(goal_pose, {0.05, 0.05, 0.05}, "fixed", 1., dart::Color::Green(1.0), "goal_marker");
         // remove collisions from goal marker
         simu.world()->getSkeleton("goal_marker")->getRootBodyNode()->setCollidable(false);
+
+        auto ground = global::global_floor->clone();
+        Eigen::Vector6d floor_pose = Eigen::Vector6d::Zero();
+        floor_pose(4) = -0.0125;
+        simu.add_skeleton(ground, floor_pose, "fixed");
+
+#ifdef GRAPHIC
+        Eigen::Vector3d camera_pos = Eigen::Vector3d(0., 2., 0.);
+        Eigen::Vector3d look_at = Eigen::Vector3d(0., 0., 0.);
+        Eigen::Vector3d up = Eigen::Vector3d(0., 1., 0.);
+        simu.graphics()->fixed_camera(camera_pos, look_at, up);
+#endif
     }
 
     template <typename Policy, typename Reward>
@@ -248,9 +280,16 @@ struct SimpleArm : public blackdrops::system::DARTSystem<Params, PolicyControl> 
         std::vector<std::tuple<Eigen::VectorXd, Eigen::VectorXd, Eigen::VectorXd>> ret = blackdrops::system::DARTSystem<Params, PolicyControl>::execute(policy, actual_reward, T, R, display);
 
         std::vector<Eigen::VectorXd> states = this->get_last_states();
+        // std::vector<Eigen::VectorXd> coms = this->get_last_commands();
+
         for (size_t i = 0; i < R.size(); i++) {
             double r = R[i];
             Eigen::VectorXd final = states[i + 1];
+            // Eigen::VectorXd com = coms[i];
+            // Eigen::VectorXd vec(final.size() + com.size());
+            // vec.head(final.size()) = final;
+            // vec.tail(com.size()) = com;
+            // std::cout << com.transpose() << std::endl;
             global::reward_gp.add_sample(final, limbo::tools::make_vector(r));
         }
 
@@ -260,7 +299,7 @@ struct SimpleArm : public blackdrops::system::DARTSystem<Params, PolicyControl> 
         // Dump rewards
         int eval = 1000;
         Eigen::VectorXd limits(4);
-        limits << M_PI, M_PI / 2.0, M_PI / 2.0, M_PI / 2.0;
+        limits << 10., 10., 30., 30.; // / 2.0, M_PI / 2.0, M_PI / 2.0;
         std::vector<Eigen::VectorXd> rvs = random_vectors(limits.size(), eval, limits);
         // std::vector<Eigen::VectorXd> rvs = global::reward_gp.samples();
 
@@ -291,36 +330,27 @@ struct RewardFunction {
     {
         Eigen::VectorXd mu;
         double s;
+        // Eigen::VectorXd vec(to_state.size() + action.size());
+        // vec.head(to_state.size()) = to_state;
+        // vec.tail(action.size()) = action;
         std::tie(mu, s) = global::reward_gp.query(to_state);
         if (certain || !Params::opt_cmaes::handle_uncertainty())
             return mu(0);
 
-        return std::max(0., gaussian_rand(mu(0), std::sqrt(s)));
+        return gaussian_rand(mu(0), std::sqrt(s));
     }
 };
 
 void init_simu(const std::string& robot_file)
 {
-    global::global_robot = std::make_shared<robot_dart::Robot>(robot_dart::Robot(robot_file, {}, "arm", true));
+    global::global_robot = std::make_shared<robot_dart::Robot>(utils::load_skel(robot_file, "arm"));
+    Eigen::Isometry3d tf = global::global_robot->skeleton()->getRootBodyNode()->getParentJoint()->getTransformFromParentBodyNode();
+    tf.translation() = Eigen::Vector3d(0., 0.01, 0.);
+    global::global_robot->skeleton()->getRootBodyNode()->getParentJoint()->setTransformFromParentBodyNode(tf);
 
-    // get goal position
-    std::shared_ptr<robot_dart::Robot> simulated_robot = global::global_robot->clone();
-    simulated_robot->fix_to_world();
-    simulated_robot->set_position_enforced(true);
+    global::global_floor = utils::load_skel(robot_file, "ground skeleton");
 
-    // #ifdef GRAPHIC
-    //     using robot_simu_t = robot_dart::RobotDARTSimu<robot_dart::robot_control<robot_dart::PositionControl>, robot_dart::graphics<robot_dart::Graphics<Params>>>;
-    // #else
-    using robot_simu_t = robot_dart::RobotDARTSimu<robot_dart::robot_control<robot_dart::PositionControl>>;
-    // #endif
-
-    // here set goal position
-    std::vector<double> params = {M_PI / 4.0, M_PI / 8.0, M_PI / 8.0, M_PI / 8.0};
-
-    robot_simu_t simu(params, simulated_robot);
-    simu.run(2);
-    auto bd = simulated_robot->skeleton()->getBodyNode("arm_link_5");
-    global::goal = bd->getTransform().translation();
+    global::goal = Eigen::Vector3d(0.1, 0.01, -0.1);
 
     std::cout << "Goal is: " << global::goal.transpose() << std::endl;
 }
@@ -452,7 +482,7 @@ int main(int argc, char** argv)
     std::cout << "  tbb threads = " << threads << std::endl;
     std::cout << std::endl;
 
-    init_simu(std::string(RESPATH) + "/URDF/arm.urdf");
+    init_simu(std::string(RESPATH) + "/skel/reacher2d.skel");
 
     using policy_opt_t = limbo::opt::Cmaes<Params>;
 
@@ -463,7 +493,7 @@ int main(int argc, char** argv)
 
     using MGP_t = blackdrops::GPModel<Params, GP_t>;
 
-    blackdrops::BlackDROPS<Params, MGP_t, SimpleArm, blackdrops::policy::NNPolicy<PolicyParams>, policy_opt_t, RewardFunction> arm_system;
+    blackdrops::BlackDROPS<Params, MGP_t, SimpleArm, global::policy_t, policy_opt_t, RewardFunction> arm_system;
 
     arm_system.learn(2, 15, true);
 

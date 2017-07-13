@@ -24,7 +24,7 @@ where b1 and b2 are some friction coefficients (we should set them to a value ar
 
 #### Policy representation
 
-Black-DROPS does not impose any constraint on the policy representation; for simplicity, but also for its effectiveness we will use a simple feed-forward neural network policy with one hidden layer.
+Black-DROPS does not impose any constraint on the policy representation; for simplicity, but also for its effectiveness we will use a simple feed-forward neural network policy with one hidden layer and the hyperbolic tangent function as the activation function.
 
 #### Reward function
 
@@ -166,7 +166,7 @@ If there's no error, you should be able to run your scenario:
 - `source ./scripts/paths.sh` (this should be done only once for each terminal --- it should be run from the root of the repo)
 - `./deps/limbo/build/exp/blackdrops/src/tutorials/planar_arm_graphic -m 5000 -r 5 -n 10 -e 1 -u -b 5`
 
-You should now watch your planar arm learning to reach a point using the Black-DROPS algorithm. Good scores are values >= -20.
+You should now watch your planar arm learning to reach a point using the Black-DROPS algorithm. Good scores are values >= -25.
 
 For more detailed explanation of the command line arguments run: `./deps/limbo/build/exp/blackdrops/src/tutorials/planar_arm_graphic -h`. If you do not have SDL2 installed, use `planar_arm_simu` instead to run the experiment without graphics.
 

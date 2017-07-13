@@ -11,9 +11,13 @@ def build(bld):
     # Find new targets
     files = glob.glob(bld.path.abspath()+"/*.cpp")
     new_targets = []
+    dart_targets = []
     for f in files:
         target_name = f[f.rfind('/')+1:-4]
-        new_targets.append(target_name)
+        if 'dart' not in target_name:
+            new_targets.append(target_name)
+        else:
+            dart_targets.append(target_name)
 
     # Compile new targets
     for target in new_targets:
@@ -34,4 +38,34 @@ def build(bld):
                             uselib=libs,
                             uselib_local='limbo',
                             cxxflags = cxxflags,
+                            variants = ['GRAPHIC'])
+
+    dart_libs = 'TBB EIGEN BOOST LIMBO LIBCMAES NLOPT SFERES2 BOOST_CHRONO RT ROBOT_DART DART BOOST_DART THREADS '
+    dart_libs_graphic = dart_libs + 'DART_GRAPHIC'
+
+    path = bld.path.abspath()[:-len('src/tutorials')] + 'res'
+
+    if 'INCLUDES_ROBOT_DART' not in bld.get_env() or 'INCLUDES_DART' not in bld.get_env():
+        Logs.pprint('YELLOW', 'Dart or robot_dart not found in your system. Will not build DART scenarios')
+        return
+
+    # Compile new targets
+    for target in dart_targets:
+        limbo.create_variants(bld,
+                        source=target+'.cpp',
+                        includes='. ../../../../src ../ ../../include',
+                        target=target,
+                        uselib=dart_libs,
+                        uselib_local='limbo',
+                        cxxflags = cxxflags + ['-DRESPATH="' + path + '"'],
+                        variants = ['SIMU'])
+
+        if bld.get_env()['BUILD_GRAPHIC'] == True:
+            limbo.create_variants(bld,
+                            source=target+'.cpp',
+                            includes='. ../../../../src ../ ../../include',
+                            target=target,
+                            uselib=dart_libs_graphic,
+                            uselib_local='limbo',
+                            cxxflags = cxxflags + ['-DRESPATH="' + path + '"'],
                             variants = ['GRAPHIC'])

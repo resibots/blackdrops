@@ -96,7 +96,7 @@ namespace blackdrops {
 
                     Eigen::VectorXd final = init_diff + mu;
 
-                    double r = world(init_diff, mu, final);
+                    double r = world(init_diff, u, final);
                     R.push_back(r);
 
                     init_diff = final;
