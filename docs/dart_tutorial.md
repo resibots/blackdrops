@@ -294,7 +294,7 @@ If there's no error, you should be able to run your scenario:
 - `source ./scripts/paths.sh` (this should be done only once for each terminal --- it should be run from the root of the repo)
 - `./deps/limbo/build/exp/blackdrops/src/tutorials/dart_reacher2d_graphic -n 10 -m 5000 -e 1 -r 5 -b 1 -u`
 
-You should now watch this simple robot trying to reach the target location. Good rewards are ones >= -1. One minor remark is that this scenario can take quite some time between each episode (depending on your CPU capabilities).
+You should now watch this simple robot trying to reach the target location. The task is considered solved for cumulative rewards >= -1. One minor remark is that this scenario can take quite some time between each episode (depending on your CPU capabilities).
 
 For more detailed explanation of the command line arguments run: `./deps/limbo/build/exp/blackdrops/src/tutorials/dart_reacher2d_graphic -h`. If you do not have OpenSceneGraph installed, use `dart_reacher2d_simu` instead to run the experiment without graphics.
 
