@@ -51,7 +51,7 @@ To get a better idea of how well Black-DROPS works please check the [paper](http
 In short, you should:
 
 - NOT expect Black-DROPS to find very fast (in interaction time) high performing policies at every run: in the cart-pole swing up task, for example, the main trend (median) is that Black-DROPS finds a high performing policy after 16-20 seconds of interaction with the system, but it does fail sometimes completely to find any working policy after 15 episodes (60 seconds of interaction time); this also holds for analytical approaches like PILCO (see the [paper](https://arxiv.org/abs/1703.07261) for more details)
-- NOT expect Black-DROPS to find high performing policies very fast (in interaction time) when dealing with high dimensional state/action spaces (e.g., less than 8-10 episodes for a 15-D state/action space); the number of points needed to have a good model of the dynamics increases exponentially with the dimensions of the state/action space
+- NOT expect Black-DROPS to find high performing policies very fast (in interaction time) when dealing with high dimensional state/action spaces (e.g., less than 8-10 episodes for a 15-D state/action space) or when dealing with difficult tasks (e.g. less than 20-25 episodes for the double cart-pole swing up task); the number of points needed to have a good model of the dynamics increases exponentially with the dimensions of the state/action space
 - NOT expect Black-DROPS to run fast (in computation time) in small computers; our results suggest that at least 8-12 cores are needed to get reasonable computation times for Black-DROPS (Black-DROPS heavily utilizes parallelization to improve its performance)
 
 ### Using the code
