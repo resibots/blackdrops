@@ -101,7 +101,7 @@ bool sdl_init()
     return true;
 }
 
-bool draw_car(/* params */)
+bool draw_mysystem(/* params */)
 {
     // TO-CHANGE: Here you can draw your robot/system
 
