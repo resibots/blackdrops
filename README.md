@@ -68,7 +68,7 @@ Please look at the [basic tutorial](docs/basic_tutorial.md). You will find detai
 
 ### How to create your own DART-based scenario
 
-Please look at the [DART scenarios tutorial](docs/dart_tutorial.md).
+Please look at the [DART scenarios tutorial](docs/dart_tutorial.md). Make sure that you have already read the [basic tutorial](docs/basic_tutorial.md), before proceeding to this one.
 
 
 <!--### Python Code

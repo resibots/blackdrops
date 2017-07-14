@@ -110,47 +110,6 @@ namespace blackdrops {
 
             _gp_model.compute(samples, observs, true);
             _gp_model.optimize_hyperparams();
-
-            // for (size_t i = 0; i < transf_samples.size(); i++) {
-            //     Eigen::VectorXd mu;
-            //     Eigen::VectorXd sigma;
-            //     std::tie(mu, sigma) = predictm(transf_samples[i]);
-            //     // std::cout << mu.size() << " vs " << obs.row(i).size() << std::endl;
-            //     Eigen::VectorXd diff = (mu.transpose() - obs.row(i));
-            //     std::cout << diff.squaredNorm() << " with sigma: " << sigma.transpose() << std::endl;
-            // }
-
-            // for (size_t i = 0; i < (size_t)obs.cols(); ++i) {
-            //     // Print hparams in logspace
-            //     Eigen::VectorXd p = _gp_models[i]->kernel_function().h_params();
-            //     p.segment(0, p.size() - 2) = p.segment(0, p.size() - 2).array().exp();
-            //     p(p.size() - 2) = std::exp(2 * p(p.size() - 2));
-            //     p(p.size() - 1) = std::exp(2 * p(p.size() - 1));
-            //     std::cout << p.array().transpose() << std::endl;
-            // }
-
-            // // Loading test
-            // std::cout << std::endl;
-            // Eigen::MatrixXd data_comp;
-            // Eigen::read_binary("blackdrops_data.bin", data_comp);
-            //
-            // size_t limit = 120;
-            // std::cout << "Loading " << limit << "/" << data_comp.rows() << " rows from file." << std::endl;
-            //
-            // std::vector<Eigen::VectorXd> samples_comp(limit);
-            // Eigen::MatrixXd observations_comp(limit, Params::blackdrops::model_pred_dim());
-            // for (size_t i = 0; i < limit; i++) {
-            //     samples_comp[i] = data_comp.row(i).segment(0, Params::state_full_dim());
-            //     observations_comp.row(i) = data_comp.row(i).segment(Params::state_full_dim(), Params::blackdrops::model_pred_dim());
-            // }
-            //
-            // init(); // TODO: Fix this properly
-            // Eigen::VectorXd noises = Eigen::VectorXd::Constant(samples_comp.size(), Params::gp_model::noise());
-            // tbb::parallel_for(size_t(0), (size_t)observations_comp.cols(), size_t(1), [&](size_t i) {
-            //     _gp_models[i]->compute(samples_comp, _to_vector(observations_comp.col(i)), noises);
-            //     _gp_models[i]->optimize_hyperparams();
-            //     std::cout << "Computation for gp " << i << " ended." << std::endl;
-            // });
         }
 
         void save_data(const std::string& filename) const
