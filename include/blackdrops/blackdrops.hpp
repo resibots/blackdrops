@@ -72,10 +72,35 @@ namespace blackdrops {
             // Append recorded data
             _observations.insert(_observations.end(), obs_new.begin(), obs_new.end());
 
-            // _ofs << R << std::endl;
+            // statistics for immediate rewards
             for (auto r : R)
                 _ofs_real << r << " ";
             _ofs_real << std::endl;
+
+            // statistics for cumulative reward
+            double r = std::accumulate(R.begin(), R.end(), 0.0);
+            _ofs_results << r << std::endl;
+
+            // statistics for trajectories
+            std::vector<Eigen::VectorXd> states = _robot.get_last_states();
+            std::vector<Eigen::VectorXd> commands = _robot.get_last_commands();
+
+            for (size_t i = 0; i < commands.size(); i++) {
+                Eigen::VectorXd state = states[i];
+                Eigen::VectorXd command = commands[i];
+
+                for (int j = 0; j < state.size(); j++)
+                    _ofs_traj_real << state(j) << " ";
+                for (int j = 0; j < command.size(); j++)
+                    _ofs_traj_real << command(j) << " ";
+                _ofs_traj_real << std::endl;
+            }
+            Eigen::VectorXd state = states.back();
+            for (int j = 0; j < state.size(); j++)
+                _ofs_traj_real << state(j) << " ";
+            for (int j = 0; j < commands.back().size(); j++)
+                _ofs_traj_real << "0.0 ";
+            _ofs_traj_real << std::endl;
         }
 
         void learn_model()
@@ -138,7 +163,8 @@ namespace blackdrops {
             _boundary = Params::blackdrops::boundary();
             _random_policies = random_policies;
             // TO-DO: add prefix
-            _ofs_real.open("results.dat");
+            _ofs_results.open("results.dat");
+            _ofs_real.open("real.dat");
             _ofs_esti.open("estimates.dat");
             _ofs_opt.open("times.dat");
             _ofs_model.open("times_model.dat");
@@ -158,28 +184,32 @@ namespace blackdrops {
 
             std::cout << "Executing random actions..." << std::endl;
             for (size_t i = 0; i < init; i++) {
+                _ofs_traj_real.open("traj_real_" + std::to_string(i) + ".dat");
                 if (_random_policies) {
                     Eigen::VectorXd pp = limbo::tools::random_vector(_policy.params().size()).array() * 2.0 * _boundary - _boundary;
                     _policy.set_params(pp);
                     Eigen::write_binary("random_policy_params_" + std::to_string(i) + ".bin", pp);
                 }
                 execute_and_record_data();
+                _ofs_traj_real.close();
             }
 #endif
 
             std::chrono::steady_clock::time_point time_start;
             std::cout << "Starting learning..." << std::endl;
             for (size_t i = 0; i < iterations; i++) {
+                _ofs_traj_real.open("traj_real_" + std::to_string(i + init) + ".dat");
                 std::cout << std::endl
                           << "Learning iteration #" << (i + 1) << std::endl;
 
                 time_start = std::chrono::steady_clock::now();
                 learn_model();
                 double learn_model_ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - time_start).count();
-                _ofs_model << learn_model_ms << std::endl;
+                _ofs_model << (learn_model_ms * 1e-3) << std::endl;
                 _model.save_data("gp_learn_" + std::to_string(i) + ".dat");
 
                 std::cout << "Learned model..." << std::endl;
+                std::cout << "Learning time: " << learn_model_ms * 1e-3 << "s" << std::endl;
 
                 if (Params::blackdrops::verbose()) {
                     Eigen::VectorXd errors, sigmas;
@@ -194,15 +224,16 @@ namespace blackdrops {
                 std::cout << "Optimized policy..." << std::endl;
 
                 execute_and_record_data();
-                std::cout << "Executed action..." << std::endl;
-                std::cout << "Learning time: " << learn_model_ms << std::endl;
-                std::cout << "Optimization time: " << optimize_ms << std::endl;
-                _ofs_opt << optimize_ms << std::endl;
+                std::cout << "Executed policy..." << std::endl;
+                std::cout << "Optimization time: " << optimize_ms * 1e-3 << "s" << std::endl;
+                _ofs_opt << (optimize_ms * 1e-3) << std::endl;
+                _ofs_traj_real.close();
             }
             _ofs_real.close();
             _ofs_esti.close();
             _ofs_opt.close();
             _ofs_model.close();
+            _ofs_results.close();
             std::cout << "Experiment finished" << std::endl;
         }
 
@@ -210,7 +241,7 @@ namespace blackdrops {
         Robot _robot;
         Policy _policy;
         Model _model;
-        std::ofstream _ofs_real, _ofs_esti, _ofs_opt, _ofs_model;
+        std::ofstream _ofs_real, _ofs_esti, _ofs_traj_real, _ofs_results, _ofs_opt, _ofs_model;
         Eigen::VectorXd _params_starting;
         double _best;
         bool _random_policies;
