@@ -300,4 +300,4 @@ For more detailed explanation of the command line arguments run: `./deps/limbo/b
 
 ### Where to put the files of my new DART-based scenario
 
-When you want to create a new DART-based scenario, you should copy the `templates/dart_template.cpp` file into `src/dart/` folder, modify it and then compile using the instructions above. If you want to create an ODE-based scenario, then look at the [basic tutorial](basic_tutorial.md). If you require more fine tuned compilation of your program (e.g., link/include more libraries), then please make an issue and we will help you.
+When you want to create a new DART-based scenario, you should copy the `templates/dart_template.cpp` file into `src/dart/` folder, modify it (look for the `TO-CHANGE` parts in the code) and then compile using the instructions above. If you want to create an ODE-based scenario, then look at the [basic tutorial](basic_tutorial.md). If you require more fine tuned compilation of your program (e.g., link/include more libraries), then please make an issue and we will help you.
