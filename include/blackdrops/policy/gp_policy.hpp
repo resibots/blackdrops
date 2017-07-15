@@ -70,8 +70,8 @@ namespace blackdrops {
                 _sdim = Params::gp_policy::state_dim();
                 _adim = Params::gp_policy::action_dim();
                 _ps = Params::gp_policy::pseudo_samples();
-                _params = Eigen::VectorXd::Zero(_ps * _sdim + _adim * (_ps + _sdim + 1));
-                _limits = Eigen::VectorXd::Constant(Params::nn_policy::state_dim(), 1.0);
+                _params = Eigen::VectorXd::Zero(_ps * _sdim + _adim * (_ps + _sdim));
+                _limits = Eigen::VectorXd::Constant(Params::gp_policy::state_dim(), 1.0);
 
                 // Get the limits
                 for (int i = 0; i < _limits.size(); i++) {
@@ -129,8 +129,11 @@ namespace blackdrops {
                 std::vector<Eigen::VectorXd> ells;
                 for (size_t j = 0; j < _adim; j++) {
                     //--- extract hyperparameters
-                    Eigen::VectorXd ell = _params.segment(_ps * (_sdim + _adim) + j * (_sdim + 1), _sdim + 1);
-                    ells.push_back(ell);
+                    Eigen::VectorXd ell = _params.segment(_ps * (_sdim + _adim) + j * _sdim, _sdim);
+                    Eigen::VectorXd sigma_ell(ell.size() + 1);
+                    sigma_ell.head(ell.size()) = ell;
+                    sigma_ell.tail(1) = limbo::tools::make_vector(1.0);
+                    ells.push_back(sigma_ell);
 
                     //--- extract pseudo observations
                     obs = _params.segment(_sdim * _ps + j * _ps, _ps);
@@ -152,7 +155,7 @@ namespace blackdrops {
             Eigen::VectorXd params() const
             {
                 if (_random || _params.size() == 0)
-                    return limbo::tools::random_vector(_ps * _sdim + _adim * (_ps + _sdim + 1));
+                    return limbo::tools::random_vector(_ps * _sdim + _adim * (_ps + _sdim));
                 return _params;
             }
 

@@ -221,12 +221,13 @@ struct PolicyParams {
         BO_PARAM(size_t, action_dim, Params::blackdrops::action_dim());
         BO_PARAM_ARRAY(double, max_u, 10.0);
         BO_PARAM(double, pseudo_samples, 10);
-        BO_PARAM(double, noise, 1e-5);
+        BO_PARAM(double, noise, 0.01);
         BO_PARAM_ARRAY(double, limits, 5., 5., 10., 1., 1.);
     };
 
     struct kernel : public limbo::defaults::kernel {
         BO_PARAM(double, noise, gp_policy::noise());
+        BO_PARAM(double, sigma_sq, 1.0);
     };
 
     struct kernel_squared_exp_ard : public limbo::defaults::kernel_squared_exp_ard {
