@@ -47,7 +47,7 @@ sudo apt-get -qq --yes --force-yes install libnlopt-dev libbullet-dev libtinyxml
 # install DART
 cd deps/dart
 mkdir -p build && cd build
-cmake -DBUILD_PYTHON=ON -DCMAKE_INSTALL_PREFIX=${cwd}/install ..
+cmake -DDART_ENABLE_SIMD=ON -DBUILD_PYTHON=ON -DCMAKE_INSTALL_PREFIX=${cwd}/install ..
 make -j4
 make install
 # go back to original directory
