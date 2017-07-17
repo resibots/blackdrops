@@ -54,6 +54,8 @@ If you want to try with the Gaussian process (GP) policy, you should run: `./dep
 
 #### Results
 
+Note that this version has a slightly different reward function than what was used in original [Black-DROPS paper](https://arxiv.org/abs/1703.07261); in particular, we use the reward function that [PILCO](http://mlg.eng.cam.ac.uk/pilco/) uses: i.e., a saturating distance of the position of the tip of the pendulum to the desired location (this does not change the behavior of the algorithm, but we provide it like this since it is most commonly used). We here provide the figure from the Black-DROPS paper, but you should expect slightly different results (i.e., a bit higher values with the new reward) with this code.
+
 <center>
 <img src="../imgs/cartpole_rewards.png" width="400">
 </center>
@@ -64,10 +66,10 @@ This scenario was designed to replicate as close as possible the real robot scen
 
 - State space (4-D): [q0, q1, q2, q3]
 - Action space (4-D): [dq0, dq1, dq2, dq3]
-- The actuators take velocity commands, but operate in torque mode (i.e., they respect the maximum torques, maximum velocities and joint limits)
+- Velocity-controlled actuators
 - Duration of 4 seconds for each episode
 - Sampling/control rate at 10Hz (i.e., steps of 0.1 seconds)
-- 2 random trials
+- 1 random trial
 
 #### How to run it
 
@@ -85,4 +87,6 @@ If you want to run it without graphics: `./deps/limbo/build/exp/blackdrops/src/d
 
 #### Results
 
-TO-DO: Add results
+<center>
+<img src="../imgs/simu_arm.png" width="400">
+</center>

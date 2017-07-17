@@ -507,7 +507,7 @@ int main(int argc, char** argv)
 
     blackdrops::BlackDROPS<Params, MGP_t, SimpleArm, blackdrops::policy::NNPolicy<PolicyParams>, policy_opt_t, RewardFunction> arm_system;
 
-    arm_system.learn(2, 15, true);
+    arm_system.learn(1, 15, true);
 
     ActualReward actual_reward;
     std::ofstream ofs("reward_points.dat");

@@ -121,6 +121,42 @@ The initial state should be the zero state and the transform state should be sim
     }
 ```
 
+To get the state of the robot we use some DART functions:
+
+```cpp
+Eigen::VectorXd get_robot_state(const std::shared_ptr<robot_dart::Robot>& robot, bool full = false)
+{
+    Eigen::VectorXd vel = robot->skeleton()->getVelocities();
+    Eigen::VectorXd pos = robot->skeleton()->getPositions();
+
+    size_t size = pos.size() + vel.size();
+    if (full)
+        size += pos.size();
+
+    Eigen::VectorXd state(size);
+
+    state.head(vel.size()) = vel;
+
+    if (!full) {
+        state.tail(pos.size()) = pos;
+    }
+    else {
+        for (int i = 0; i < pos.size(); i++) {
+            state(vel.size() + 2 * i) = std::cos(pos(i));
+            state(vel.size() + 2 * i + 1) = std::sin(pos(i));
+        }
+    }
+    return state;
+}
+
+//...
+    Eigen::VectorXd get_state(const base_t::robot_t& robot, bool full) const
+    {
+        return get_robot_state(robot, full);
+    }
+//...
+```
+
 We add some extras to the simulation:
 
 ```cpp
@@ -176,7 +212,8 @@ struct Params {
 
 If we want to learn the reward function from data (both for DART-based and ODE-based scenarios), we need to do the following:
 
-- Create a Gaussian process for learning the reward function
+- Create a Gaussian process for learning the reward function:
+
 ```cpp
 struct RewardParams {
     struct kernel : public limbo::defaults::kernel {
@@ -202,12 +239,14 @@ namespace global {
 
     using kernel_t = limbo::kernel::SquaredExpARD<RewardParams>;
     using mean_t = limbo::mean::Data<Params>;
-    using GP_t = limbo::model::GP<RewardParams, kernel_t, mean_t, limbo::model::gp::KernelLFOpt<RewardParams>>;
+    using GP_t = limbo::model::GP<RewardParams, kernel_t, mean_t, blackdrops::model::gp::KernelLFOpt<RewardParams>>;
 
     GP_t reward_gp(4, 1);
 }
 ```
-- Create a reward function struct for the actual immediate reward (this would be unknown to the algorithm)
+
+- Create a reward function struct for the actual immediate reward (this would be unknown to the algorithm):
+
 ```cpp
 struct ActualReward {
     double operator()(const Eigen::VectorXd& from_state, const Eigen::VectorXd& action, const Eigen::VectorXd& to_state) const
@@ -236,7 +275,9 @@ struct ActualReward {
     }
 };
 ```
-- Create a reward function to be used for the policy optimization
+
+- Create a reward function to be used for the policy optimization:
+
 ```cpp
 struct RewardFunction {
     double operator()(const Eigen::VectorXd& from_state, const Eigen::VectorXd& action, const Eigen::VectorXd& to_state, bool certain = false) const
@@ -251,7 +292,9 @@ struct RewardFunction {
     }
 };
 ```
-- The system struct needs to override the `execute(const Policy& policy, const Reward& world, double T, std::vector<double>& R, bool display)` member function
+
+- The system struct needs to override the `execute(const Policy& policy, const Reward& world, double T, std::vector<double>& R, bool display)` member function:
+
 ```cpp
 template <typename Policy, typename Reward>
     std::vector<std::tuple<Eigen::VectorXd, Eigen::VectorXd, Eigen::VectorXd>> execute(const Policy& policy, const Reward& world, double T, std::vector<double>& R, bool display = true)
