@@ -42,6 +42,7 @@
 #|
 import limbo
 import glob
+from waflib import Logs
 
 def build(bld):
     libs = 'TBB EIGEN BOOST LIMBO LIBCMAES NLOPT SFERES2 BOOST_CHRONO RT SDL '

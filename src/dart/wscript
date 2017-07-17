@@ -42,6 +42,7 @@
 #|
 import limbo
 import glob
+from waflib import Logs
 
 def build(bld):
     dart_libs = 'TBB EIGEN BOOST LIMBO LIBCMAES NLOPT SFERES2 BOOST_CHRONO RT ROBOT_DART DART BOOST_DART THREADS '
@@ -54,7 +55,7 @@ def build(bld):
         return
 
     cxxflags = bld.get_env()['CXXFLAGS']
-    
+
     limbo.create_variants(bld,
                       source='simple_arm.cpp',
                       includes='. ../../../../src ../ ../../include',
