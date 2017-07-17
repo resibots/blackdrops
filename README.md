@@ -21,6 +21,7 @@ In BibTex:
 ### Code developers/maintainers
 
 - Konstantinos Chatzilygeroudis (Inria): http://costashatz.github.io/ --- actively developing/maintaining the code
+- Rituraj Kaushik (Inria): http://tansigmoid.com/
 - Roberto Rama (Inria)
 
 Black-DROPS is partly funded by the ResiBots ERC Project (http://www.resibots.eu).

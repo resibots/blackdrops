@@ -81,7 +81,7 @@ struct Params {
     };
 
     struct dart_policy_control {
-        BO_PARAM(dart::dynamics::Joint::ActuatorType, joint_type, dart::dynamics::Joint::SERVO);
+        BO_PARAM(dart::dynamics::Joint::ActuatorType, joint_type, dart::dynamics::Joint::VELOCITY);
     };
 
     struct gp_model {
@@ -116,6 +116,7 @@ struct Params {
 
     struct opt_rprop : public limbo::defaults::opt_rprop {
         BO_PARAM(int, iterations, 300);
+        BO_PARAM(double, eps_stop, 1e-4);
     };
 
     struct opt_parallelrepeater : public limbo::defaults::opt_parallelrepeater {
@@ -142,7 +143,7 @@ struct PolicyParams {
 struct RewardParams {
     struct kernel : public limbo::defaults::kernel {
         BO_PARAM(double, noise, 1e-12);
-        BO_PARAM(bool, optimize_noise, false);
+        BO_PARAM(bool, optimize_noise, true);
     };
 
     struct kernel_squared_exp_ard : public limbo::defaults::kernel_squared_exp_ard {
@@ -150,6 +151,7 @@ struct RewardParams {
 
     struct opt_rprop : public limbo::defaults::opt_rprop {
         BO_PARAM(int, iterations, 300);
+        BO_PARAM(double, eps_stop, 1e-4);
     };
 
     struct opt_parallelrepeater : public limbo::defaults::opt_parallelrepeater {
@@ -167,7 +169,7 @@ namespace global {
     using kernel_t = limbo::kernel::SquaredExpARD<RewardParams>;
     using mean_t = limbo::mean::Data<RewardParams>;
 
-    using GP_t = limbo::model::GP<RewardParams, kernel_t, mean_t, limbo::model::gp::KernelLFOpt<RewardParams>>;
+    using GP_t = limbo::model::GP<RewardParams, kernel_t, mean_t, blackdrops::model::gp::KernelLFOpt<RewardParams>>;
     GP_t reward_gp(4, 1);
 }
 
