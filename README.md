@@ -44,7 +44,7 @@ The Black-DROPS algorithm is a model-based policy search algorithm (the ICML 201
 To get a better idea of how well Black-DROPS works please check the [paper](https://arxiv.org/abs/1703.07261). Here are the main figures of the paper for quick reference (the "No var" variants are variants of Black-DROPS without taking into account the uncertainty of the model):
 
 <center>
-<img src="./imgs/pendulum_rewards.png" width="400">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<img src="./imgs/cartpole_rewards.png" width="400">
+<img src="./imgs/pendulum_rewards.png" width="400">&nbsp;<img src="./imgs/cartpole_rewards.png" width="400">
 </center>
 
 ### What you should NOT expect from Black-DROPS
