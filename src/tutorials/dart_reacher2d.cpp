@@ -380,7 +380,7 @@ struct RewardFunction {
         if (certain || !Params::opt_cmaes::handle_uncertainty())
             return mu(0);
 
-        return gaussian_rand(mu(0), std::sqrt(s));
+        return std::min(0., gaussian_rand(mu(0), std::sqrt(s)));
     }
 };
 
