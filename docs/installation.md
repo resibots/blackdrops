@@ -2,6 +2,10 @@
 
 Since Black-DROPS is a `limbo` experiment (check the [docs](http://www.resibots.eu/limbo/index.html) of limbo for details), there needs to be no installation. Nevertheless, the dependencies must be installed.
 
+### How to properly clone this repo
+
+- Clone the repo *recursively*: `git clone --recursive https://github.com/resibots/blackdrops.git` (or `git clone --recursive git@github.com:resibots/blackdrops.git`)
+
 ### Dependencies
 
 #### Required
