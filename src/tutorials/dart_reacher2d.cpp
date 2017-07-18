@@ -174,7 +174,7 @@ namespace global {
     using kernel_t = limbo::kernel::SquaredExpARD<RewardParams>;
     using mean_t = limbo::mean::Data<RewardParams>;
 
-    using GP_t = limbo::model::GP<RewardParams, kernel_t, mean_t, limbo::model::gp::KernelLFOpt<RewardParams>>;
+    using GP_t = limbo::model::GP<RewardParams, kernel_t, mean_t, blackdrops::model::gp::KernelLFOpt<RewardParams>>;
     GP_t reward_gp(4, 1);
 }
 
