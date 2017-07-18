@@ -41,7 +41,7 @@ Some of the dependencies (libcmaes, DART, NLOpt, robot\_dart) require specific i
 - `cd /path/to/repo/root` **(this is very important as the script assumes that you are in the root of the repo)**
 - `./scripts/install_deps_req.sh`
 
-Using the scripts, all of the custom dependencies (limbo, libcmaes, DART, NLOpt, robot\_dart) will be installed in `/path/to/repo/root/install` in order not to pollute your linux distribution. As such, you should update your `LD_LIBRARY_PATH` (or you can source the proper script --- see below). Consequently no `sudo` is required for this dependencies; nevertheless, `sudo` is still required for installing standard packages (like boost-dev packages, libeigen3-dev, etc). 
+Using the scripts, all of the custom dependencies (limbo, libcmaes, DART, NLOpt, robot\_dart) will be installed in `/path/to/repo/root/install` in order not to pollute your linux distribution. As such, you should update your `LD_LIBRARY_PATH` (or you can source the proper script --- see below). Consequently no `sudo` is required for these dependencies; nevertheless, `sudo` is still required for installing standard packages (like boost-dev packages, libeigen3-dev, etc). 
 
 ### Compilation
 
