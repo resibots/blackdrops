@@ -7,6 +7,7 @@
 #|
 #| Contributor(s):
 #|   - Konstantinos Chatzilygeroudis (konstantinos.chatzilygeroudis@inria.fr)
+#|   - Rituraj Kaushik (rituraj.kaushik@inria.fr)
 #|   - Roberto Rama (bertoski@gmail.com)
 #|
 #| This software is a computer library whose purpose is to optimize continuous,
