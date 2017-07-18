@@ -38,8 +38,8 @@ The Black-DROPS algorithm is a model-based policy search algorithm (the ICML 201
 - takes into account the uncertainty of the dynamical model when searching for a policy
 - is data-efficient or sample-efficient; i.e., it requires very small *interaction time* with the system to find a working policy (e.g., around 16-20 seconds to learn a policy for the cart-pole swing up task)
 - when several cores are available, it can be faster than analytical approaches (e.g., [PILCO](http://mlg.eng.cam.ac.uk/pilco/))
-- it imposes no constraints on the type of the reward function (more specifically we have an example where the reward function is learned from data)
-- it imposes no constraints on the type of the policy representation (any parameterized policy can be used --- for example, dynamic movement primitives)
+- it imposes no constraints on the type of the reward function (more specifically we have examples where the reward function is learned from data)
+- it imposes no constraints on the type of the policy representation (any parameterized policy can be used --- for example, dynamic movement primitives or neural networks)
 
 To get a better idea of how well Black-DROPS works please check the [paper](https://arxiv.org/abs/1703.07261). Here are the main figures of the paper for quick reference (the "No var" variants are variants of Black-DROPS without taking into account the uncertainty of the model):
 
