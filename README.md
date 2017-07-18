@@ -24,11 +24,11 @@ In BibTex:
 - Rituraj Kaushik (Inria): http://tansigmoid.com/
 - Roberto Rama (Inria)
 
-Black-DROPS is partly funded by the ResiBots ERC Project (http://www.resibots.eu).
+Black-DROPS is funded by the ResiBots ERC Project (http://www.resibots.eu).
 
 ### How to properly clone this repo
 
-- Clone properly the repo: `git clone --recursive https://github.com/resibots/blackdrops.git` (or `git clone --recursive git@github.com:resibots/blackdrops.git`)
+- Clone the repo *recursively*: `git clone --recursive https://github.com/resibots/blackdrops.git` (or `git clone --recursive git@github.com:resibots/blackdrops.git`)
 
 ### What you should expect from Black-DROPS
 
