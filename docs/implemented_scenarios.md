@@ -87,6 +87,11 @@ If you want to run it without graphics: `./deps/limbo/build/exp/blackdrops/src/d
 
 #### Results
 
+We note that here optimizing the policy without taking variance into account achieves similar performance as the full Black-DROPS algorithm most probably:
+
+- because the underlying system has no noise, and
+- because no real exploration is needed for the system to find the solution (i.e., the arm can directly go to the target location once the reward and the dynamics models are learnt)
+
 <center>
 <img src="../imgs/simu_arm.png" width="400">
 </center>
