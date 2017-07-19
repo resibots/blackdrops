@@ -179,7 +179,7 @@ If you are having trouble with completing some parts of the tutorial, you can ch
 The Black-DROPS code produces several statistics files:
 
 - **blackdrops_data.bin** - binary file with an *Eigen::MatrixXd* (Nx(D+E), where N is the number of data points, D the dimension of the input to the GPs and E the dimension of the prediction of the GPs) stored with the data gathered from the system
-- **estimated.dat** - text file where the i-th line contains the immediate rewards received at each time step on the i-th execution on the mean model
+- **estimates.dat** - text file where the i-th line contains the immediate rewards received at each time step on the i-th execution on the mean model
 - **gp_learn_***i***.dat** - text file with the data gathered from the system up until the i-th episode on the real system
 - **policy_params_***i***.bin** - binary file containing the *Eigen::VectorXd* of the policy parameters executed on the i-th learning episode
 - **policy_params_starting_***i***.bin** - binary file containing the *Eigen::VectorXd* of the policy parameters that were used as a starting point on the i-th learning episode
