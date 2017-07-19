@@ -113,9 +113,9 @@ bool draw_pendulum(double theta1, double theta2, bool red = false)
         SDL_SetRenderDrawColor(renderer, 0xFF, 0x00, 0x00, 0xFF);
     SDL_Rect outlineRect = {static_cast<int>(SCREEN_WIDTH / 2 - 0.05 * SCREEN_HEIGHT / 4), static_cast<int>(SCREEN_HEIGHT / 2 - 0.05 * SCREEN_HEIGHT / 4), static_cast<int>(0.1 * SCREEN_HEIGHT / 4), static_cast<int>(0.1 * SCREEN_HEIGHT / 4)};
     SDL_RenderFillRect(renderer, &outlineRect);
-    outlineRect = {SCREEN_WIDTH / 2 + x1 * SCREEN_HEIGHT / 4 - 0.05 * SCREEN_HEIGHT / 4, SCREEN_HEIGHT / 2 - y1 * SCREEN_HEIGHT / 4 - 0.05 * SCREEN_HEIGHT / 4, static_cast<int>(0.1 * SCREEN_HEIGHT / 4), static_cast<int>(0.1 * SCREEN_HEIGHT / 4)};
+    outlineRect = {static_cast<int>(SCREEN_WIDTH / 2 + x1 * SCREEN_HEIGHT / 4 - 0.05 * SCREEN_HEIGHT / 4), static_cast<int>(SCREEN_HEIGHT / 2 - y1 * SCREEN_HEIGHT / 4 - 0.05 * SCREEN_HEIGHT / 4), static_cast<int>(0.1 * SCREEN_HEIGHT / 4), static_cast<int>(0.1 * SCREEN_HEIGHT / 4)};
     SDL_RenderFillRect(renderer, &outlineRect);
-    SDL_RenderDrawLine(renderer, SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2, static_cast<int>(SCREEN_WIDTH / 2 + x1 * SCREEN_HEIGHT / 4), static_cast<int>(SCREEN_HEIGHT / 2 - y1 * SCREEN_HEIGHT / 4));
+    SDL_RenderDrawLine(renderer, static_cast<int>(SCREEN_WIDTH / 2), static_cast<int>(SCREEN_HEIGHT / 2), static_cast<int>(SCREEN_WIDTH / 2 + x1 * SCREEN_HEIGHT / 4), static_cast<int>(SCREEN_HEIGHT / 2 - y1 * SCREEN_HEIGHT / 4));
     SDL_RenderDrawLine(renderer, static_cast<int>(SCREEN_WIDTH / 2 + x1 * SCREEN_HEIGHT / 4), static_cast<int>(SCREEN_HEIGHT / 2 - y1 * SCREEN_HEIGHT / 4), static_cast<int>(SCREEN_WIDTH / 2 + x2 * SCREEN_HEIGHT / 4), static_cast<int>(SCREEN_HEIGHT / 2 - y2 * SCREEN_HEIGHT / 4));
 
     return true;
