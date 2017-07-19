@@ -20,12 +20,15 @@ cwd=$(pwd)
 # create install dir
 mkdir -p install
 
-# do libgtest fix for libcmaes
-cd /usr/src/gtest
-sudo mkdir -p build && cd build
-sudo cmake ..
-sudo make
-sudo cp *.a /usr/lib
+# do libgtest fix for libcmaes (Linux only)
+if [ $OS = "Darwin" ]; then
+    cd /usr/src/gtest
+    sudo mkdir -p build && cd build
+    sudo cmake ..
+    sudo make
+    sudo cp *.a /usr/lib
+fi
+
 # install libcmaes
 cd ${cwd}/deps/libcmaes
 mkdir -p build && cd build
