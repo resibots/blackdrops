@@ -1,5 +1,8 @@
 #!/bin/bash
 
+OS=$(uname)
+echo "Detected OS: $OS"
+
 if [ $OS = "Darwin" ]; then
     echo "ERROR: OSX is only for install_deps_req.sh"
     exit 1

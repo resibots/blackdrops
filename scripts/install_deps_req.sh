@@ -1,4 +1,5 @@
 #!/bin/bash
+
 OS=$(uname)
 echo "Detected OS: $OS"
 
@@ -21,7 +22,7 @@ cwd=$(pwd)
 mkdir -p install
 
 # do libgtest fix for libcmaes (Linux only)
-if [ $OS = "Darwin" ]; then
+if [ $OS = "Linux" ]; then
     cd /usr/src/gtest
     sudo mkdir -p build && cd build
     sudo cmake ..
