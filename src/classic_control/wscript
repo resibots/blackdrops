@@ -56,7 +56,7 @@ def build(bld):
                       uselib=libs,
                       uselib_local='limbo',
                       cxxflags = cxxflags + ['-D NODSP'],
-                      variants = ['SIMU', 'SIMU SPGPS', 'SIMU GPPOLICY', 'SIMU GPPOLICY SPGPS'])
+                      variants = ['SIMU', 'SIMU MEAN', 'SIMU MEAN MODELIDENT', 'SIMU MEAN MODELIDENT ONLYMI', 'SIMU SPGPS', 'SIMU GPPOLICY', 'SIMU GPPOLICY SPGPS'])
 
     limbo.create_variants(bld,
                       source='pendulum.cpp',
@@ -75,7 +75,7 @@ def build(bld):
                         uselib=libs,
                         uselib_local='limbo',
                         cxxflags = cxxflags,
-                        variants = ['GRAPHIC', 'GRAPHIC SPGPS', 'GRAPHIC GPPOLICY', 'GRAPHIC GPPOLICY SPGPS'])
+                        variants = ['GRAPHIC', 'GRAPHIC MEAN', 'GRAPHIC MEAN MODELIDENT', 'GRAPHIC MEAN MODELIDENT ONLYMI', 'GRAPHIC SPGPS', 'GRAPHIC GPPOLICY', 'GRAPHIC GPPOLICY SPGPS'])
         limbo.create_variants(bld,
                         source='pendulum.cpp',
                         includes='. ../../../../src ../ ../../include',
