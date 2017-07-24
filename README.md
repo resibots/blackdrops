@@ -57,7 +57,7 @@ In short, you should:
 
 ### Using the code
 
-Please look at the [installation guide](docs/installation.md). You will find detailed guidelines on how to properly install all the dependencies, compile the Black-DROPS code and run scenarios.
+Please look at the [installation guide](docs/installation.md). You will find detailed guidelines on how to properly install all the dependencies, compile the Black-DROPS code and run scenarios. There is also an [advanced installation guide](docs/advanced_installation.md) which is recommended for users experienced with build systems and command line usage.
 
 ### Already implemented scenarios
 
