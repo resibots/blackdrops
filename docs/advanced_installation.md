@@ -188,7 +188,7 @@ For simple graphics, we use the SDL2 library.
 For Ubuntu systems, you should:
 
 ```bash
-sudo apt-get install libsdl2-dev
+sudo apt-get install libsdl2-dev libsdl2-image-dev
 ```
 
 For OSX systems:
