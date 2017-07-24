@@ -157,6 +157,10 @@ The last part is to define how many random trials and how many learning episodes
 
 #### Compiling and running your scenario
 
+**Using the provided scripts**
+
+This requires that you have installed everything using the scripts.
+
 You should now do the following:
 
 - `cd /path/to/repo/root` **(this is very important as the scripts assume that you are in the root of the repo)**
@@ -171,6 +175,16 @@ If there's no error, you should be able to run your scenario:
 You should now watch your planar arm learning to reach a point using the Black-DROPS algorithm. Good scores are values >= -25.
 
 For more detailed explanation of the command line arguments run: `./deps/limbo/build/exp/blackdrops/src/tutorials/planar_arm_graphic -h`. If you do not have SDL2 installed, use `planar_arm_simu` instead to run the experiment without graphics.
+
+**For advanced users**
+
+If you have used the advanced installation procedure, then you should do the following:
+
+- `cd /path/to/limbo/folder`
+- `./waf configure --exp blackdrops`
+- `./waf --exp blackdrops -j4`
+
+If there's no error, you should be able to run your scenario: `./build/exp/blackdrops/src/tutorials/planar_arm_graphic -m 5000 -r 5 -n 10 -e 1 -u -b 5`
 
 If you are having trouble with completing some parts of the tutorial, you can check the `src/tutorials/planar_arm_finished.cpp` file.
 

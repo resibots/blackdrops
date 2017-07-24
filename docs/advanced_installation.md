@@ -40,7 +40,7 @@ tar -zxvf nlopt-2.4.2.tar.gz && cd nlopt-2.4.2
 sudo make install
 ```
 
-If you want to install NLOpt somewhere else than `/usr/local/`, you add the `--prefix=/path/to/desired/installation/folder` in the `./configure` command.
+If you want to install NLOpt somewhere else than `/usr/local/`, you add the `--prefix=/path/to/install/folder` in the `./configure` command.
 
 Now that the basic dependencies of limbo have been installed, we can proceed in cloning the limbo framework:
 
@@ -108,7 +108,7 @@ make -j4
 sudo make install
 ```
 
-If you do not have TBB install, you should use: `cmake -DUSE_TBB=OFF -DUSE_OPENMP=ON ..`. If you want to install libcmaes somewhere else than `/usr/local`, you should use the `-DCMAKE_INSTALL_PREFIX=/path/to/installation/folder` cmake argument.
+If you do not have TBB install, you should use: `cmake -DUSE_TBB=OFF -DUSE_OPENMP=ON ..`. If you want to install libcmaes somewhere else than `/usr/local`, you should use the `-DCMAKE_INSTALL_PREFIX=/path/to/install/folder` cmake argument.
 
 ### Installing DART
 
@@ -141,7 +141,7 @@ make -j4
 sudo make install
 ```
 
-If you want to install DART somewhere else than `/usr/local`, you should use the `-DCMAKE_INSTALL_PREFIX=/path/to/installation/folder` cmake argument.
+If you want to install DART somewhere else than `/usr/local`, you should use the `-DCMAKE_INSTALL_PREFIX=/path/to/install/folder` cmake argument.
 
 For **OSX systems** with homebrew, please follow the detailed installation instructions on the [DART documentation website](http://dartsim.github.io/install_dart_on_mac.html#install-from-source-using-homebrew). You need to follow the same procedure as for Ubuntu systems. In short you should do the following:
 
@@ -179,7 +179,7 @@ cd robot_dart
 sudo ./waf install
 ```
 
-If you have installed DART in a different location than the default ones (i.e., other than `/usr/local/` or `/usr/`), you the `--dart=/path/to/dart/installation` option in `./waf configure`.
+If you have installed DART in a different location than the default ones (i.e., other than `/usr/local/` or `/usr/`), you the `--dart=/path/to/dart/install` option in `./waf configure`.
 
 ### Installing SDL2
 
