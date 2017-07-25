@@ -1,6 +1,6 @@
 ## Implemented Scenarios
 
-In this page, we will briefly present all the already implemented scenarios and how to run/use them properly.
+In this page, we will briefly present all the already implemented scenarios and how to run/use them properly. Note that if you have installed the Black-DROPS code following the advanced installation procedure, you should replace all occurrences of `./deps/limbo/` with `./path/to/limbo/`.
 
 ### Pendulum swing-up task
 

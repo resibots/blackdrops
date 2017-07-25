@@ -1,4 +1,13 @@
 #!/bin/bash
+
+OS=$(uname)
+echo "Detected OS: $OS"
+
+if [ $OS = "Darwin" ]; then
+    echo "ERROR: OSX is only for install_deps_req.sh"
+    exit 1
+fi
+
 sudo apt-get -qq update
 # install Eigen 3, Boost and TBB
 sudo apt-get --yes --force-yes install cmake libeigen3-dev libtbb-dev libboost-serialization-dev libboost-filesystem-dev libboost-test-dev libboost-program-options-dev libboost-thread-dev libboost-regex-dev
