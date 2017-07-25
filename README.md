@@ -29,6 +29,7 @@ Black-DROPS is funded by the ResiBots ERC Project (http://www.resibots.eu).
 ### How to properly clone this repo
 
 - Clone the repo *recursively*: `git clone --recursive https://github.com/resibots/blackdrops.git` (or `git clone --recursive git@github.com:resibots/blackdrops.git`)
+- If you follow the [advanced installation](docs/advanced_installation.md), you do not necessarily need to clone recursively the repository.
 
 ### What you should expect from Black-DROPS
 
