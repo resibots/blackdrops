@@ -86,7 +86,7 @@ namespace blackdrops {
             std::vector<Eigen::VectorXd> states = _robot.get_last_states();
             std::vector<Eigen::VectorXd> commands = _robot.get_last_commands();
 
-            for (size_t i = 0; i < commands.size(); i++) {
+            for (size_t i = 0; i < R.size(); i++) {
                 Eigen::VectorXd state = states[i];
                 Eigen::VectorXd command = commands[i];
 
@@ -154,6 +154,29 @@ namespace blackdrops {
             _robot.execute_dummy(_policy, _model, world, Params::blackdrops::T(), R);
             std::cout << "Dummy reward: " << std::accumulate(R.begin(), R.end(), 0.0) << std::endl;
 
+            _ofs_traj_dummy.open("traj_dummy_" + std::to_string(i) + ".dat");
+            // statistics for trajectories
+            std::vector<Eigen::VectorXd> states = _robot.get_last_dummy_states();
+            std::vector<Eigen::VectorXd> commands = _robot.get_last_dummy_commands();
+
+            for (size_t i = 0; i < R.size(); i++) {
+                Eigen::VectorXd state = states[i];
+                Eigen::VectorXd command = commands[i];
+
+                for (int j = 0; j < state.size(); j++)
+                    _ofs_traj_dummy << state(j) << " ";
+                for (int j = 0; j < command.size(); j++)
+                    _ofs_traj_dummy << command(j) << " ";
+                _ofs_traj_dummy << std::endl;
+            }
+            Eigen::VectorXd state = states.back();
+            for (int j = 0; j < state.size(); j++)
+                _ofs_traj_dummy << state(j) << " ";
+            for (int j = 0; j < commands.back().size(); j++)
+                _ofs_traj_dummy << "0.0 ";
+            _ofs_traj_dummy << std::endl;
+            _ofs_traj_dummy.close();
+
             for (auto r : R)
                 _ofs_esti << r << " ";
             _ofs_esti << std::endl;
@@ -180,7 +203,9 @@ namespace blackdrops {
             optimize_policy(0);
             _params_starting = _policy.params();
             optimize_policy(0);
+            _ofs_traj_real.open("traj_real_0.dat");
             execute_and_record_data();
+            _ofs_traj_real.close();
 #else
 
             std::cout << "Executing random actions..." << std::endl;
@@ -242,7 +267,7 @@ namespace blackdrops {
         Robot _robot;
         Policy _policy;
         Model _model;
-        std::ofstream _ofs_real, _ofs_esti, _ofs_traj_real, _ofs_results, _ofs_opt, _ofs_model;
+        std::ofstream _ofs_real, _ofs_esti, _ofs_traj_real, _ofs_traj_dummy, _ofs_results, _ofs_opt, _ofs_model;
         Eigen::VectorXd _params_starting;
         double _best;
         bool _random_policies;
@@ -250,6 +275,7 @@ namespace blackdrops {
         double _max_reward;
         Eigen::VectorXd _max_params;
         double _boundary;
+        std::mutex _iter_mutex;
 
         // state, action, prediction
         std::vector<std::tuple<Eigen::VectorXd, Eigen::VectorXd, Eigen::VectorXd>> _observations;
@@ -263,15 +289,18 @@ namespace blackdrops {
 
             // std::vector<double> R;
             // _robot.execute(policy, world, Params::blackdrops::T(), R, false);
-            //
+
             // double r = std::accumulate(R.begin(), R.end(), 0.0);
             double r = _robot.predict_policy(policy, _model, world, Params::blackdrops::T());
 
+            _iter_mutex.lock();
             _opt_iters++;
+            _iter_mutex.unlock();
             if (_max_reward < r) {
                 _max_reward = r;
                 _max_params = policy.params().array();
-                // Eigen::write_binary("max_params.bin", policy.params());
+                if (Params::blackdrops::verbose())
+                    std::cout << "(" << _opt_iters << ", " << _max_reward << "), " << std::flush;
             }
 
             return limbo::opt::no_grad(r);

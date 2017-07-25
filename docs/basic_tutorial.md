@@ -203,6 +203,7 @@ The Black-DROPS code produces several statistics files:
 - **times.dat** - text file where the i-th line contains the time in seconds the optimization of the policy took in the i-th learning episode
 - **times_model.dat** - text file where the i-th line contains the time in seconds the training of the model took in the i-th learning episode
 - **traj_real_***i***.dat** - text file where the j-th line contains the state/action pair observed at the j-th time step in the i-th execution on the robot (the last action is always zeros as no action was taken in the real system)
+- **traj_dummy_***i***.dat** - text file where the j-th line contains the state/action pair observed at the j-th time step in the i-th execution on the dummy model (the last action is always zeros as no action was taken -- the dummy model is ran once every optimization of the policy)
 
 ### Where to put the files of my new scenario
 

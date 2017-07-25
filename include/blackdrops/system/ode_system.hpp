@@ -98,8 +98,10 @@ namespace blackdrops {
             }
 
             template <typename Policy, typename Model, typename Reward>
-            void execute_dummy(const Policy& policy, const Model& model, const Reward& world, double T, std::vector<double>& R, bool display = true) const
+            void execute_dummy(const Policy& policy, const Model& model, const Reward& world, double T, std::vector<double>& R, bool display = true)
             {
+                std::vector<Eigen::VectorXd> states, commands;
+
                 double dt = Params::blackdrops::dt();
                 R = std::vector<double>();
                 // init state
@@ -107,11 +109,15 @@ namespace blackdrops {
 
                 Eigen::VectorXd init = this->transform_state(init_diff);
 
+                states.push_back(init_diff);
+
                 for (double t = 0.0; t <= T; t += dt) {
                     Eigen::VectorXd query_vec(Params::blackdrops::model_input_dim() + Params::blackdrops::action_dim());
                     Eigen::VectorXd u = policy.next(init);
                     query_vec.head(Params::blackdrops::model_input_dim()) = init;
                     query_vec.tail(Params::blackdrops::action_dim()) = u;
+
+                    commands.push_back(u);
 
                     Eigen::VectorXd mu;
                     Eigen::VectorXd sigma;
@@ -119,12 +125,17 @@ namespace blackdrops {
 
                     Eigen::VectorXd final = init_diff + mu;
 
+                    states.push_back(final);
+
                     double r = world(init_diff, mu, final);
                     R.push_back(r);
 
                     init_diff = final;
                     init = this->transform_state(init_diff);
                 }
+
+                _last_dummy_states = states;
+                _last_dummy_commands = commands;
             }
 
             template <typename Policy, typename Model, typename Reward>
@@ -192,12 +203,25 @@ namespace blackdrops {
                 return _last_commands;
             }
 
+            // get states from last dummy execution
+            std::vector<Eigen::VectorXd> get_last_dummy_states() const
+            {
+                return _last_dummy_states;
+            }
+
+            // get commands from lastd ummy execution
+            std::vector<Eigen::VectorXd> get_last_dummy_commands() const
+            {
+                return _last_dummy_commands;
+            }
+
             virtual void draw_single(const Eigen::VectorXd& state) const {}
 
             virtual void dynamics(const std::vector<double>& x, std::vector<double>& dx, double t, const Eigen::VectorXd& u) const = 0;
 
         protected:
             std::vector<Eigen::VectorXd> _last_states, _last_commands;
+            std::vector<Eigen::VectorXd> _last_dummy_states, _last_dummy_commands;
         };
     }
 }
