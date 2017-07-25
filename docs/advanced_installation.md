@@ -104,7 +104,6 @@ Now let's compile and install the library:
 
 ```bash
 mkdir -p build && cd build
-# no tbb for libcmaes
 cmake -DUSE_TBB=ON -DUSE_OPENMP=OFF ..
 make -j4
 sudo make install
