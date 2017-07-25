@@ -109,7 +109,7 @@ make -j4
 sudo make install
 ```
 
-If you do not have TBB install, you should use: `cmake -DUSE_TBB=OFF -DUSE_OPENMP=ON ..`. If you want to install libcmaes somewhere else than `/usr/local`, you should use the `-DCMAKE_INSTALL_PREFIX=/path/to/install/folder` cmake argument.
+If you do not have TBB installed, you should use: `cmake -DUSE_TBB=OFF -DUSE_OPENMP=ON ..`. If you want to install libcmaes somewhere else than `/usr/local`, you should use the `-DCMAKE_INSTALL_PREFIX=/path/to/install/folder` cmake argument.
 
 ### Installing DART
 
