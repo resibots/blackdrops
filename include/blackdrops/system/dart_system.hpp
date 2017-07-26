@@ -87,7 +87,7 @@ namespace blackdrops {
                 // add extra
                 this->add_extra_to_simu(simu);
 
-                simu.run(T + Params::blackdrops::dt());
+                simu.run(T + Params::dart_system::sim_step());
 
                 std::vector<Eigen::VectorXd> states = simu.controller().get_states();
                 _last_states = states;
@@ -116,8 +116,10 @@ namespace blackdrops {
             }
 
             template <typename Policy, typename Model, typename Reward>
-            void execute_dummy(const Policy& policy, const Model& model, const Reward& world, double T, std::vector<double>& R, bool display = true) const
+            void execute_dummy(const Policy& policy, const Model& model, const Reward& world, double T, std::vector<double>& R, bool display = true)
             {
+                std::vector<Eigen::VectorXd> states, commands;
+
                 double dt = Params::blackdrops::dt();
                 R = std::vector<double>();
                 // init state
@@ -125,11 +127,15 @@ namespace blackdrops {
 
                 Eigen::VectorXd init = this->transform_state(init_diff);
 
+                states.push_back(init_diff);
+
                 for (double t = 0.0; t <= T; t += dt) {
                     Eigen::VectorXd query_vec(Params::blackdrops::model_input_dim() + Params::blackdrops::action_dim());
                     Eigen::VectorXd u = policy.next(init);
                     query_vec.head(Params::blackdrops::model_input_dim()) = init;
                     query_vec.tail(Params::blackdrops::action_dim()) = u;
+
+                    commands.push_back(u);
 
                     Eigen::VectorXd mu;
                     Eigen::VectorXd sigma;
@@ -140,9 +146,14 @@ namespace blackdrops {
                     double r = world(init_diff, u, final);
                     R.push_back(r);
 
+                    states.push_back(final);
+
                     init_diff = final;
                     init = this->transform_state(init_diff);
                 }
+
+                _last_dummy_states = states;
+                _last_dummy_commands = commands;
             }
 
             template <typename Policy, typename Model, typename Reward>
@@ -213,6 +224,18 @@ namespace blackdrops {
                 return _last_commands;
             }
 
+            // get states from last dummy execution
+            std::vector<Eigen::VectorXd> get_last_dummy_states() const
+            {
+                return _last_dummy_states;
+            }
+
+            // get commands from lastd ummy execution
+            std::vector<Eigen::VectorXd> get_last_dummy_commands() const
+            {
+                return _last_dummy_commands;
+            }
+
             // you should override this, to define how your simulated robot_dart::Robot will be constructed
             virtual std::shared_ptr<robot_dart::Robot> get_robot() const = 0;
 
@@ -221,6 +244,7 @@ namespace blackdrops {
 
         protected:
             std::vector<Eigen::VectorXd> _last_states, _last_commands;
+            std::vector<Eigen::VectorXd> _last_dummy_states, _last_dummy_commands;
         };
 
         template <typename Params, typename Policy>
@@ -247,6 +271,7 @@ namespace blackdrops {
 
                 _prev_time = 0.0;
                 _t = 0.0;
+                _first = true;
 
                 _policy.set_params(Eigen::VectorXd::Map(ctrl.data(), ctrl.size()));
 
@@ -264,7 +289,7 @@ namespace blackdrops {
             {
                 double dt = Params::blackdrops::dt();
 
-                if (_t == 0.0 || (_t - _prev_time) >= dt) {
+                if (_first || (_t - _prev_time - dt) > -Params::dart_system::sim_step() / 2.0) {
                     Eigen::VectorXd commands = _policy.next(this->get_state(_robot, true));
                     Eigen::VectorXd q = this->get_state(_robot, false);
                     _states.push_back(q);
@@ -274,6 +299,7 @@ namespace blackdrops {
                     _robot->skeleton()->setCommands(commands);
                     _prev_commands = commands;
                     _prev_time = _t;
+                    _first = false;
                 }
                 else
                     _robot->skeleton()->setCommands(_prev_commands);
@@ -294,6 +320,7 @@ namespace blackdrops {
         protected:
             double _prev_time;
             double _t;
+            bool _first;
             Eigen::VectorXd _prev_commands;
             Policy _policy;
             std::vector<Eigen::VectorXd> _coms;

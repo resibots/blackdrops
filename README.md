@@ -29,6 +29,7 @@ Black-DROPS is funded by the ResiBots ERC Project (http://www.resibots.eu).
 ### How to properly clone this repo
 
 - Clone the repo *recursively*: `git clone --recursive https://github.com/resibots/blackdrops.git` (or `git clone --recursive git@github.com:resibots/blackdrops.git`)
+- If you follow the [advanced installation](docs/advanced_installation.md), you do not necessarily need to clone recursively the repository.
 
 ### What you should expect from Black-DROPS
 
@@ -57,7 +58,7 @@ In short, you should:
 
 ### Using the code
 
-Please look at the [installation guide](docs/installation.md). You will find detailed guidelines on how to properly install all the dependencies, compile the Black-DROPS code and run scenarios.
+Please look at the [installation guide](docs/installation.md). You will find detailed guidelines on how to properly install all the dependencies, compile the Black-DROPS code and run scenarios. There is also an [advanced installation guide](docs/advanced_installation.md) which is recommended for users experienced with build systems and command line usage.
 
 ### Already implemented scenarios
 

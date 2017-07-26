@@ -157,6 +157,10 @@ The last part is to define how many random trials and how many learning episodes
 
 #### Compiling and running your scenario
 
+**Using the provided scripts**
+
+This requires that you have installed everything using the scripts.
+
 You should now do the following:
 
 - `cd /path/to/repo/root` **(this is very important as the scripts assume that you are in the root of the repo)**
@@ -171,6 +175,16 @@ If there's no error, you should be able to run your scenario:
 You should now watch your planar arm learning to reach a point using the Black-DROPS algorithm. Good scores are values >= -25.
 
 For more detailed explanation of the command line arguments run: `./deps/limbo/build/exp/blackdrops/src/tutorials/planar_arm_graphic -h`. If you do not have SDL2 installed, use `planar_arm_simu` instead to run the experiment without graphics.
+
+**For advanced users**
+
+If you have used the advanced installation procedure, then you should do the following:
+
+- `cd /path/to/limbo/folder`
+- `./waf configure --exp blackdrops`
+- `./waf --exp blackdrops -j4`
+
+If there's no error, you should be able to run your scenario: `./build/exp/blackdrops/src/tutorials/planar_arm_graphic -m 5000 -r 5 -n 10 -e 1 -u -b 5`
 
 If you are having trouble with completing some parts of the tutorial, you can check the `src/tutorials/planar_arm_finished.cpp` file.
 
@@ -189,6 +203,7 @@ The Black-DROPS code produces several statistics files:
 - **times.dat** - text file where the i-th line contains the time in seconds the optimization of the policy took in the i-th learning episode
 - **times_model.dat** - text file where the i-th line contains the time in seconds the training of the model took in the i-th learning episode
 - **traj_real_***i***.dat** - text file where the j-th line contains the state/action pair observed at the j-th time step in the i-th execution on the robot (the last action is always zeros as no action was taken in the real system)
+- **traj_dummy_***i***.dat** - text file where the j-th line contains the state/action pair observed at the j-th time step in the i-th execution on the dummy model (the last action is always zeros as no action was taken -- the dummy model is ran once every optimization of the policy)
 
 ### Where to put the files of my new scenario
 

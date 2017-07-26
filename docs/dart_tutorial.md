@@ -326,6 +326,10 @@ Around 2 random trials and 15 learning episodes should be enough to learn the ta
 
 #### Compiling and running your scenario
 
+**Using the provided scripts**
+
+This requires that you have installed everything using the scripts.
+
 You should now do the following:
 
 - `cd /path/to/repo/root` **(this is very important as the scripts assume that you are in the root of the repo)**
@@ -340,6 +344,16 @@ If there's no error, you should be able to run your scenario:
 You should now watch this simple robot trying to reach the target location. The task is considered solved for cumulative rewards >= -1. One minor remark is that this scenario can take quite some time between each episode (depending on your CPU capabilities).
 
 For more detailed explanation of the command line arguments run: `./deps/limbo/build/exp/blackdrops/src/tutorials/dart_reacher2d_graphic -h`. If you do not have OpenSceneGraph installed, use `dart_reacher2d_simu` instead to run the experiment without graphics.
+
+**For advanced users**
+
+If you have used the advanced installation procedure, then you should do the following:
+
+- `cd /path/to/limbo/folder`
+- `./waf configure --exp blackdrops`
+- `./waf --exp blackdrops -j4`
+
+If there's no error, you should be able to run your scenario: `./build/exp/blackdrops/src/tutorials/dart_reacher2d_graphic -n 10 -m 5000 -e 1 -r 5 -b 1 -u`
 
 ### Where to put the files of my new DART-based scenario
 

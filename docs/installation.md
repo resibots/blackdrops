@@ -1,6 +1,6 @@
 ## Installation of Black-DROPS code
 
-Since Black-DROPS is a `limbo` experiment (check the [docs](http://www.resibots.eu/limbo/index.html) of limbo for details), there needs to be no installation. Nevertheless, the dependencies must be installed.
+Since Black-DROPS is a `limbo` experiment (check the [docs](http://www.resibots.eu/limbo/index.html) of limbo for details), there needs to be no installation. Nevertheless, the dependencies must be installed. We provide scripts for easy installation of the dependencies, configuration and compilation of the source code on Ubuntu-based and OSX systems. If you need a more controlled installation of the dependencies and/or configuration/compilation, please check the [advanced installation tutorial](advanced_installation.md) (this is recommended for users experienced with building systems and command line usage).
 
 ### How to properly clone this repo
 
@@ -9,7 +9,7 @@ Since Black-DROPS is a `limbo` experiment (check the [docs](http://www.resibots.
 ### Dependencies
 
 #### Required
-- Ubuntu (it should work on versions >= 14.04)
+- Ubuntu (it should work on versions >= 14.04) or OSX
 - limbo, https://github.com/resibots/limbo (for high-performing Gaussian process regression)
 - libcmaes, https://github.com/beniz/libcmaes (for high-quality implementations of CMA-ES variants) --- recommended to use with TBB
 - Eigen3 (needed by limbo and libcmaes)
@@ -28,10 +28,14 @@ Some of the dependencies (libcmaes, DART, NLOpt, robot\_dart) require specific i
 
 #### Install the recommended dependencies
 
+**This only works for Ubuntu systems.**
+
 - `cd /path/to/repo/root` **(this is very important as the script assumes that you are in the root of the repo)**
 - `./scripts/install_deps.sh`
 
 #### Install all the dependencies
+
+**This only works for Ubuntu systems.**
 
 - `cd /path/to/repo/root` **(this is very important as the script assumes that you are in the root of the repo)**
 - `./scripts/install_deps_all.sh`
@@ -41,7 +45,7 @@ Some of the dependencies (libcmaes, DART, NLOpt, robot\_dart) require specific i
 - `cd /path/to/repo/root` **(this is very important as the script assumes that you are in the root of the repo)**
 - `./scripts/install_deps_req.sh`
 
-Using the scripts, all of the custom dependencies (limbo, libcmaes, DART, NLOpt, robot\_dart) will be installed in `/path/to/repo/root/install` in order not to pollute your linux distribution. As such, you should update your `LD_LIBRARY_PATH` (or you can source the proper script --- see below). Consequently no `sudo` is required for these dependencies; nevertheless, `sudo` is still required for installing standard packages (like boost-dev packages, libeigen3-dev, etc). 
+Using the scripts, all of the custom dependencies (limbo, libcmaes, DART, NLOpt, robot\_dart) will be installed in `/path/to/repo/root/install` in order not to pollute your linux distribution. As such, you should update your `LD_LIBRARY_PATH` (or you can source the proper script --- see below). Consequently no `sudo` is required for these dependencies; nevertheless, `sudo` is still required for installing standard packages (like boost-dev packages, libeigen3-dev, etc).
 
 ### Compilation
 
@@ -51,8 +55,7 @@ As the Black-DROPS code is a `limbo` experiment and can sometimes be a bit trick
 - `./scripts/configure.sh`
 - `./scripts/compile.sh`
 
-And then every time you make a change to a source file (*\*.hpp or \*.cpp*), you should re-run the compilation script. If you want to know in more detail how to compile limbo experiments (i.e, not with the scripts), please check the quite extensive [documentation](http://www.resibots.eu/limbo/index.html) of limbo.
-<!--In addition, if you want more fine-tuned compilation of your own scenarios, please check the [advanced tutorial](here).-->
+And then every time you make a change to a source file (*\*.hpp or \*.cpp*), you should re-run the compilation script. If you want to know in more detail how to compile limbo experiments (i.e, not with the scripts), please check the quite extensive [documentation](http://www.resibots.eu/limbo/index.html) of limbo. In addition, if you want more fine-tuned compilation of your own scenarios, please check the [advanced installation tutorial](advanced_installation.md).
 
 ### Running scenarios
 

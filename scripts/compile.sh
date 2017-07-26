@@ -12,3 +12,5 @@ cd deps/limbo
 
 # go back to original directory
 cd ../..
+
+echo "Do not forget to source scripts/paths.sh to run an experiment"
