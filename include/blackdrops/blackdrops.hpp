@@ -308,7 +308,6 @@ namespace blackdrops {
 
         std::tuple<Eigen::VectorXd, Eigen::VectorXd> get_accuracy(double perc = 0.75) const
         {
-            // TO-DO: Fix this
             // get data
             int sample_size = _observations.size();
             int training_size = perc * sample_size;
@@ -346,7 +345,7 @@ namespace blackdrops {
 
                 Eigen::VectorXd mu, sigma;
                 std::tie(mu, sigma) = model.predictm(s);
-                errors.array() += (mu - pred).norm();
+                errors.array() += (mu - pred).array().square().sqrt();
                 sigmas.array() += sigma.array();
             }
 
