@@ -59,7 +59,6 @@
 
 #if defined(USE_SDL) && !defined(NODSP)
 #include <SDL2/SDL.h>
-#include <SDL2/SDL_image.h>
 
 //Screen dimension constants
 const int SCREEN_WIDTH = 640;
