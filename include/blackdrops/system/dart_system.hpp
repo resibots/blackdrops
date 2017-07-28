@@ -120,7 +120,7 @@ namespace blackdrops {
             {
                 std::vector<Eigen::VectorXd> states, commands;
 
-                double dt = Params::blackdrops::dt();
+                int H = std::ceil(Params::blackdrops::T() / Params::blackdrops::dt());
                 R = std::vector<double>();
                 // init state
                 Eigen::VectorXd init_diff = this->init_state();
@@ -129,7 +129,7 @@ namespace blackdrops {
 
                 states.push_back(init_diff);
 
-                for (double t = 0.0; t <= T; t += dt) {
+                for (int i = 0; i < H; i++) {
                     Eigen::VectorXd query_vec(Params::blackdrops::model_input_dim() + Params::blackdrops::action_dim());
                     Eigen::VectorXd u = policy.next(init);
                     query_vec.head(Params::blackdrops::model_input_dim()) = init;
@@ -159,14 +159,14 @@ namespace blackdrops {
             template <typename Policy, typename Model, typename Reward>
             double predict_policy(const Policy& policy, const Model& model, const Reward& world, double T) const
             {
-                double dt = Params::blackdrops::dt();
+                int H = std::ceil(Params::blackdrops::T() / Params::blackdrops::dt());
                 double reward = 0.0;
                 // init state
                 Eigen::VectorXd init_diff = this->init_state();
 
                 Eigen::VectorXd init = this->transform_state(init_diff);
 
-                for (double t = 0.0; t <= T; t += dt) {
+                for (int i = 0; i < H; i++) {
                     Eigen::VectorXd query_vec(Params::blackdrops::model_input_dim() + Params::blackdrops::action_dim());
                     Eigen::VectorXd u = policy.next(init);
                     query_vec.head(Params::blackdrops::model_input_dim()) = init;
