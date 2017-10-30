@@ -182,7 +182,7 @@ namespace blackdrops {
             _ofs_esti << std::endl;
         }
 
-        void learn(size_t init, size_t iterations, bool random_policies = false)
+        void learn(size_t init, size_t iterations, bool random_policies = false, const std::string& policy_file = "")
         {
             _boundary = Params::blackdrops::boundary();
             _random_policies = random_policies;
@@ -197,12 +197,19 @@ namespace blackdrops {
 
 #ifdef MEAN
             _random_policies = true;
-            Eigen::VectorXd pp = limbo::tools::random_vector(_policy.params().size()).array() * 2.0 * _boundary - _boundary;
-            _policy.set_params(pp);
-            _params_starting = pp;
-            optimize_policy(0);
-            _params_starting = _policy.params();
-            optimize_policy(0);
+            if (policy_file == "") {
+                Eigen::VectorXd pp = limbo::tools::random_vector(_policy.params().size()).array() * 2.0 * _boundary - _boundary;
+                _policy.set_params(pp);
+                _params_starting = pp;
+                optimize_policy(0);
+                _params_starting = _policy.params();
+                optimize_policy(0);
+            }
+            else {
+                Eigen::VectorXd params;
+                Eigen::read_binary(policy_file, params);
+                _policy.set_params(params);
+            }
             _ofs_traj_real.open("traj_real_0.dat");
             execute_and_record_data();
             _ofs_traj_real.close();

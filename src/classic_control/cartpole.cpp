@@ -204,7 +204,9 @@ struct Params {
     };
 
     struct opt_nloptnograd : public limbo::defaults::opt_nloptnograd {
-        BO_PARAM(int, iterations, 100);
+        BO_PARAM(int, iterations, 1000);
+        BO_PARAM(double, fun_tolerance, 1e-4);
+        BO_PARAM(double, xrel_tolerance, 1e-4);
     };
 
     struct mean_function {

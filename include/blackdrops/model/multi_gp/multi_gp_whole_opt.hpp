@@ -70,13 +70,16 @@ namespace blackdrops {
                         for (auto gp : gps) {
                             long double lik = gp.compute_log_lik();
 
-                            lik_all += std::exp(-lik);
+                            // lik_all += std::exp(-lik);
+                            lik_all += std::exp(lik); //(1. / lik);
                             if (!compute_grad)
                                 continue;
                         }
 
                         // std::cout << -std::log(lik_all) << " vs " << (initial_params - params).squaredNorm() << std::endl;
-                        lik_all = -std::log(lik_all); // - (initial_params - params).norm();
+                        // lik_all = -std::log(lik_all); // - (initial_params - params).norm();
+                        // lik_all = 1. / lik_all;
+                        lik_all = std::log(lik_all);
 
                         if (!compute_grad)
                             return limbo::opt::no_grad(lik_all);

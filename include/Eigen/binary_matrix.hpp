@@ -42,8 +42,8 @@
 #ifndef EIGEN_BINARY_MATRIX
 #define EIGEN_BINARY_MATRIX
 
-#include <fstream>
 #include <cmath>
+#include <fstream>
 
 namespace Eigen {
     template <class Matrix>
