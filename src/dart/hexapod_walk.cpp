@@ -637,6 +637,8 @@ int main(int argc, char** argv)
     bool verbose = false;
     int threads = tbb::task_scheduler_init::automatic;
     int broken_leg = -1;
+    std::string policy_file = "";
+
     namespace po = boost::program_options;
     po::options_description desc("Command line arguments");
     // clang-format off
@@ -648,7 +650,8 @@ int main(int argc, char** argv)
                       ("uncertainty,u", po::bool_switch(&uncertainty)->default_value(false), "Enable uncertainty handling.")
                       ("threads,d", po::value<int>(), "Max number of threads used by TBB")
                       ("damage,p", po::value<int>(), "Leg to be shortened [0-5]")
-                      ("verbose,v", po::bool_switch(&verbose)->default_value(false), "Enable verbose mode.");
+                      ("verbose,v", po::bool_switch(&verbose)->default_value(false), "Enable verbose mode.")
+                      ("policy", po::value<std::string>(), "Path to load policy file");
     // clang-format on
 
     try {
@@ -667,6 +670,10 @@ int main(int argc, char** argv)
 
         if (vm.count("damage")) {
             broken_leg = vm["damage"].as<int>();
+        }
+
+        if (vm.count("policy")) {
+            policy_file = vm["policy"].as<std::string>();
         }
 
         // Cmaes parameters
@@ -748,7 +755,7 @@ int main(int argc, char** argv)
 
     blackdrops::BlackDROPS<Params, MGP_t, Hexapod, FakePolicy, policy_opt_t, RewardFunction> hexa_system;
 
-    hexa_system.learn(1, 10, true);
+    hexa_system.learn(1, 10, true, policy_file);
 
     return 0;
 }
