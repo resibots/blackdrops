@@ -10,10 +10,24 @@
 #|   - Rituraj Kaushik (rituraj.kaushik@inria.fr)
 #|   - Roberto Rama (bertoski@gmail.com)
 #|
-#| This software is a computer library whose purpose is to optimize continuous,
-#| black-box functions. It mainly implements Gaussian processes and Bayesian
-#| optimization.
+#| This software is the implementation of the Black-DROPS algorithm, which is
+#| a model-based policy search algorithm with the following main properties:
+#|   - uses Gaussian processes (GPs) to model the dynamics of the robot/system
+#|   - takes into account the uncertainty of the dynamical model when
+#|                                                      searching for a policy
+#|   - is data-efficient or sample-efficient; i.e., it requires very small
+#|     interaction time with the system to find a working policy (e.g.,
+#|     around 16-20 seconds to learn a policy for the cart-pole swing up task)
+#|   - when several cores are available, it can be faster than analytical
+#|                                                    approaches (e.g., PILCO)
+#|   - it imposes no constraints on the type of the reward function (it can
+#|                                                  also be learned from data)
+#|   - it imposes no constraints on the type of the policy representation
+#|     (any parameterized policy can be used --- e.g., dynamic movement
+#|                                              primitives or neural networks)
+#|
 #| Main repository: http://github.com/resibots/blackdrops
+#| Preprint: https://arxiv.org/abs/1703.07261
 #|
 #| This software is governed by the CeCILL-C license under French law and
 #| abiding by the rules of distribution of free software.  You can  use,

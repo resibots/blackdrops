@@ -53,30 +53,95 @@
 //| The fact that you are presently reading this means that you have had
 //| knowledge of the CeCILL-C license and that you accept its terms.
 //|
-#ifndef UTILS_UTILS_HPP
-#define UTILS_UTILS_HPP
+#ifndef BLACKDROPS_MI_MODEL_HPP
+#define BLACKDROPS_MI_MODEL_HPP
 
-#include <random>
+#include <Eigen/binary_matrix.hpp>
 
-template <typename T>
-inline T gaussian_rand(T m = 0.0, T v = 1.0)
-{
-    static std::random_device rd;
-    static std::mt19937 gen(rd());
+namespace blackdrops {
+    template <typename Params, typename MeanFunction, typename Optimizer>
+    class MIModel {
+    public:
+        MIModel() { _init = false; }
 
-    std::normal_distribution<T> gaussian(m, v);
+        void learn(const std::vector<std::tuple<Eigen::VectorXd, Eigen::VectorXd, Eigen::VectorXd>>& observations, bool only_limits = false)
+        {
+            std::vector<Eigen::VectorXd> samples, observs;
+            for (size_t i = 0; i < observations.size(); i++) {
+                Eigen::VectorXd st, act, pred;
+                st = std::get<0>(observations[i]);
+                act = std::get<1>(observations[i]);
+                pred = std::get<2>(observations[i]);
 
-    return gaussian(gen);
-}
+                Eigen::VectorXd s(st.size() + act.size());
+                s.head(st.size()) = st;
+                s.tail(act.size()) = act;
 
-inline double angle_dist(double a, double b)
-{
-    double theta = b - a;
-    while (theta < -M_PI)
-        theta += 2 * M_PI;
-    while (theta > M_PI)
-        theta -= 2 * M_PI;
-    return theta;
+                samples.push_back(s);
+                observs.push_back(pred);
+            }
+
+            _samples = samples;
+            _observations = observs;
+
+            if (!_init) {
+                _mean = MeanFunction(_samples[0].size());
+                _init = true;
+            }
+
+            Optimizer optimizer;
+            Eigen::VectorXd best_params = optimizer(std::bind(&MIModel::_optimize_model, this, std::placeholders::_1, std::placeholders::_2), _mean.h_params(), true);
+
+            std::cout << "Mean: " << best_params.transpose() << std::endl;
+
+            _mean.set_h_params(best_params);
+        }
+
+        void save_data(const std::string& filename) const
+        {
+            std::ofstream ofs_data(filename);
+            for (size_t i = 0; i < _samples.size(); ++i) {
+                if (i != 0)
+                    ofs_data << std::endl;
+                for (size_t j = 0; j < _samples[0].size(); ++j) {
+                    ofs_data << _samples[i](j) << " ";
+                }
+                for (size_t j = 0; j < _observations[0].size(); ++j) {
+                    ofs_data << _observations[i](j) << " ";
+                }
+            }
+        }
+
+        std::tuple<Eigen::VectorXd, Eigen::VectorXd> predictm(const Eigen::VectorXd& x) const
+        {
+            Eigen::VectorXd mu = _mean(x, x);
+            Eigen::VectorXd ss = Eigen::VectorXd::Zero(mu.size());
+
+            return std::make_tuple(mu, ss);
+        }
+
+    protected:
+        std::vector<Eigen::VectorXd> _samples, _observations;
+        MeanFunction _mean;
+        bool _init;
+
+        limbo::opt::eval_t _optimize_model(const Eigen::VectorXd& params, bool eval_grad = false) const
+        {
+            assert(_samples.size());
+            MeanFunction mean(_samples[0].size());
+            mean.set_h_params(params);
+
+            double mse = 0.;
+            for (size_t i = 0; i < _samples.size(); i++) {
+                Eigen::VectorXd mu = mean(_samples[i], _samples[i]);
+                Eigen::VectorXd val = _observations[i];
+
+                mse += (mu - val).squaredNorm();
+            }
+
+            return limbo::opt::no_grad(-mse);
+        }
+    };
 }
 
 #endif

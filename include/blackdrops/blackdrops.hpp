@@ -8,10 +8,24 @@
 //|   - Rituraj Kaushik (rituraj.kaushik@inria.fr)
 //|   - Roberto Rama (bertoski@gmail.com)
 //|
-//| This software is a computer library whose purpose is to optimize continuous,
-//| black-box functions. It mainly implements Gaussian processes and Bayesian
-//| optimization.
+//| This software is the implementation of the Black-DROPS algorithm, which is
+//| a model-based policy search algorithm with the following main properties:
+//|   - uses Gaussian processes (GPs) to model the dynamics of the robot/system
+//|   - takes into account the uncertainty of the dynamical model when
+//|                                                      searching for a policy
+//|   - is data-efficient or sample-efficient; i.e., it requires very small
+//|     interaction time with the system to find a working policy (e.g.,
+//|     around 16-20 seconds to learn a policy for the cart-pole swing up task)
+//|   - when several cores are available, it can be faster than analytical
+//|                                                    approaches (e.g., PILCO)
+//|   - it imposes no constraints on the type of the reward function (it can
+//|                                                  also be learned from data)
+//|   - it imposes no constraints on the type of the policy representation
+//|     (any parameterized policy can be used --- e.g., dynamic movement
+//|                                              primitives or neural networks)
+//|
 //| Main repository: http://github.com/resibots/blackdrops
+//| Preprint: https://arxiv.org/abs/1703.07261
 //|
 //| This software is governed by the CeCILL-C license under French law and
 //| abiding by the rules of distribution of free software.  You can  use,
@@ -182,7 +196,7 @@ namespace blackdrops {
             _ofs_esti << std::endl;
         }
 
-        void learn(size_t init, size_t iterations, bool random_policies = false)
+        void learn(size_t init, size_t iterations, bool random_policies = false, const std::string& policy_file = "")
         {
             _boundary = Params::blackdrops::boundary();
             _random_policies = random_policies;
@@ -197,12 +211,19 @@ namespace blackdrops {
 
 #ifdef MEAN
             _random_policies = true;
-            Eigen::VectorXd pp = limbo::tools::random_vector(_policy.params().size()).array() * 2.0 * _boundary - _boundary;
-            _policy.set_params(pp);
-            _params_starting = pp;
-            optimize_policy(0);
-            _params_starting = _policy.params();
-            optimize_policy(0);
+            if (policy_file == "") {
+                Eigen::VectorXd pp = limbo::tools::random_vector(_policy.params().size()).array() * 2.0 * _boundary - _boundary;
+                _policy.set_params(pp);
+                _params_starting = pp;
+                optimize_policy(0);
+                _params_starting = _policy.params();
+                optimize_policy(0);
+            }
+            else {
+                Eigen::VectorXd params;
+                Eigen::read_binary(policy_file, params);
+                _policy.set_params(params);
+            }
             _ofs_traj_real.open("traj_real_0.dat");
             execute_and_record_data();
             _ofs_traj_real.close();
