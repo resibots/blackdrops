@@ -88,7 +88,7 @@ struct Params {
         BO_PARAM(size_t, model_pred_dim, 4);
         // BO_PARAM(double, dt, 0.1);
         // BO_PARAM(double, T, 3.0);
-        BO_PARAM(double, dt, 0.01);
+        BO_PARAM(double, dt, 0.02);
         BO_PARAM(double, T, 0.5);
         BO_DYN_PARAM(double, boundary);
         BO_DYN_PARAM(bool, verbose);
@@ -152,7 +152,7 @@ struct PolicyParams {
         BO_PARAM(size_t, action_dim, Params::blackdrops::action_dim());
         // BO_PARAM_ARRAY(double, max_u, 10.0, 10.0);
         // BO_PARAM_ARRAY(double, limits, 10., 10., 1.0, 1.0, 1.0, 1.0);
-        BO_PARAM_ARRAY(double, max_u, 50.0, 50.0);
+        BO_PARAM_ARRAY(double, max_u, 200.0, 200.0);
         BO_PARAM_ARRAY(double, limits, 30., 70., 1.0, 1.0, 1.0, 1.0);
         BO_DYN_PARAM(int, hidden_neurons);
         BO_PARAM(double, af, 1.0);
@@ -166,6 +166,10 @@ struct RewardParams {
     };
 
     struct kernel_squared_exp_ard : public limbo::defaults::kernel_squared_exp_ard {
+    };
+
+    struct mean_constant {
+        BO_PARAM(double, constant, -1.);
     };
 
     struct opt_rprop : public limbo::defaults::opt_rprop {
@@ -187,7 +191,7 @@ namespace global {
     Eigen::VectorXd goal(3);
 
     using kernel_t = limbo::kernel::SquaredExpARD<RewardParams>;
-    using mean_t = limbo::mean::Data<RewardParams>;
+    using mean_t = limbo::mean::Constant<RewardParams>;
 
     using GP_t = limbo::model::GP<RewardParams, kernel_t, mean_t, blackdrops::model::gp::KernelLFOpt<RewardParams>>;
     GP_t reward_gp(4, 1);
@@ -241,9 +245,10 @@ struct ActualReward {
         Eigen::VectorXd eef = bd->getTransform().translation();
         // double s_c_sq = 0.2 * 0.2;
         double dee = (eef - global::goal).norm();
+        double a = (action.array() / 200.0).square().sum();
 
         // return std::exp(-0.5 / s_c_sq * dee);
-        return -dee;
+        return -dee - a;
         //  - action.squaredNorm() / (2. * PolicyParams::nn_policy::max_u(0) * PolicyParams::nn_policy::max_u(0));
     }
 };
@@ -286,6 +291,7 @@ struct DARTReacher : public blackdrops::system::DARTSystem<Params, PolicyControl
     Eigen::VectorXd transform_state(const Eigen::VectorXd& original_state) const
     {
         Eigen::VectorXd ret = Eigen::VectorXd::Zero(Params::blackdrops::model_input_dim());
+        ret.head(2) = original_state.head(2);
         for (int j = 0; j < 2; j++) {
             ret(2 + 2 * j) = std::cos(original_state(j + 2));
             ret(2 + 2 * j + 1) = std::sin(original_state(j + 2));
@@ -338,17 +344,22 @@ struct DARTReacher : public blackdrops::system::DARTSystem<Params, PolicyControl
         std::vector<std::tuple<Eigen::VectorXd, Eigen::VectorXd, Eigen::VectorXd>> ret = blackdrops::system::DARTSystem<Params, PolicyControl>::execute(policy, actual_reward, T, R, display);
 
         std::vector<Eigen::VectorXd> states = this->get_last_states();
-        // std::vector<Eigen::VectorXd> coms = this->get_last_commands();
+        std::vector<Eigen::VectorXd> coms = this->get_last_commands();
 
         for (size_t i = 0; i < R.size(); i++) {
             double r = R[i];
             Eigen::VectorXd final = states[i + 1];
+            Eigen::VectorXd action = coms[i];
+
+            Eigen::VectorXd vec(4);
+            vec.head(2) = final.tail(2);
+            vec.tail(2) = action;
             // Eigen::VectorXd com = coms[i];
             // Eigen::VectorXd vec(final.size() + com.size());
             // vec.head(final.size()) = final;
             // vec.tail(com.size()) = com;
             // std::cout << com.transpose() << std::endl;
-            global::reward_gp.add_sample(final, limbo::tools::make_vector(r));
+            global::reward_gp.add_sample(vec, limbo::tools::make_vector(r));
         }
 
         global::reward_gp.optimize_hyperparams();
@@ -356,22 +367,23 @@ struct DARTReacher : public blackdrops::system::DARTSystem<Params, PolicyControl
 
         // Dump rewards
         int eval = 1000;
-        Eigen::VectorXd limits(4);
-        limits << 10., 10., M_PI, M_PI;
+        Eigen::VectorXd limits(6);
+        limits << 10., 10., M_PI, M_PI, 200., 200.;
         std::vector<Eigen::VectorXd> rvs = random_vectors(limits.size(), eval, limits);
         // std::vector<Eigen::VectorXd> rvs = global::reward_gp.samples();
 
         double mse = 0.0;
         std::ofstream ofs("reward_" + std::to_string(n_iter) + ".dat");
         for (size_t i = 0; i < rvs.size(); i++) {
-            Eigen::VectorXd to_state = rvs[i];
+            Eigen::VectorXd to_state = rvs[i].head(4);
+            Eigen::VectorXd action = rvs[i].tail(2);
             // Eigen::VectorXd eef = get_eef(to_state);
             // double de = (eef - global::goal).norm();
             // ofs<<"0 0 0 ";
             for (int j = 0; j < to_state.size(); j++)
                 ofs << to_state[j] << " ";
-            double r_b = world(to_state, to_state, to_state, true);
-            double r_w = actual_reward(to_state, to_state, to_state);
+            double r_b = world(to_state, action, to_state, true);
+            double r_w = actual_reward(to_state, action, to_state);
             ofs << r_b << " " << r_w << std::endl;
             mse += (r_b - r_w) * (r_b - r_w);
         }
@@ -388,10 +400,10 @@ struct RewardFunction {
     {
         Eigen::VectorXd mu;
         double s;
-        // Eigen::VectorXd vec(to_state.size() + action.size());
-        // vec.head(to_state.size()) = to_state;
-        // vec.tail(action.size()) = action;
-        std::tie(mu, s) = global::reward_gp.query(to_state);
+        Eigen::VectorXd vec(2 + action.size());
+        vec.head(2) = to_state.tail(2);
+        vec.tail(action.size()) = action;
+        std::tie(mu, s) = global::reward_gp.query(vec);
         if (certain || !Params::opt_cmaes::handle_uncertainty())
             return mu(0);
 
