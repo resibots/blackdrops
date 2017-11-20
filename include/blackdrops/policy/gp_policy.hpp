@@ -69,7 +69,7 @@ namespace blackdrops {
             BO_PARAM(double, pseudo_samples, 10);
             BO_PARAM(double, noise, 0.01);
         };
-    }
+    } // namespace defaults
 
     namespace policy {
         template <typename Params>
@@ -86,12 +86,6 @@ namespace blackdrops {
                 _adim = Params::gp_policy::action_dim();
                 _ps = Params::gp_policy::pseudo_samples();
                 _params = Eigen::VectorXd::Zero(_ps * _sdim + _adim * (_ps + _sdim));
-                _limits = Eigen::VectorXd::Constant(Params::gp_policy::state_dim(), 1.0);
-
-                // Get the limits
-                for (int i = 0; i < _limits.size(); i++) {
-                    _limits(i) = Params::gp_policy::limits(i);
-                }
             }
 
             Eigen::VectorXd next(const Eigen::VectorXd& state) const
@@ -105,7 +99,7 @@ namespace blackdrops {
                 }
 
                 //--- Query the GPs with state
-                Eigen::VectorXd nstate = state.array() / _limits.array();
+                Eigen::VectorXd nstate = state;
                 Eigen::VectorXd action(_adim);
                 tbb::parallel_for(size_t(0), _adim, size_t(1), [&](size_t i) {
                     Eigen::VectorXd a = _gp_policies[i].mu(nstate);
@@ -147,7 +141,7 @@ namespace blackdrops {
                     Eigen::VectorXd ell = _params.segment(_ps * (_sdim + _adim) + j * _sdim, _sdim);
                     Eigen::VectorXd sigma_ell(ell.size() + 1);
                     sigma_ell.head(ell.size()) = ell;
-                    sigma_ell.tail(1) = limbo::tools::make_vector(1.0);
+                    sigma_ell.tail(1) = limbo::tools::make_vector(0.0);
                     ells.push_back(sigma_ell);
 
                     //--- extract pseudo observations
@@ -183,11 +177,7 @@ namespace blackdrops {
             double _boundary;
 
             std::vector<gp_t> _gp_policies;
-
-            Eigen::VectorXd _means;
-            Eigen::MatrixXd _sigmas;
-            Eigen::VectorXd _limits;
         };
-    }
-}
+    } // namespace policy
+} // namespace blackdrops
 #endif

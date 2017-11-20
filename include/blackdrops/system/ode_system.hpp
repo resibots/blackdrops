@@ -240,7 +240,7 @@ namespace blackdrops {
             std::vector<Eigen::VectorXd> _last_states, _last_commands;
             std::vector<Eigen::VectorXd> _last_dummy_states, _last_dummy_commands;
         };
-    }
-}
+    } // namespace system
+} // namespace blackdrops
 
 #endif
