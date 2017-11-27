@@ -254,7 +254,7 @@ struct PolicyParams {
         BO_PARAM_ARRAY(double, max_u, 10.0);
         BO_PARAM(double, pseudo_samples, 10);
         BO_PARAM(double, noise, 0.01 * 0.01);
-        // BO_PARAM_ARRAY(double, limits, 5., 5., 10., 1., 1.);
+        BO_PARAM_ARRAY(double, limits, 5., 5., 10., 1., 1.);
     };
 
     struct kernel : public limbo::defaults::kernel {

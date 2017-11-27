@@ -86,6 +86,13 @@ namespace blackdrops {
                 _adim = Params::gp_policy::action_dim();
                 _ps = Params::gp_policy::pseudo_samples();
                 _params = Eigen::VectorXd::Zero(_ps * _sdim + _adim * (_ps + _sdim));
+
+                _limits = Eigen::VectorXd::Constant(Params::gp_policy::state_dim(), 1.0);
+
+                // Get the limits
+                for (int i = 0; i < _limits.size(); i++) {
+                    _limits(i) = Params::gp_policy::limits(i);
+                }
             }
 
             Eigen::VectorXd next(const Eigen::VectorXd& state) const
@@ -99,7 +106,7 @@ namespace blackdrops {
                 }
 
                 //--- Query the GPs with state
-                Eigen::VectorXd nstate = state;
+                Eigen::VectorXd nstate = state.array() / _limits.array();;
                 Eigen::VectorXd action(_adim);
                 tbb::parallel_for(size_t(0), _adim, size_t(1), [&](size_t i) {
                     Eigen::VectorXd a = _gp_policies[i].mu(nstate);
@@ -177,6 +184,7 @@ namespace blackdrops {
             double _boundary;
 
             std::vector<gp_t> _gp_policies;
+            Eigen::VectorXd _limits;
         };
     } // namespace policy
 } // namespace blackdrops
