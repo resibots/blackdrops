@@ -211,7 +211,7 @@ struct Params {
         BO_DYN_PARAM(bool, handle_uncertainty);
 
 #ifdef SIMPLE_CMAES
-        BO_PARAM(int, variant, aCMAES);
+        BO_PARAM(int, variant, aIPOP_CMAES);
 #else
         BO_PARAM(int, variant, aBIPOP_CMAES);
 #endif
