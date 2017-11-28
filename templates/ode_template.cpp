@@ -134,7 +134,7 @@ void sdl_clean()
 #endif
 
 struct Params {
-    struct blackdrops {
+    struct blackdrops : public ::blackdrops::defaults::blackdrops {
         // TO-CHANGE: Here you should set your parameters
         BO_PARAM(size_t, action_dim, @int_value); // action space # of dimensions
         BO_PARAM(size_t, model_input_dim, @int_value); // transformed input # of dimensions (input to the GPs and policy)

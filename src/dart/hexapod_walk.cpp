@@ -82,7 +82,7 @@ struct Params {
     };
 #endif
 
-    struct blackdrops {
+    struct blackdrops : public ::blackdrops::defaults::blackdrops {
         BO_PARAM(size_t, action_dim, 18);
         BO_PARAM(size_t, model_input_dim, 49);
         BO_PARAM(size_t, model_pred_dim, 49);
@@ -208,7 +208,7 @@ namespace global {
     std::vector<bool> used_robots;
     std::mutex robot_mutex;
     int n_robots = 100;
-}
+} // namespace global
 
 dart::dynamics::SkeletonPtr get_available_robot()
 {

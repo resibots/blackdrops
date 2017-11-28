@@ -84,14 +84,18 @@ struct Params {
 
     struct blackdrops : public ::blackdrops::defaults::blackdrops {
         BO_PARAM(size_t, action_dim, 2);
-        BO_PARAM(size_t, model_input_dim, 6);
-        BO_PARAM(size_t, model_pred_dim, 4);
+        BO_PARAM(size_t, model_input_dim, 8);
+        BO_PARAM(size_t, model_pred_dim, 6);
         // BO_PARAM(double, dt, 0.1);
         // BO_PARAM(double, T, 3.0);
         BO_PARAM(double, dt, 0.02);
         BO_PARAM(double, T, 0.5);
         BO_DYN_PARAM(double, boundary);
         BO_DYN_PARAM(bool, verbose);
+
+        BO_PARAM(bool, stochastic_evaluation, true);
+        BO_PARAM(int, num_evals, 100);
+        BO_PARAM(int, opt_evals, 5);
     };
 
     struct dart_system {
@@ -126,7 +130,7 @@ struct Params {
         BO_DYN_PARAM(int, elitism);
         BO_DYN_PARAM(bool, handle_uncertainty);
 
-        BO_PARAM(int, variant, aBIPOP_CMAES);
+        BO_PARAM(int, variant, aIPOP_CMAES);
         BO_PARAM(bool, verbose, false);
         BO_PARAM(bool, fun_compute_initial, true);
         BO_DYN_PARAM(double, ubound);
@@ -153,7 +157,7 @@ struct PolicyParams {
         // BO_PARAM_ARRAY(double, max_u, 10.0, 10.0);
         // BO_PARAM_ARRAY(double, limits, 10., 10., 1.0, 1.0, 1.0, 1.0);
         BO_PARAM_ARRAY(double, max_u, 200.0, 200.0);
-        BO_PARAM_ARRAY(double, limits, 30., 70., 1.0, 1.0, 1.0, 1.0);
+        BO_PARAM_ARRAY(double, limits, 0.2, 0.2, 30., 70., 1.0, 1.0, 1.0, 1.0);
         BO_DYN_PARAM(int, hidden_neurons);
         BO_PARAM(double, af, 1.0);
     };
@@ -189,12 +193,13 @@ namespace global {
     using policy_t = blackdrops::policy::NNPolicy<PolicyParams>;
 
     Eigen::VectorXd goal(3);
+    std::mutex _goal_mutex;
 
     using kernel_t = limbo::kernel::SquaredExpARD<RewardParams>;
     using mean_t = limbo::mean::Constant<RewardParams>;
 
     using GP_t = limbo::model::GP<RewardParams, kernel_t, mean_t, blackdrops::model::gp::KernelLFOpt<RewardParams>>;
-    GP_t reward_gp(4, 1);
+    GP_t reward_gp(6, 1);
 } // namespace global
 
 Eigen::VectorXd get_robot_state(const std::shared_ptr<robot_dart::Robot>& robot, bool full = false)
@@ -231,7 +236,7 @@ struct ActualReward {
 
         std::vector<double> params(2, 1.0);
         for (int i = 0; i < 2; i++)
-            params[i] = to_state(2 + i);
+            params[i] = to_state(4 + i);
         robot_simu_t simu(params, simulated_robot);
         // Change gravity
         Eigen::VectorXd gravity(3);
@@ -244,7 +249,10 @@ struct ActualReward {
         auto bd = simulated_robot->skeleton()->getBodyNode("link2");
         Eigen::VectorXd eef = bd->getTransform().translation();
         // double s_c_sq = 0.2 * 0.2;
-        double dee = (eef - global::goal).norm();
+        // double dee = (eef - global::goal).norm();
+        Eigen::VectorXd goal(3);
+        goal << to_state(0), 0.01, to_state(1);
+        double dee = (eef - goal).norm();
         double a = (action.array() / 200.0).square().sum();
 
         // return std::exp(-0.5 / s_c_sq * dee);
@@ -253,13 +261,13 @@ struct ActualReward {
     }
 };
 
-Eigen::VectorXd get_random_vector(size_t dim, Eigen::VectorXd bounds)
+Eigen::VectorXd get_random_vector(size_t dim, const Eigen::VectorXd& bounds)
 {
     Eigen::VectorXd rv = (limbo::tools::random_vector(dim).array() * 2 - 1);
     return rv.cwiseProduct(bounds);
 }
 
-std::vector<Eigen::VectorXd> random_vectors(size_t dim, size_t q, Eigen::VectorXd bounds)
+std::vector<Eigen::VectorXd> random_vectors(size_t dim, size_t q, const Eigen::VectorXd& bounds)
 {
     std::vector<Eigen::VectorXd> result(q);
     for (size_t i = 0; i < q; i++) {
@@ -276,7 +284,15 @@ struct PolicyControl : public blackdrops::system::BaseDARTPolicyControl<Params, 
 
     Eigen::VectorXd get_state(const base_t::robot_t& robot, bool full) const
     {
-        return get_robot_state(robot, full);
+        Eigen::VectorXd robot_state = get_robot_state(robot, full);
+        Eigen::VectorXd full_state(2 + robot_state.size());
+
+        global::_goal_mutex.lock();
+        full_state.head(2) << global::goal(0), global::goal(2);
+        global::_goal_mutex.unlock();
+        full_state.tail(robot_state.size()) = robot_state;
+
+        return full_state;
     }
 };
 
@@ -285,16 +301,30 @@ struct DARTReacher : public blackdrops::system::DARTSystem<Params, PolicyControl
 
     Eigen::VectorXd init_state() const
     {
-        return Eigen::VectorXd::Zero(Params::blackdrops::model_pred_dim());
+        // return Eigen::VectorXd::Zero(Params::blackdrops::model_pred_dim());
+        Eigen::VectorXd limits(Params::blackdrops::model_pred_dim());
+        limits << 0.2, 0.2, 0.005, 0.005, 0.1, 0.1;
+
+        Eigen::VectorXd state = get_random_vector(limits.size(), limits);
+        while (state.head(2).norm() >= 2.) {
+            state.head(2) = get_random_vector(2, limits.head(2));
+        }
+
+        global::_goal_mutex.lock();
+        global::goal << state(0), global::goal(1), state(1);
+        global::_goal_mutex.unlock();
+
+        return state;
     }
 
     Eigen::VectorXd transform_state(const Eigen::VectorXd& original_state) const
     {
         Eigen::VectorXd ret = Eigen::VectorXd::Zero(Params::blackdrops::model_input_dim());
-        ret.head(2) = original_state.head(2);
+        int st = 4;
+        ret.head(st) = original_state.head(st);
         for (int j = 0; j < 2; j++) {
-            ret(2 + 2 * j) = std::cos(original_state(j + 2));
-            ret(2 + 2 * j + 1) = std::sin(original_state(j + 2));
+            ret(st + 2 * j) = std::cos(original_state(j + st));
+            ret(st + 2 * j + 1) = std::sin(original_state(j + st));
         }
 
         return ret;
@@ -309,6 +339,7 @@ struct DARTReacher : public blackdrops::system::DARTSystem<Params, PolicyControl
 
     void add_extra_to_simu(base_t::robot_simu_t& simu) const
     {
+        // std::cout << "Goal is: " << global::goal.transpose() << std::endl;
         // Change gravity
         Eigen::VectorXd gravity(3);
         gravity << 0., -9.81, 0.;
@@ -327,7 +358,7 @@ struct DARTReacher : public blackdrops::system::DARTSystem<Params, PolicyControl
         simu.add_skeleton(ground, floor_pose, "fixed");
 
 #ifdef GRAPHIC
-        Eigen::Vector3d camera_pos = Eigen::Vector3d(0., 2., 0.);
+        Eigen::Vector3d camera_pos = Eigen::Vector3d(0., 3., 0.);
         Eigen::Vector3d look_at = Eigen::Vector3d(0., 0., 0.);
         Eigen::Vector3d up = Eigen::Vector3d(0., 1., 0.);
         simu.graphics()->fixed_camera(camera_pos, look_at, up);
@@ -339,57 +370,60 @@ struct DARTReacher : public blackdrops::system::DARTSystem<Params, PolicyControl
     template <typename Policy, typename Reward>
     std::vector<std::tuple<Eigen::VectorXd, Eigen::VectorXd, Eigen::VectorXd>> execute(const Policy& policy, const Reward& world, double T, std::vector<double>& R, bool display = true)
     {
-        static int n_iter = 0;
+        // static int n_iter = 0;
         ActualReward actual_reward;
         std::vector<std::tuple<Eigen::VectorXd, Eigen::VectorXd, Eigen::VectorXd>> ret = blackdrops::system::DARTSystem<Params, PolicyControl>::execute(policy, actual_reward, T, R, display);
 
-        std::vector<Eigen::VectorXd> states = this->get_last_states();
-        std::vector<Eigen::VectorXd> coms = this->get_last_commands();
+        if (display) {
+            std::vector<Eigen::VectorXd> states = this->get_last_states();
+            std::vector<Eigen::VectorXd> coms = this->get_last_commands();
 
-        for (size_t i = 0; i < R.size(); i++) {
-            double r = R[i];
-            Eigen::VectorXd final = states[i + 1];
-            Eigen::VectorXd action = coms[i];
+            for (size_t i = 0; i < R.size(); i++) {
+                double r = R[i];
+                Eigen::VectorXd final = states[i + 1];
+                Eigen::VectorXd action = coms[i];
 
-            Eigen::VectorXd vec(4);
-            vec.head(2) = final.tail(2);
-            vec.tail(2) = action;
-            // Eigen::VectorXd com = coms[i];
-            // Eigen::VectorXd vec(final.size() + com.size());
-            // vec.head(final.size()) = final;
-            // vec.tail(com.size()) = com;
-            // std::cout << com.transpose() << std::endl;
-            global::reward_gp.add_sample(vec, limbo::tools::make_vector(r));
+                Eigen::VectorXd vec(6);
+                vec.head(2) = final.head(2);
+                vec.segment(2, 2) = final.tail(2);
+                vec.tail(2) = action;
+                // Eigen::VectorXd com = coms[i];
+                // Eigen::VectorXd vec(final.size() + com.size());
+                // vec.head(final.size()) = final;
+                // vec.tail(com.size()) = com;
+                // std::cout << com.transpose() << std::endl;
+                global::reward_gp.add_sample(vec, limbo::tools::make_vector(r));
+            }
+
+            global::reward_gp.optimize_hyperparams();
+            std::cout << "Learned the new reward function..." << std::endl;
         }
 
-        global::reward_gp.optimize_hyperparams();
-        std::cout << "Learned the new reward function..." << std::endl;
+        // // Dump rewards
+        // int eval = 1000;
+        // Eigen::VectorXd limits(6);
+        // limits << 10., 10., M_PI, M_PI, 200., 200.;
+        // std::vector<Eigen::VectorXd> rvs = random_vectors(limits.size(), eval, limits);
+        // // std::vector<Eigen::VectorXd> rvs = global::reward_gp.samples();
 
-        // Dump rewards
-        int eval = 1000;
-        Eigen::VectorXd limits(6);
-        limits << 10., 10., M_PI, M_PI, 200., 200.;
-        std::vector<Eigen::VectorXd> rvs = random_vectors(limits.size(), eval, limits);
-        // std::vector<Eigen::VectorXd> rvs = global::reward_gp.samples();
-
-        double mse = 0.0;
-        std::ofstream ofs("reward_" + std::to_string(n_iter) + ".dat");
-        for (size_t i = 0; i < rvs.size(); i++) {
-            Eigen::VectorXd to_state = rvs[i].head(4);
-            Eigen::VectorXd action = rvs[i].tail(2);
-            // Eigen::VectorXd eef = get_eef(to_state);
-            // double de = (eef - global::goal).norm();
-            // ofs<<"0 0 0 ";
-            for (int j = 0; j < to_state.size(); j++)
-                ofs << to_state[j] << " ";
-            double r_b = world(to_state, action, to_state, true);
-            double r_w = actual_reward(to_state, action, to_state);
-            ofs << r_b << " " << r_w << std::endl;
-            mse += (r_b - r_w) * (r_b - r_w);
-        }
-        ofs.close();
-        std::cout << "MSE: " << mse / double(eval) << std::endl;
-        n_iter++;
+        // double mse = 0.0;
+        // std::ofstream ofs("reward_" + std::to_string(n_iter) + ".dat");
+        // for (size_t i = 0; i < rvs.size(); i++) {
+        //     Eigen::VectorXd to_state = rvs[i].head(4);
+        //     Eigen::VectorXd action = rvs[i].tail(2);
+        //     // Eigen::VectorXd eef = get_eef(to_state);
+        //     // double de = (eef - global::goal).norm();
+        //     // ofs<<"0 0 0 ";
+        //     for (int j = 0; j < to_state.size(); j++)
+        //         ofs << to_state[j] << " ";
+        //     double r_b = world(to_state, action, to_state, true);
+        //     double r_w = actual_reward(to_state, action, to_state);
+        //     ofs << r_b << " " << r_w << std::endl;
+        //     mse += (r_b - r_w) * (r_b - r_w);
+        // }
+        // ofs.close();
+        // std::cout << "MSE: " << mse / double(eval) << std::endl;
+        // n_iter++;
 
         return ret;
     }
@@ -400,8 +434,9 @@ struct RewardFunction {
     {
         Eigen::VectorXd mu;
         double s;
-        Eigen::VectorXd vec(2 + action.size());
-        vec.head(2) = to_state.tail(2);
+        Eigen::VectorXd vec(4 + action.size());
+        vec.head(2) = to_state.head(2);
+        vec.segment(2, 2) = to_state.tail(2);
         vec.tail(action.size()) = action;
         std::tie(mu, s) = global::reward_gp.query(vec);
         if (certain || !Params::opt_cmaes::handle_uncertainty())
@@ -422,7 +457,7 @@ void init_simu(const std::string& robot_file)
 
     global::goal = Eigen::Vector3d(0.1, 0.01, -0.1);
 
-    std::cout << "Goal is: " << global::goal.transpose() << std::endl;
+    // std::cout << "Goal is: " << global::goal.transpose() << std::endl;
 }
 
 BO_DECLARE_DYN_PARAM(int, PolicyParams::nn_policy, hidden_neurons);
@@ -565,20 +600,21 @@ int main(int argc, char** argv)
 
     blackdrops::BlackDROPS<Params, MGP_t, DARTReacher, global::policy_t, policy_opt_t, RewardFunction> reacher_system;
 
-    reacher_system.learn(2, 15, true);
+    reacher_system.learn(2, 20, true);
+    // reacher_system.learn(1, 1, true);
 
-    ActualReward actual_reward;
-    std::ofstream ofs("reward_points.dat");
-    for (size_t i = 0; i < global::reward_gp.samples().size(); i++) {
-        Eigen::VectorXd to_state = global::reward_gp.samples()[i];
-        for (int j = 0; j < to_state.size(); j++)
-            ofs << to_state[j] << " ";
-        Eigen::VectorXd mu = global::reward_gp.mu(to_state);
-        double r = actual_reward(to_state, to_state, to_state);
-        ofs << mu(0) << " " << r;
-        ofs << std::endl;
-    }
-    ofs.close();
+    // ActualReward actual_reward;
+    // std::ofstream ofs("reward_points.dat");
+    // for (size_t i = 0; i < global::reward_gp.samples().size(); i++) {
+    //     Eigen::VectorXd to_state = global::reward_gp.samples()[i];
+    //     for (int j = 0; j < to_state.size(); j++)
+    //         ofs << to_state[j] << " ";
+    //     Eigen::VectorXd mu = global::reward_gp.mu(to_state);
+    //     double r = actual_reward(to_state, to_state, to_state);
+    //     ofs << mu(0) << " " << r;
+    //     ofs << std::endl;
+    // }
+    // ofs.close();
 
     return 0;
 }

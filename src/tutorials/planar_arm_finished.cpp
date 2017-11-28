@@ -156,7 +156,7 @@ void sdl_clean()
 #endif
 
 struct Params {
-    struct blackdrops {
+    struct blackdrops : public ::blackdrops::defaults::blackdrops {
         BO_PARAM(size_t, action_dim, 2);
         BO_PARAM(size_t, model_input_dim, 6);
         BO_PARAM(size_t, model_pred_dim, 4);

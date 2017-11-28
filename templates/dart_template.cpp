@@ -83,7 +83,7 @@ struct Params {
     };
 #endif
 
-    struct blackdrops {
+    struct blackdrops : public ::blackdrops::defaults::blackdrops {
         // TO-CHANGE: Here you should set your parameters
         BO_PARAM(size_t, action_dim, @int_value); // action space # of dimensions
         BO_PARAM(size_t, model_input_dim, @int_value); // transformed input # of dimensions (input to the GPs and policy)
@@ -185,7 +185,7 @@ namespace global {
     using policy_t = blackdrops::policy::NNPolicy<PolicyParams>;
 
     // TO-CHANGE: You may want to define some global helper variables
-}
+} // namespace global
 
 struct PolicyControl : public blackdrops::system::BaseDARTPolicyControl<Params, global::policy_t> {
     using base_t = blackdrops::system::BaseDARTPolicyControl<Params, global::policy_t>;

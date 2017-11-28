@@ -156,7 +156,7 @@ void sdl_clean()
 #endif
 
 struct Params {
-    struct blackdrops {
+    struct blackdrops : public ::blackdrops::defaults::blackdrops {
         BO_PARAM(size_t, action_dim, 1); // @action_dim - here you should fill the dimensions of the action space
         BO_PARAM(size_t, model_input_dim, 1); // @transformed_state - here you should fill the input dimensions to the GPs and the policy
         BO_PARAM(size_t, model_pred_dim, 1); // @state_dim - here you should fill the actual dimensions of the state

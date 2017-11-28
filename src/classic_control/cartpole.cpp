@@ -159,7 +159,7 @@ struct Params {
     BO_PARAM(double, goal_pos_x, 0.0);
     BO_PARAM(double, goal_vel_x, 0.0);
 
-    struct blackdrops {
+    struct blackdrops : public ::blackdrops::defaults::blackdrops {
         BO_PARAM(size_t, action_dim, 1);
         BO_PARAM(size_t, model_input_dim, 5);
         BO_PARAM(size_t, model_pred_dim, 4);

@@ -81,7 +81,7 @@ struct Params {
     };
 #endif
 
-    struct blackdrops {
+    struct blackdrops : public ::blackdrops::defaults::blackdrops {
         BO_PARAM(size_t, action_dim, 4);
         BO_PARAM(size_t, model_input_dim, 8);
         BO_PARAM(size_t, model_pred_dim, 4);
@@ -186,7 +186,7 @@ namespace global {
 
     using GP_t = limbo::model::GP<RewardParams, kernel_t, mean_t, blackdrops::model::gp::KernelLFOpt<RewardParams>>;
     GP_t reward_gp(4, 1);
-}
+} // namespace global
 
 Eigen::VectorXd get_robot_state(const std::shared_ptr<robot_dart::Robot>& robot, bool full = false)
 {

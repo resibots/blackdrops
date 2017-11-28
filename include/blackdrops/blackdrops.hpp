@@ -64,6 +64,14 @@
 
 namespace blackdrops {
 
+    namespace defaults {
+        struct blackdrops {
+            BO_PARAM(bool, stochastic_evaluation, false);
+            BO_PARAM(int, num_evals, 0);
+            BO_PARAM(int, opt_evals, 1);
+        };
+    } // namespace defaults
+
     template <typename Params, typename Model, typename Robot, typename Policy, typename PolicyOptimizer, typename RewardFunction>
     class BlackDROPS {
     public:
@@ -77,7 +85,23 @@ namespace blackdrops {
             // Execute best policy so far on robot
             auto obs_new = _robot.execute(_policy, world, Params::blackdrops::T(), R);
 
-            // Check if it is better than the previous best
+            double r_eval = 0.;
+
+            if (Params::blackdrops::stochastic_evaluation()) {
+                for (int i = 0; i < Params::blackdrops::num_evals(); i++) {
+                    std::vector<double> R_more;
+                    _robot.execute(_policy, world, Params::blackdrops::T(), R_more, false);
+
+                    r_eval += std::accumulate(R_more.begin(), R_more.end(), 0.0);
+                }
+                r_eval /= double(Params::blackdrops::num_evals());
+                std::cout << "Expected Reward: " << r_eval << std::endl;
+            }
+            else {
+                r_eval = std::accumulate(R.begin(), R.end(), 0.0);
+            }
+
+            // Check if it is better than the previous best -- this is only what the algorithm knows
             double r_new = std::accumulate(R.begin(), R.end(), 0.0);
             if (r_new > _best) {
                 _best = r_new;
@@ -92,9 +116,8 @@ namespace blackdrops {
                 _ofs_real << r << " ";
             _ofs_real << std::endl;
 
-            // statistics for cumulative reward
-            double r = std::accumulate(R.begin(), R.end(), 0.0);
-            _ofs_results << r << std::endl;
+            // statistics for cumulative reward (this the evaluation reward)
+            _ofs_results << r_eval << std::endl;
 
             // statistics for trajectories
             std::vector<Eigen::VectorXd> states = _robot.get_last_states();
@@ -308,11 +331,17 @@ namespace blackdrops {
 
             policy.set_params(params.array());
 
-            // std::vector<double> R;
-            // _robot.execute(policy, world, Params::blackdrops::T(), R, false);
+            int N = (Params::blackdrops::stochastic_evaluation()) ? Params::blackdrops::opt_evals() : 1;
 
-            // double r = std::accumulate(R.begin(), R.end(), 0.0);
-            double r = _robot.predict_policy(policy, _model, world, Params::blackdrops::T());
+            double r = 0.;
+            for (int i = 0; i < N; i++) {
+                // std::vector<double> R;
+                // _robot.execute(policy, world, Params::blackdrops::T(), R, false);
+
+                // r += std::accumulate(R.begin(), R.end(), 0.0);
+                r += _robot.predict_policy(policy, _model, world, Params::blackdrops::T());
+            }
+            r /= double(N);
 
             _iter_mutex.lock();
             _opt_iters++;
