@@ -210,7 +210,7 @@ struct Params {
         BO_DYN_PARAM(int, elitism);
         BO_DYN_PARAM(bool, handle_uncertainty);
 
-        BO_PARAM(int, lambda, 16);
+        BO_PARAM(int, lambda, 64);
 
 #ifdef SIMPLE_CMAES
         BO_PARAM(int, variant, aIPOP_CMAES);
