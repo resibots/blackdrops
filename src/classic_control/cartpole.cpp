@@ -332,19 +332,19 @@ struct RewardFunction {
         //
         // return std::exp(-0.5 / s_c_sq * (dx * dx + da * da));
 
-        // double dcos = std::cos(to_state(3)) - std::cos(Params::goal_pos());
-        // double dsin = std::sin(to_state(3)) - std::sin(Params::goal_pos());
-        // double dx = to_state(0);
+        double dcos = std::cos(to_state(3)) - std::cos(Params::goal_pos());
+        double dsin = std::sin(to_state(3)) - std::sin(Params::goal_pos());
+        double dx = to_state(0);
 
-        // return -(dx * dx + dcos * dcos + dsin * dsin); //std::exp(-0.5 / s_c_sq * (dx * dx + dcos * dcos + dsin * dsin));
+        return -(dx * dx + dcos * dcos + dsin * dsin); //std::exp(-0.5 / s_c_sq * (dx * dx + dcos * dcos + dsin * dsin));
 
-        double x = to_state(0);
-        double theta = to_state(3);
-        double l = 0.5;
+        // double x = to_state(0);
+        // double theta = to_state(3);
+        // double l = 0.5;
 
-        double derr = x * x + 2. * x * l * std::sin(theta) + 2. * l * l + 2. * l * l * std::cos(theta);
-        return -derr;
-        // return std::exp(-0.5 / s_c_sq * derr);
+        // double derr = x * x + 2. * x * l * std::sin(theta) + 2. * l * l + 2. * l * l * std::cos(theta);
+        // return -derr;
+        // // return std::exp(-0.5 / s_c_sq * derr);
     }
 };
 
