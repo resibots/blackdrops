@@ -69,6 +69,8 @@ namespace blackdrops {
             BO_PARAM(bool, stochastic_evaluation, false);
             BO_PARAM(int, num_evals, 0);
             BO_PARAM(int, opt_evals, 1);
+
+            BO_PARAM(double, noise, 1e-10);
         };
     } // namespace defaults
 

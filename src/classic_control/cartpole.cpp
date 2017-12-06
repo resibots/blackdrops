@@ -167,6 +167,11 @@ struct Params {
         BO_PARAM(double, T, 4.0);
         BO_DYN_PARAM(double, boundary);
         BO_DYN_PARAM(bool, verbose);
+
+        BO_PARAM(bool, stochastic_evaluation, true);
+        BO_PARAM(int, num_evals, 500);
+        BO_PARAM(int, opt_evals, 1);
+        BO_PARAM(double, noise, 0.01);
     };
 
     struct gp_model {
@@ -270,7 +275,16 @@ struct PolicyParams {
 struct CartPole : public blackdrops::system::ODESystem<Params> {
     Eigen::VectorXd init_state() const
     {
-        return Eigen::VectorXd::Zero(4);
+        constexpr double sigma = 0.001;
+
+        Eigen::VectorXd st = Eigen::VectorXd::Zero(4);
+        for (int i = 0; i < st.size(); i++) {
+            double s = gaussian_rand(st(i), sigma);
+            st(i) = std::max(st(i) - sigma,
+                std::min(s, st(i) + sigma));
+        }
+
+        return st;
     }
 
     Eigen::VectorXd transform_state(const Eigen::VectorXd& original_state) const
@@ -343,6 +357,10 @@ struct RewardFunction {
         // double l = 0.5;
 
         // double derr = x * x + 2. * x * l * std::sin(theta) + 2. * l * l + 2. * l * l * std::cos(theta);
+        // if (std::sqrt(derr) < 0.25)
+        //     return 0;
+
+        // return -1.;
         // return -derr;
         // // return std::exp(-0.5 / s_c_sq * derr);
     }

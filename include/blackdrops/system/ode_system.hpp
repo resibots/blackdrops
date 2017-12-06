@@ -128,8 +128,17 @@ namespace blackdrops {
 
                 states.push_back(init_diff);
 
+                double sigma = Params::blackdrops::noise();
+
                 for (int i = 0; i < H; i++) {
                     Eigen::VectorXd query_vec(Params::blackdrops::model_input_dim() + Params::blackdrops::action_dim());
+
+                    for (int j = 0; j < init.size(); j++) {
+                        double s = gaussian_rand(init(j), sigma);
+                        init(j) = std::max(init(j) - sigma,
+                            std::min(s, init(j) + sigma));
+                    }
+
                     Eigen::VectorXd u = policy.next(init);
                     query_vec.head(Params::blackdrops::model_input_dim()) = init;
                     query_vec.tail(Params::blackdrops::action_dim()) = u;
