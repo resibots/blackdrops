@@ -359,6 +359,8 @@ public:
 
     void set_noise_function(std::function<Eigen::VectorXd(const Eigen::VectorXd&)> func) {}
 
+    void set_policy_function(std::function<Eigen::VectorXd(const Eigen::VectorXd&)> func) {}
+
 protected:
     double _prev_time;
     double _t;

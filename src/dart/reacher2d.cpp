@@ -155,13 +155,13 @@ struct PolicyParams {
     };
 
     struct nn_policy {
-        BO_PARAM(size_t, state_dim, Params::blackdrops::model_input_dim());
+        BO_PARAM(size_t, state_dim, Params::blackdrops::model_input_dim() + 2);
         BO_PARAM(size_t, action_dim, Params::blackdrops::action_dim());
         // BO_PARAM_ARRAY(double, max_u, 10.0, 10.0);
         // BO_PARAM_ARRAY(double, limits, 10., 10., 1.0, 1.0, 1.0, 1.0);
         BO_PARAM_ARRAY(double, max_u, 200.0, 200.0);
-        // BO_PARAM_ARRAY(double, limits, 0.2, 0.2, 30., 70., 1.0, 1.0, 1.0, 1.0);
-        BO_PARAM_ARRAY(double, limits, 30., 70., 1.0, 1.0, 1.0, 1.0);
+        BO_PARAM_ARRAY(double, limits, 0.2, 0.2, 30., 70., 1.0, 1.0, 1.0, 1.0);
+        // BO_PARAM_ARRAY(double, limits, 30., 70., 1.0, 1.0, 1.0, 1.0);
         BO_DYN_PARAM(int, hidden_neurons);
         BO_PARAM(double, af, 1.0);
     };
@@ -248,9 +248,7 @@ struct PolicyControl : public blackdrops::system::BaseDARTPolicyControl<Params, 
 
     Eigen::VectorXd get_state(const base_t::robot_t& robot) const
     {
-        Eigen::VectorXd robot_state = get_robot_state(robot);
-
-        return robot_state;
+        return get_robot_state(robot);
     }
 };
 
@@ -282,7 +280,6 @@ struct DARTReacher : public blackdrops::system::DARTSystem<Params, PolicyControl
         }
 
         info.target = target;
-        std::cout << target.transpose() << std::endl;
 
         return info;
     }
@@ -297,6 +294,16 @@ struct DARTReacher : public blackdrops::system::DARTSystem<Params, PolicyControl
             ret(st + 2 * j) = std::cos(original_state(j + st));
             ret(st + 2 * j + 1) = std::sin(original_state(j + st));
         }
+
+        return ret;
+    }
+
+    Eigen::VectorXd policy_transform(const Eigen::VectorXd& original_state, const blackdrops::RolloutInfo& info) const
+    {
+        Eigen::VectorXd ret = Eigen::VectorXd::Zero(Params::blackdrops::model_input_dim() + 2);
+
+        ret.head(2) = info.target;
+        ret.tail(Params::blackdrops::model_input_dim()) = original_state;
 
         return ret;
     }

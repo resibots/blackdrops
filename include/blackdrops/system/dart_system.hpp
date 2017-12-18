@@ -104,6 +104,8 @@ namespace blackdrops {
                 if (info != nullptr)
                     *info = rollout_info;
 
+                simu.controller().set_policy_function(std::bind(&DARTSystem::policy_transform, this, std::placeholders::_1, rollout_info));
+
                 // Add extra to simu object
                 this->add_extra_to_simu(simu, rollout_info);
 
@@ -160,7 +162,7 @@ namespace blackdrops {
 
                 for (int i = 0; i < H; i++) {
                     Eigen::VectorXd query_vec(Params::blackdrops::model_input_dim() + Params::blackdrops::action_dim());
-                    Eigen::VectorXd u = policy.next(init);
+                    Eigen::VectorXd u = policy.next(this->policy_transform(init, rollout_info));
                     query_vec.head(Params::blackdrops::model_input_dim()) = init;
                     query_vec.tail(Params::blackdrops::action_dim()) = u;
 
@@ -201,7 +203,7 @@ namespace blackdrops {
 
                 for (int i = 0; i < H; i++) {
                     Eigen::VectorXd query_vec(Params::blackdrops::model_input_dim() + Params::blackdrops::action_dim());
-                    Eigen::VectorXd u = policy.next(init);
+                    Eigen::VectorXd u = policy.next(this->policy_transform(init, rollout_info));
                     query_vec.head(Params::blackdrops::model_input_dim()) = init;
                     query_vec.tail(Params::blackdrops::action_dim()) = u;
 
@@ -253,6 +255,13 @@ namespace blackdrops {
             // add noise to the observed state if desired
             // by default, no noise is added
             virtual Eigen::VectorXd add_noise(const Eigen::VectorXd& original_state) const
+            {
+                return original_state;
+            }
+
+            // transform the state variables that go to the policy if needed
+            // by default, no transformation is applied
+            virtual Eigen::VectorXd policy_transform(const Eigen::VectorXd& original_state, const RolloutInfo& info) const
             {
                 return original_state;
             }
@@ -333,6 +342,7 @@ namespace blackdrops {
                 // set some default functions in case the user does not define them
                 set_transform_state(std::bind(&BaseDARTPolicyControl::transform_state, this, std::placeholders::_1));
                 set_noise_function(std::bind(&BaseDARTPolicyControl::transform_state, this, std::placeholders::_1));
+                set_policy_function(std::bind(&BaseDARTPolicyControl::transform_state, this, std::placeholders::_1));
             }
 
             void update(double t)
@@ -347,7 +357,7 @@ namespace blackdrops {
 
                 if (_first || (_t - _prev_time - dt) > -Params::dart_system::sim_step() / 2.0) {
                     Eigen::VectorXd q = _add_noise(this->get_state(_robot));
-                    Eigen::VectorXd commands = _policy.next(_tranform_state(q));
+                    Eigen::VectorXd commands = _policy.next(_policy_state(_tranform_state(q)));
                     _states.push_back(q);
                     _coms.push_back(commands);
 
@@ -381,6 +391,11 @@ namespace blackdrops {
                 _add_noise = func;
             }
 
+            void set_policy_function(std::function<Eigen::VectorXd(const Eigen::VectorXd&)> func)
+            {
+                _policy_state = func;
+            }
+
             virtual Eigen::VectorXd get_state(const robot_t& robot) const = 0;
 
         protected:
@@ -393,6 +408,7 @@ namespace blackdrops {
             std::vector<Eigen::VectorXd> _states;
             std::function<Eigen::VectorXd(const Eigen::VectorXd&)> _tranform_state;
             std::function<Eigen::VectorXd(const Eigen::VectorXd&)> _add_noise;
+            std::function<Eigen::VectorXd(const Eigen::VectorXd&)> _policy_state;
 
             Eigen::VectorXd transform_state(const Eigen::VectorXd& original_state) const
             {
