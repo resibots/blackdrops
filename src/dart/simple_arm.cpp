@@ -188,21 +188,10 @@ namespace global {
     GP_t reward_gp(4, 1);
 } // namespace global
 
-Eigen::VectorXd get_robot_state(const std::shared_ptr<robot_dart::Robot>& robot, bool full = false)
+Eigen::VectorXd get_robot_state(const std::shared_ptr<robot_dart::Robot>& robot)
 {
-    Eigen::VectorXd pos = robot->skeleton()->getPositions();
-    size_t size = pos.size();
-    if (full)
-        size += pos.size();
-    Eigen::VectorXd state(size);
-    if (!full)
-        state = pos;
-    else {
-        for (int i = 0; i < pos.size(); i++) {
-            state(2 * i) = std::cos(pos(i));
-            state(2 * i + 1) = std::sin(pos(i));
-        }
-    }
+    Eigen::VectorXd state = robot->skeleton()->getPositions();
+
     return state;
 }
 
@@ -252,9 +241,9 @@ struct PolicyControl : public blackdrops::system::BaseDARTPolicyControl<Params, 
     PolicyControl() : base_t() {}
     PolicyControl(const std::vector<double>& ctrl, base_t::robot_t robot) : base_t(ctrl, robot) {}
 
-    Eigen::VectorXd get_state(const robot_t& robot, bool full) const
+    Eigen::VectorXd get_state(const robot_t& robot) const
     {
-        return get_robot_state(robot, full);
+        return get_robot_state(robot);
     }
 };
 

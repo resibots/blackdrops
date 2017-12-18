@@ -251,7 +251,7 @@ bool release_robot(const dart::dynamics::SkeletonPtr& robot)
     return false;
 }
 
-Eigen::VectorXd get_robot_state(const std::shared_ptr<robot_dart::Robot>& robot, bool full = false)
+Eigen::VectorXd get_robot_state(const std::shared_ptr<robot_dart::Robot>& robot)
 {
     Eigen::VectorXd vels = robot->skeleton()->getVelocities();
     Eigen::VectorXd pos = robot->skeleton()->getPositions();
@@ -310,7 +310,7 @@ public:
         double dt = Params::blackdrops::dt();
 
         if (_first || (_t - _prev_time - dt) > -Params::dart_system::sim_step() / 2.0) {
-            Eigen::VectorXd q = this->get_state(_robot, false);
+            Eigen::VectorXd q = this->get_state(_robot);
             q.conservativeResize(q.size() + 1);
             q.tail(1) = limbo::tools::make_vector(_t);
 
@@ -350,9 +350,9 @@ public:
         return _coms;
     }
 
-    Eigen::VectorXd get_state(const robot_t& robot, bool full) const
+    Eigen::VectorXd get_state(const robot_t& robot) const
     {
-        return get_robot_state(robot, full);
+        return get_robot_state(robot);
     }
 
     void set_transform_state(std::function<Eigen::VectorXd(const Eigen::VectorXd&)> func) {}
@@ -503,7 +503,7 @@ public:
         double dt = Params::blackdrops::dt();
 
         if (_first || (_t - _prev_time - dt) > -Params::dart_system::sim_step() / 2.0) {
-            Eigen::VectorXd q = this->get_state(_robot, false);
+            Eigen::VectorXd q = this->get_state(_robot);
             q.conservativeResize(q.size() + 1);
             q.tail(1) = limbo::tools::make_vector(_t);
             _states.push_back(q);
@@ -527,9 +527,9 @@ public:
         return _states;
     }
 
-    Eigen::VectorXd get_state(const robot_t& robot, bool full) const
+    Eigen::VectorXd get_state(const robot_t& robot) const
     {
-        return get_robot_state(robot, full);
+        return get_robot_state(robot);
     }
 
 protected:
