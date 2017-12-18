@@ -56,6 +56,8 @@
 #ifndef BLACKDROPS_SYSTEM_DART_SYSTEM_HPP
 #define BLACKDROPS_SYSTEM_DART_SYSTEM_HPP
 
+#include <functional>
+
 #include <robot_dart/robot_dart_simu.hpp>
 
 #ifdef GRAPHIC
@@ -94,6 +96,8 @@ namespace blackdrops {
                 robot_simu_t simu(params, simulated_robot);
                 // simulation step different from sampling rate -- we need a stable simulation
                 simu.set_step(Params::dart_system::sim_step());
+                simu.controller().set_transform_state(std::bind(&DARTSystem::transform_state, this, std::placeholders::_1));
+                simu.controller().set_noise_function(std::bind(&DARTSystem::add_noise, this, std::placeholders::_1));
 
                 Eigen::VectorXd init_diff = this->init_state();
                 this->set_robot_state(simulated_robot, init_diff);
@@ -219,6 +223,13 @@ namespace blackdrops {
                 return original_state;
             }
 
+            // add noise to the observed state if desired
+            // by default, no noise is added
+            virtual Eigen::VectorXd add_noise(const Eigen::VectorXd& original_state) const
+            {
+                return original_state;
+            }
+
             // return the initial state of the system
             // by default, the zero state is returned
             virtual Eigen::VectorXd init_state() const
@@ -291,6 +302,10 @@ namespace blackdrops {
 
                 _states.clear();
                 _coms.clear();
+
+                // set some default functions in case the user does not define them
+                set_transform_state(std::bind(&BaseDARTPolicyControl::transform_state, this, std::placeholders::_1));
+                set_noise_function(std::bind(&BaseDARTPolicyControl::transform_state, this, std::placeholders::_1));
             }
 
             void update(double t)
@@ -304,8 +319,8 @@ namespace blackdrops {
                 double dt = Params::blackdrops::dt();
 
                 if (_first || (_t - _prev_time - dt) > -Params::dart_system::sim_step() / 2.0) {
-                    Eigen::VectorXd commands = _policy.next(this->get_state(_robot, true));
                     Eigen::VectorXd q = this->get_state(_robot, false);
+                    Eigen::VectorXd commands = _policy.next(_tranform_state(q));
                     _states.push_back(q);
                     _coms.push_back(commands);
 
@@ -329,6 +344,16 @@ namespace blackdrops {
                 return _coms;
             }
 
+            void set_transform_state(std::function<Eigen::VectorXd(const Eigen::VectorXd&)> func)
+            {
+                _tranform_state = func;
+            }
+
+            void set_noise_function(std::function<Eigen::VectorXd(const Eigen::VectorXd&)> func)
+            {
+                _add_noise = func;
+            }
+
             virtual Eigen::VectorXd get_state(const robot_t& robot, bool full) const = 0;
 
         protected:
@@ -339,8 +364,15 @@ namespace blackdrops {
             Policy _policy;
             std::vector<Eigen::VectorXd> _coms;
             std::vector<Eigen::VectorXd> _states;
+            std::function<Eigen::VectorXd(const Eigen::VectorXd&)> _tranform_state;
+            std::function<Eigen::VectorXd(const Eigen::VectorXd&)> _add_noise;
+
+            Eigen::VectorXd transform_state(const Eigen::VectorXd& original_state) const
+            {
+                return original_state;
+            }
         };
-    }
-}
+    } // namespace system
+} // namespace blackdrops
 
 #endif

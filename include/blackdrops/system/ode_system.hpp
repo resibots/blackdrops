@@ -74,7 +74,7 @@ namespace blackdrops {
                 _last_states.clear();
                 _last_commands.clear();
 
-                Eigen::VectorXd init_diff = this->init_state();
+                Eigen::VectorXd init_diff = this->add_noise(this->init_state());
                 _last_states.push_back(init_diff);
 
                 double t = 0.0;
@@ -96,14 +96,17 @@ namespace blackdrops {
                     if (display)
                         this->draw_single(final);
 
-                    _last_states.push_back(final);
+                    // add noise to our observation
+                    Eigen::VectorXd obs = this->add_noise(final);
+
+                    _last_states.push_back(obs);
                     _last_commands.push_back(u);
 
-                    res.push_back(std::make_tuple(init, u, final - init_diff));
-                    double r = world(init, u, final);
+                    res.push_back(std::make_tuple(init, u, obs - init_diff));
+                    double r = world(init, u, obs);
                     R.push_back(r);
 
-                    init_diff = final;
+                    init_diff = obs;
                 }
 
                 if (!policy.random() && display) {
@@ -128,16 +131,8 @@ namespace blackdrops {
 
                 states.push_back(init_diff);
 
-                double sigma = Params::blackdrops::noise();
-
                 for (int i = 0; i < H; i++) {
                     Eigen::VectorXd query_vec(Params::blackdrops::model_input_dim() + Params::blackdrops::action_dim());
-
-                    for (int j = 0; j < init.size(); j++) {
-                        double s = gaussian_rand(init(j), sigma);
-                        init(j) = std::max(init(j) - sigma,
-                            std::min(s, init(j) + sigma));
-                    }
 
                     Eigen::VectorXd u = policy.next(init);
                     query_vec.head(Params::blackdrops::model_input_dim()) = init;
@@ -206,6 +201,13 @@ namespace blackdrops {
             // transform the state input to the GPs and policy if needed
             // by default, no transformation is applied
             virtual Eigen::VectorXd transform_state(const Eigen::VectorXd& original_state) const
+            {
+                return original_state;
+            }
+
+            // add noise to the observed state if desired
+            // by default, no noise is added
+            virtual Eigen::VectorXd add_noise(const Eigen::VectorXd& original_state) const
             {
                 return original_state;
             }

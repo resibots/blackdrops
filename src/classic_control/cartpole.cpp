@@ -171,7 +171,6 @@ struct Params {
         BO_PARAM(bool, stochastic_evaluation, true);
         BO_PARAM(int, num_evals, 500);
         BO_PARAM(int, opt_evals, 1);
-        BO_PARAM(double, noise, 0.01);
     };
 
     struct gp_model {
@@ -295,6 +294,21 @@ struct CartPole : public blackdrops::system::ODESystem<Params> {
         trans_state(4) = std::sin(original_state(3));
 
         return trans_state;
+    }
+
+    Eigen::VectorXd add_noise(const Eigen::VectorXd& original_state) const
+    {
+        constexpr double sigma = 0.01;
+
+        Eigen::VectorXd noisy = original_state;
+
+        for (int j = 0; j < original_state.size(); j++) {
+            double s = gaussian_rand(original_state(j), sigma);
+            noisy(j) = std::max(original_state(j) - sigma,
+                std::min(s, original_state(j) + sigma));
+        }
+
+        return noisy;
     }
 
     void draw_single(const Eigen::VectorXd& state) const
