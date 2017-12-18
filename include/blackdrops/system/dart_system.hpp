@@ -68,7 +68,7 @@
 
 namespace blackdrops {
     namespace system {
-        template <typename Params, typename PolicyController>
+        template <typename Params, typename PolicyController, typename RolloutInfo>
         struct DARTSystem {
 
 #ifdef GRAPHIC
@@ -78,7 +78,7 @@ namespace blackdrops {
 #endif
 
             template <typename Policy, typename Reward>
-            std::vector<std::tuple<Eigen::VectorXd, Eigen::VectorXd, Eigen::VectorXd>> execute(const Policy& policy, const Reward& world, double T, std::vector<double>& R, bool display = true)
+            std::vector<std::tuple<Eigen::VectorXd, Eigen::VectorXd, Eigen::VectorXd>> execute(const Policy& policy, const Reward& world, double T, std::vector<double>& R, bool display = true, RolloutInfo* info = nullptr)
             {
                 // Make sure that the simulation step is smaller than the sampling/control rate
                 assert(Params::dart_system::sim_step() < Params::blackdrops::dt());
@@ -99,11 +99,18 @@ namespace blackdrops {
                 simu.controller().set_transform_state(std::bind(&DARTSystem::transform_state, this, std::placeholders::_1));
                 simu.controller().set_noise_function(std::bind(&DARTSystem::add_noise, this, std::placeholders::_1));
 
-                Eigen::VectorXd init_diff = this->init_state();
-                this->set_robot_state(simulated_robot, init_diff);
+                // Get the information of the rollout
+                RolloutInfo rollout_info = get_rollout_info();
+                if (info != nullptr)
+                    *info = rollout_info;
 
-                // add extra
-                this->add_extra_to_simu(simu);
+                // Add extra to simu object
+                this->add_extra_to_simu(simu, rollout_info);
+
+                // Get initial state from info and add noise
+                Eigen::VectorXd init_diff = rollout_info.init_state;
+                this->set_robot_state(simulated_robot, init_diff);
+                init_diff = this->add_noise(init_diff);
 
                 simu.run(T + Params::dart_system::sim_step());
 
@@ -120,7 +127,7 @@ namespace blackdrops {
                     Eigen::VectorXd u = commands[j];
                     Eigen::VectorXd final = states[j + 1];
 
-                    double r = world(init, u, final);
+                    double r = world(rollout_info, init, u, final);
                     R.push_back(r);
                     res.push_back(std::make_tuple(init_full, u, final - init));
                 }
@@ -140,8 +147,12 @@ namespace blackdrops {
 
                 int H = std::ceil(Params::blackdrops::T() / Params::blackdrops::dt());
                 R = std::vector<double>();
-                // init state
-                Eigen::VectorXd init_diff = this->init_state();
+
+                // Get the information of the rollout
+                RolloutInfo rollout_info = get_rollout_info();
+
+                // Get initial state from info
+                Eigen::VectorXd init_diff = rollout_info.init_state;
 
                 Eigen::VectorXd init = this->transform_state(init_diff);
 
@@ -161,7 +172,7 @@ namespace blackdrops {
 
                     Eigen::VectorXd final = init_diff + mu;
 
-                    double r = world(init_diff, u, final);
+                    double r = world(rollout_info, init_diff, u, final);
                     R.push_back(r);
 
                     states.push_back(final);
@@ -179,8 +190,12 @@ namespace blackdrops {
             {
                 int H = std::ceil(Params::blackdrops::T() / Params::blackdrops::dt());
                 double reward = 0.0;
-                // init state
-                Eigen::VectorXd init_diff = this->init_state();
+
+                // Get the information of the rollout
+                RolloutInfo rollout_info = get_rollout_info();
+
+                // Get initial state from info
+                Eigen::VectorXd init_diff = rollout_info.init_state;
 
                 Eigen::VectorXd init = this->transform_state(init_diff);
 
@@ -205,7 +220,7 @@ namespace blackdrops {
 
                     Eigen::VectorXd final = init_diff + mu;
 
-                    reward += world(init_diff, u, final);
+                    reward += world(rollout_info, init_diff, u, final);
                     init_diff = final;
                     init = this->transform_state(init_diff);
                 }
@@ -213,8 +228,20 @@ namespace blackdrops {
                 return reward;
             }
 
+            // get information for rollout (i.e., initial state, target, etc.)
+            // this is useful if you wish to generate some different conditions
+            // that are constant throughout the same rollout, but different in different rollouts
+            // by default, we only get the initial state
+            virtual RolloutInfo get_rollout_info() const
+            {
+                RolloutInfo info;
+                info.init_state = this->init_state();
+
+                return info;
+            }
+
             // override this to add extra stuff to the robot_dart simulator
-            virtual void add_extra_to_simu(robot_simu_t& simu) const {}
+            virtual void add_extra_to_simu(robot_simu_t& simu, const RolloutInfo& rollout_info) const {}
 
             // transform the state input to the GPs and policy if needed
             // by default, no transformation is applied

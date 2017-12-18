@@ -213,7 +213,7 @@ Eigen::VectorXd get_robot_state(const std::shared_ptr<robot_dart::Robot>& robot)
 }
 
 struct ActualReward {
-    double operator()(const Eigen::VectorXd& from_state, const Eigen::VectorXd& action, const Eigen::VectorXd& to_state) const
+    double operator()(const blackdrops::RolloutInfo& info, const Eigen::VectorXd& from_state, const Eigen::VectorXd& action, const Eigen::VectorXd& to_state) const
     {
         using robot_simu_t = robot_dart::RobotDARTSimu<robot_dart::robot_control<robot_dart::PositionControl>>;
 
@@ -270,8 +270,8 @@ struct PolicyControl : public blackdrops::system::BaseDARTPolicyControl<Params, 
     }
 };
 
-struct DARTReacher : public blackdrops::system::DARTSystem<Params, PolicyControl> {
-    using base_t = blackdrops::system::DARTSystem<Params, PolicyControl>;
+struct DARTReacher : public blackdrops::system::DARTSystem<Params, PolicyControl, blackdrops::RolloutInfo> {
+    using base_t = blackdrops::system::DARTSystem<Params, PolicyControl, blackdrops::RolloutInfo>;
 
     Eigen::VectorXd init_state() const
     {
@@ -297,7 +297,7 @@ struct DARTReacher : public blackdrops::system::DARTSystem<Params, PolicyControl
         return simulated_robot;
     }
 
-    void add_extra_to_simu(base_t::robot_simu_t& simu) const
+    void add_extra_to_simu(base_t::robot_simu_t& simu, const blackdrops::RolloutInfo& info) const
     {
         // Change gravity
         Eigen::VectorXd gravity(3);
@@ -330,8 +330,9 @@ struct DARTReacher : public blackdrops::system::DARTSystem<Params, PolicyControl
     std::vector<std::tuple<Eigen::VectorXd, Eigen::VectorXd, Eigen::VectorXd>> execute(const Policy& policy, const Reward& world, double T, std::vector<double>& R, bool display = true)
     {
         static int n_iter = 0;
+        blackdrops::RolloutInfo info;
         ActualReward actual_reward;
-        std::vector<std::tuple<Eigen::VectorXd, Eigen::VectorXd, Eigen::VectorXd>> ret = blackdrops::system::DARTSystem<Params, PolicyControl>::execute(policy, actual_reward, T, R, display);
+        std::vector<std::tuple<Eigen::VectorXd, Eigen::VectorXd, Eigen::VectorXd>> ret = base_t::execute(policy, actual_reward, T, R, display, &info);
 
         std::vector<Eigen::VectorXd> states = this->get_last_states();
         std::vector<Eigen::VectorXd> coms = this->get_last_commands();
@@ -372,8 +373,8 @@ struct DARTReacher : public blackdrops::system::DARTSystem<Params, PolicyControl
             // ofs<<"0 0 0 ";
             for (int j = 0; j < to_state.size(); j++)
                 ofs << to_state[j] << " ";
-            double r_b = world(to_state, action, to_state, true);
-            double r_w = actual_reward(to_state, action, to_state);
+            double r_b = world(info, to_state, action, to_state, true);
+            double r_w = actual_reward(info, to_state, action, to_state);
             ofs << r_b << " " << r_w << std::endl;
             mse += (r_b - r_w) * (r_b - r_w);
         }
@@ -386,7 +387,7 @@ struct DARTReacher : public blackdrops::system::DARTSystem<Params, PolicyControl
 };
 
 struct RewardFunction {
-    double operator()(const Eigen::VectorXd& from_state, const Eigen::VectorXd& action, const Eigen::VectorXd& to_state, bool certain = false) const
+    double operator()(const blackdrops::RolloutInfo& info, const Eigen::VectorXd& from_state, const Eigen::VectorXd& action, const Eigen::VectorXd& to_state, bool certain = false) const
     {
         Eigen::VectorXd mu;
         double s;
@@ -558,13 +559,14 @@ int main(int argc, char** argv)
     reacher_system.learn(2, 15, true);
 
     ActualReward actual_reward;
+    blackdrops::RolloutInfo info;
     std::ofstream ofs("reward_points.dat");
     for (size_t i = 0; i < global::reward_gp.samples().size(); i++) {
         Eigen::VectorXd to_state = global::reward_gp.samples()[i];
         for (int j = 0; j < to_state.size(); j++)
             ofs << to_state[j] << " ";
         Eigen::VectorXd mu = global::reward_gp.mu(to_state);
-        double r = actual_reward(to_state, to_state, to_state);
+        double r = actual_reward(info, to_state, to_state, to_state);
         ofs << mu(0) << " " << r;
         ofs << std::endl;
     }

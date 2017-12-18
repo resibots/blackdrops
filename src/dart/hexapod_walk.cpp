@@ -370,8 +370,8 @@ protected:
     std::vector<Eigen::VectorXd> _states;
 };
 
-struct Hexapod : public blackdrops::system::DARTSystem<Params, PolicyControl> {
-    using base_t = blackdrops::system::DARTSystem<Params, PolicyControl>;
+struct Hexapod : public blackdrops::system::DARTSystem<Params, PolicyControl, blackdrops::RolloutInfo> {
+    using base_t = blackdrops::system::DARTSystem<Params, PolicyControl, blackdrops::RolloutInfo>;
 
     Eigen::VectorXd init_state() const
     {
@@ -397,7 +397,7 @@ struct Hexapod : public blackdrops::system::DARTSystem<Params, PolicyControl> {
         return simulated_robot;
     }
 
-    void add_extra_to_simu(base_t::robot_simu_t& simu) const
+    void add_extra_to_simu(base_t::robot_simu_t& simu, const blackdrops::RolloutInfo& info) const
     {
         // add floor
         simu.add_floor();
@@ -420,7 +420,9 @@ struct Hexapod : public blackdrops::system::DARTSystem<Params, PolicyControl> {
     template <typename Policy, typename Reward>
     std::vector<std::tuple<Eigen::VectorXd, Eigen::VectorXd, Eigen::VectorXd>> execute(const Policy& policy, const Reward& world, double T, std::vector<double>& R, bool display = true)
     {
-        std::vector<std::tuple<Eigen::VectorXd, Eigen::VectorXd, Eigen::VectorXd>> ret = blackdrops::system::DARTSystem<Params, PolicyControl>::execute(policy, world, T, R, display);
+        blackdrops::RolloutInfo info;
+
+        std::vector<std::tuple<Eigen::VectorXd, Eigen::VectorXd, Eigen::VectorXd>> ret = base_t::execute(policy, world, T, R, display, &info);
 
         if (display)
             std::cout << "last state: " << this->get_last_states().back().segment(27, 3).transpose() << std::endl;
@@ -431,7 +433,7 @@ struct Hexapod : public blackdrops::system::DARTSystem<Params, PolicyControl> {
     template <typename Policy, typename Model, typename Reward>
     void execute_dummy(const Policy& policy, const Model& model, const Reward& world, double T, std::vector<double>& R, bool display = true)
     {
-        blackdrops::system::DARTSystem<Params, PolicyControl>::execute_dummy(policy, model, world, T, R, display);
+        base_t::execute_dummy(policy, model, world, T, R, display);
 
         if (display)
             std::cout << "last dummy state: " << this->get_last_dummy_states().back().segment(27, 3).transpose() << std::endl;
@@ -439,7 +441,7 @@ struct Hexapod : public blackdrops::system::DARTSystem<Params, PolicyControl> {
 };
 
 struct RewardFunction {
-    double operator()(const Eigen::VectorXd& from_state, const Eigen::VectorXd& action, const Eigen::VectorXd& to_state, bool certain = false) const
+    double operator()(const blackdrops::RolloutInfo& info, const Eigen::VectorXd& from_state, const Eigen::VectorXd& action, const Eigen::VectorXd& to_state, bool certain = false) const
     {
         // TO-DO: Maybe stop when safety limits are reached
         Eigen::Vector3d rot;

@@ -84,10 +84,10 @@ struct Params {
 
     struct blackdrops : public ::blackdrops::defaults::blackdrops {
         BO_PARAM(size_t, action_dim, 2);
-        BO_PARAM(size_t, model_input_dim, 8);
-        BO_PARAM(size_t, model_pred_dim, 6);
-        // BO_PARAM(size_t, model_input_dim, 6);
-        // BO_PARAM(size_t, model_pred_dim, 4);
+        // BO_PARAM(size_t, model_input_dim, 8);
+        // BO_PARAM(size_t, model_pred_dim, 6);
+        BO_PARAM(size_t, model_input_dim, 6);
+        BO_PARAM(size_t, model_pred_dim, 4);
         // BO_PARAM(double, dt, 0.1);
         // BO_PARAM(double, T, 3.0);
         BO_PARAM(double, dt, 0.02);
@@ -160,33 +160,10 @@ struct PolicyParams {
         // BO_PARAM_ARRAY(double, max_u, 10.0, 10.0);
         // BO_PARAM_ARRAY(double, limits, 10., 10., 1.0, 1.0, 1.0, 1.0);
         BO_PARAM_ARRAY(double, max_u, 200.0, 200.0);
-        BO_PARAM_ARRAY(double, limits, 0.2, 0.2, 30., 70., 1.0, 1.0, 1.0, 1.0);
-        // BO_PARAM_ARRAY(double, limits, 30., 70., 1.0, 1.0, 1.0, 1.0);
+        // BO_PARAM_ARRAY(double, limits, 0.2, 0.2, 30., 70., 1.0, 1.0, 1.0, 1.0);
+        BO_PARAM_ARRAY(double, limits, 30., 70., 1.0, 1.0, 1.0, 1.0);
         BO_DYN_PARAM(int, hidden_neurons);
         BO_PARAM(double, af, 1.0);
-    };
-};
-
-struct RewardParams {
-    struct kernel : public limbo::defaults::kernel {
-        BO_PARAM(double, noise, 1e-12);
-        BO_PARAM(bool, optimize_noise, true);
-    };
-
-    struct kernel_squared_exp_ard : public limbo::defaults::kernel_squared_exp_ard {
-    };
-
-    struct mean_constant {
-        BO_PARAM(double, constant, -1.);
-    };
-
-    struct opt_rprop : public limbo::defaults::opt_rprop {
-        BO_PARAM(int, iterations, 300);
-        BO_PARAM(double, eps_stop, 1e-4);
-    };
-
-    struct opt_parallelrepeater : public limbo::defaults::opt_parallelrepeater {
-        BO_PARAM(int, repeats, 3);
     };
 };
 
@@ -197,13 +174,6 @@ namespace global {
     using policy_t = blackdrops::policy::NNPolicy<PolicyParams>;
 
     Eigen::VectorXd goal(3);
-    std::mutex _goal_mutex;
-
-    // using kernel_t = limbo::kernel::SquaredExpARD<RewardParams>;
-    // using mean_t = limbo::mean::Constant<RewardParams>;
-
-    // using GP_t = limbo::model::GP<RewardParams, kernel_t, mean_t, blackdrops::model::gp::KernelLFOpt<RewardParams>>;
-    // GP_t reward_gp(6, 1);
 } // namespace global
 
 Eigen::VectorXd get_robot_state(const std::shared_ptr<robot_dart::Robot>& robot)
@@ -278,45 +248,50 @@ struct PolicyControl : public blackdrops::system::BaseDARTPolicyControl<Params, 
 
     Eigen::VectorXd get_state(const base_t::robot_t& robot) const
     {
-        // return get_robot_state(robot, full);
         Eigen::VectorXd robot_state = get_robot_state(robot);
-        Eigen::VectorXd full_state(2 + robot_state.size());
 
-        global::_goal_mutex.lock();
-        full_state.head(2) << global::goal(0), global::goal(2);
-        global::_goal_mutex.unlock();
-        full_state.tail(robot_state.size()) = robot_state;
-
-        return full_state;
+        return robot_state;
     }
 };
 
-struct DARTReacher : public blackdrops::system::DARTSystem<Params, PolicyControl> {
-    using base_t = blackdrops::system::DARTSystem<Params, PolicyControl>;
+struct DARTReacher : public blackdrops::system::DARTSystem<Params, PolicyControl, blackdrops::RolloutInfo> {
+    using base_t = blackdrops::system::DARTSystem<Params, PolicyControl, blackdrops::RolloutInfo>;
 
     Eigen::VectorXd init_state() const
     {
-        // return Eigen::VectorXd::Zero(Params::blackdrops::model_pred_dim());
         Eigen::VectorXd limits(Params::blackdrops::model_pred_dim());
-        limits << 0.2, 0.2, 0.005, 0.005, 0.1, 0.1;
+        // limits << 0.2, 0.2, 0.005, 0.005, 0.1, 0.1;
+        limits << 0.005, 0.005, 0.1, 0.1;
 
         Eigen::VectorXd state = get_random_vector(limits.size(), limits);
-        while (state.head(2).norm() >= 0.2) {
-            state.head(2) = get_random_vector(2, limits.head(2));
-        }
-
-        global::_goal_mutex.lock();
-        global::goal << state(0), global::goal(1), state(1);
-        global::_goal_mutex.unlock();
 
         return state;
+    }
+
+    blackdrops::RolloutInfo get_rollout_info() const
+    {
+        blackdrops::RolloutInfo info;
+        info.init_state = this->init_state();
+
+        Eigen::VectorXd limits(2);
+        limits << 0.2, 0.2;
+
+        Eigen::VectorXd target = get_random_vector(limits.size(), limits);
+        while (target.norm() >= 0.2) {
+            target = get_random_vector(limits.size(), limits);
+        }
+
+        info.target = target;
+        std::cout << target.transpose() << std::endl;
+
+        return info;
     }
 
     Eigen::VectorXd transform_state(const Eigen::VectorXd& original_state) const
     {
         Eigen::VectorXd ret = Eigen::VectorXd::Zero(Params::blackdrops::model_input_dim());
-        int st = 4;
-        // int st = 2;
+        // int st = 4;
+        int st = 2;
         ret.head(st) = original_state.head(st);
         for (int j = 0; j < 2; j++) {
             ret(st + 2 * j) = std::cos(original_state(j + st));
@@ -329,7 +304,8 @@ struct DARTReacher : public blackdrops::system::DARTSystem<Params, PolicyControl
     void set_robot_state(const std::shared_ptr<robot_dart::Robot>& robot, const Eigen::VectorXd& state) const
     {
         robot->skeleton()->setPositions(state.tail(2));
-        robot->skeleton()->setVelocities(state.segment(2, 2));
+        // robot->skeleton()->setVelocities(state.segment(2, 2));
+        robot->skeleton()->setVelocities(state.head(2));
     }
 
     std::shared_ptr<robot_dart::Robot> get_robot() const
@@ -339,7 +315,7 @@ struct DARTReacher : public blackdrops::system::DARTSystem<Params, PolicyControl
         return simulated_robot;
     }
 
-    void add_extra_to_simu(base_t::robot_simu_t& simu) const
+    void add_extra_to_simu(base_t::robot_simu_t& simu, const blackdrops::RolloutInfo& rollout_info) const
     {
         // std::cout << "Goal is: " << global::goal.transpose() << std::endl;
         // Change gravity
@@ -348,7 +324,9 @@ struct DARTReacher : public blackdrops::system::DARTSystem<Params, PolicyControl
         simu.world()->setGravity(gravity);
         // Add goal marker
         Eigen::Vector6d goal_pose = Eigen::Vector6d::Zero();
-        goal_pose.tail(3) = global::goal;
+        Eigen::VectorXd goal(3);
+        goal << rollout_info.target(0), global::goal(1), rollout_info.target(1);
+        goal_pose.tail(3) = goal;
         // pose, dims, type, mass, color, name
         simu.add_ellipsoid(goal_pose, {0.025, 0.025, 0.025}, "fixed", 1., dart::Color::Green(1.0), "goal_marker");
         // remove collisions from goal marker
@@ -432,7 +410,7 @@ struct DARTReacher : public blackdrops::system::DARTSystem<Params, PolicyControl
 };
 
 struct RewardFunction {
-    double operator()(const Eigen::VectorXd& from_state, const Eigen::VectorXd& action, const Eigen::VectorXd& to_state, bool certain = false) const
+    double operator()(const blackdrops::RolloutInfo& info, const Eigen::VectorXd& from_state, const Eigen::VectorXd& action, const Eigen::VectorXd& to_state, bool certain = false) const
     {
         // Eigen::VectorXd mu;
         // double s;
@@ -446,9 +424,7 @@ struct RewardFunction {
 
         // return std::min(0., gaussian_rand(mu(0), std::sqrt(s)));
 
-        Eigen::VectorXd goal(2);
-        goal << to_state(0), to_state(1);
-        // goal << global::goal(0), global::goal(2);
+        Eigen::VectorXd goal = info.target;
 
         Eigen::VectorXd links(2);
         links << 0.1, 0.11;

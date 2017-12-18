@@ -69,10 +69,13 @@ namespace blackdrops {
             BO_PARAM(bool, stochastic_evaluation, false);
             BO_PARAM(int, num_evals, 0);
             BO_PARAM(int, opt_evals, 1);
-
-            BO_PARAM(double, noise, 1e-10);
         };
     } // namespace defaults
+
+    struct RolloutInfo {
+        Eigen::VectorXd init_state;
+        Eigen::VectorXd target;
+    };
 
     template <typename Params, typename Model, typename Robot, typename Policy, typename PolicyOptimizer, typename RewardFunction>
     class BlackDROPS {
@@ -255,13 +258,23 @@ namespace blackdrops {
 #else
 
             std::cout << "Executing random actions..." << std::endl;
-            for (size_t i = 0; i < init; i++) {
-                _ofs_traj_real.open("traj_real_" + std::to_string(i) + ".dat");
-                if (_random_policies) {
-                    Eigen::VectorXd pp = limbo::tools::random_vector(_policy.params().size()).array() * 2.0 * _boundary - _boundary;
-                    _policy.set_params(pp);
-                    Eigen::write_binary("random_policy_params_" + std::to_string(i) + ".bin", pp);
+            if (policy_file == "") {
+                for (size_t i = 0; i < init; i++) {
+                    _ofs_traj_real.open("traj_real_" + std::to_string(i) + ".dat");
+                    if (_random_policies) {
+                        Eigen::VectorXd pp = limbo::tools::random_vector(_policy.params().size()).array() * 2.0 * _boundary - _boundary;
+                        _policy.set_params(pp);
+                        Eigen::write_binary("random_policy_params_" + std::to_string(i) + ".bin", pp);
+                    }
+                    execute_and_record_data();
+                    _ofs_traj_real.close();
                 }
+            }
+            else {
+                Eigen::VectorXd params;
+                Eigen::read_binary(policy_file, params);
+                _policy.set_params(params);
+                _ofs_traj_real.open("traj_real_0.dat");
                 execute_and_record_data();
                 _ofs_traj_real.close();
             }
