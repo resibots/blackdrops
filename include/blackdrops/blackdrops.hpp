@@ -93,13 +93,18 @@ namespace blackdrops {
             double r_eval = 0.;
 
             if (Params::blackdrops::stochastic_evaluation()) {
-                for (int i = 0; i < Params::blackdrops::num_evals(); i++) {
-                    std::vector<double> R_more;
-                    _robot.execute(_policy, world, Params::blackdrops::T(), R_more, false);
+                Eigen::VectorXd rews = Eigen::VectorXd::Zero(Params::blackdrops::num_evals());
+                limbo::tools::par::loop(0, Params::blackdrops::num_evals(), [&](size_t i) {
+                    // Policy objects are not thread-safe usually
+                    Policy p;
+                    p.set_params(_policy.params());
 
-                    r_eval += std::accumulate(R_more.begin(), R_more.end(), 0.0);
-                }
-                r_eval /= double(Params::blackdrops::num_evals());
+                    std::vector<double> R_more;
+                    _robot.execute(p, world, Params::blackdrops::T(), R_more, false);
+
+                    rews(i) = std::accumulate(R_more.begin(), R_more.end(), 0.0);
+                });
+                r_eval = rews.mean();
                 std::cout << "Expected Reward: " << r_eval << std::endl;
             }
             else {
@@ -348,15 +353,19 @@ namespace blackdrops {
 
             int N = (Params::blackdrops::stochastic_evaluation()) ? Params::blackdrops::opt_evals() : 1;
 
-            double r = 0.;
-            for (int i = 0; i < N; i++) {
+            Eigen::VectorXd rews(N);
+            limbo::tools::par::loop(0, N, [&](size_t i) {
+                Policy p;
+                p.set_params(policy.params());
                 // std::vector<double> R;
-                // _robot.execute(policy, world, Params::blackdrops::T(), R, false);
+                // _robot.execute(p, world, Params::blackdrops::T(), R, false);
 
                 // r += std::accumulate(R.begin(), R.end(), 0.0);
-                r += _robot.predict_policy(policy, _model, world, Params::blackdrops::T());
-            }
-            r /= double(N);
+
+                // Policy objects are not thread-safe usually
+                rews(i) = _robot.predict_policy(p, _model, world, Params::blackdrops::T());
+            });
+            double r = rews.mean();
 
             _iter_mutex.lock();
             _opt_iters++;

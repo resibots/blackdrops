@@ -214,13 +214,9 @@ struct Params {
         BO_DYN_PARAM(int, elitism);
         BO_DYN_PARAM(bool, handle_uncertainty);
 
-        // BO_PARAM(int, lambda, 64);
+        // BO_PARAM(int, lambda, 512);
 
-#ifdef SIMPLE_CMAES
         BO_PARAM(int, variant, aIPOP_CMAES);
-#else
-        BO_PARAM(int, variant, aBIPOP_CMAES);
-#endif
         BO_PARAM(bool, verbose, false);
         BO_PARAM(bool, fun_compute_initial, true);
         BO_DYN_PARAM(double, ubound);
@@ -276,12 +272,7 @@ struct CartPole : public blackdrops::system::ODESystem<Params> {
     {
         constexpr double sigma = 0.001;
 
-        Eigen::VectorXd st = Eigen::VectorXd::Zero(4);
-        for (int i = 0; i < st.size(); i++) {
-            double s = gaussian_rand(st(i), sigma);
-            st(i) = std::max(st(i) - sigma,
-                std::min(s, st(i) + sigma));
-        }
+        Eigen::VectorXd st = gaussian_rand(Eigen::VectorXd::Zero(4), sigma);
 
         return st;
     }
@@ -300,13 +291,7 @@ struct CartPole : public blackdrops::system::ODESystem<Params> {
     {
         constexpr double sigma = 0.01;
 
-        Eigen::VectorXd noisy = original_state;
-
-        for (int j = 0; j < original_state.size(); j++) {
-            double s = gaussian_rand(original_state(j), sigma);
-            noisy(j) = std::max(original_state(j) - sigma,
-                std::min(s, original_state(j) + sigma));
-        }
+        Eigen::VectorXd noisy = gaussian_rand(original_state, sigma);
 
         return noisy;
     }
@@ -365,6 +350,7 @@ struct RewardFunction {
         double dx = to_state(0);
 
         return -(dx * dx + dcos * dcos + dsin * dsin); //std::exp(-0.5 / s_c_sq * (dx * dx + dcos * dcos + dsin * dsin));
+        // return std::exp(-0.5 / s_c_sq * (dx * dx + dcos * dcos + dsin * dsin));
 
         // double x = to_state(0);
         // double theta = to_state(3);

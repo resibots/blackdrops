@@ -67,16 +67,21 @@ namespace blackdrops {
             template <typename Policy, typename Reward>
             std::vector<std::tuple<Eigen::VectorXd, Eigen::VectorXd, Eigen::VectorXd>> execute(const Policy& policy, const Reward& world, double T, std::vector<double>& R, bool display = true)
             {
-                int H = std::ceil(Params::blackdrops::T() / Params::blackdrops::dt());
+                int H = std::ceil(T / Params::blackdrops::dt());
                 std::vector<std::tuple<Eigen::VectorXd, Eigen::VectorXd, Eigen::VectorXd>> res;
 
                 R = std::vector<double>();
-                _last_states.clear();
-                _last_commands.clear();
+                if (display) {
+                    _last_states.clear();
+                    _last_commands.clear();
+                }
 
-                Eigen::VectorXd init_diff = this->add_noise(this->init_state());
-                _last_states.push_back(init_diff);
+                Eigen::VectorXd init_true = this->init_state();
+                Eigen::VectorXd init_diff = this->add_noise(init_true);
+                if (display)
+                    _last_states.push_back(init_diff);
 
+                boost::numeric::odeint::runge_kutta_dopri5<std::vector<double>> _stepper;
                 double t = 0.0;
                 double dt = Params::blackdrops::dt();
                 for (int i = 0; i < H; i++) {
@@ -84,10 +89,10 @@ namespace blackdrops {
 
                     Eigen::VectorXd u = policy.next(init);
 
-                    std::vector<double> robot_state(init_diff.size(), 0.0);
-                    Eigen::VectorXd::Map(robot_state.data(), robot_state.size()) = init_diff;
+                    std::vector<double> robot_state(init_true.size(), 0.0);
+                    Eigen::VectorXd::Map(robot_state.data(), robot_state.size()) = init_true;
 
-                    boost::numeric::odeint::integrate_const(boost::numeric::odeint::make_dense_output(1.0e-12, 1.0e-12, boost::numeric::odeint::runge_kutta_dopri5<std::vector<double>>()),
+                    boost::numeric::odeint::integrate_const(boost::numeric::odeint::make_dense_output(1.0e-12, 1.0e-12, _stepper),
                         std::bind(&ODESystem::dynamics, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, u),
                         robot_state, t, t + dt, dt / 4.0);
                     t += dt;
@@ -99,14 +104,20 @@ namespace blackdrops {
                     // add noise to our observation
                     Eigen::VectorXd obs = this->add_noise(final);
 
-                    _last_states.push_back(obs);
-                    _last_commands.push_back(u);
+                    if (display) {
+                        _last_states.push_back(obs);
+                        _last_commands.push_back(u);
+                    }
 
                     res.push_back(std::make_tuple(init, u, obs - init_diff));
-                    double r = world(init, u, obs);
+
+                    // We want the actual reward of the system (i.e., with the noiseless states)
+                    // this is not given to the algorithm
+                    double r = world(init_true, u, final);
                     R.push_back(r);
 
                     init_diff = obs;
+                    init_true = final;
                 }
 
                 if (!policy.random() && display) {
@@ -122,7 +133,7 @@ namespace blackdrops {
             {
                 std::vector<Eigen::VectorXd> states, commands;
 
-                int H = std::ceil(Params::blackdrops::T() / Params::blackdrops::dt());
+                int H = std::ceil(T / Params::blackdrops::dt());
                 R = std::vector<double>();
                 // init state
                 Eigen::VectorXd init_diff = this->init_state();
@@ -162,7 +173,7 @@ namespace blackdrops {
             template <typename Policy, typename Model, typename Reward>
             double predict_policy(const Policy& policy, const Model& model, const Reward& world, double T) const
             {
-                int H = std::ceil(Params::blackdrops::T() / Params::blackdrops::dt());
+                int H = std::ceil(T / Params::blackdrops::dt());
                 double reward = 0.0;
                 // init state
                 Eigen::VectorXd init_diff = this->init_state();

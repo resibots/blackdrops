@@ -117,6 +117,7 @@ namespace blackdrops {
                 simu.run(T + Params::dart_system::sim_step());
 
                 std::vector<Eigen::VectorXd> states = simu.controller().get_states();
+                std::vector<Eigen::VectorXd> noiseless_states = simu.controller().get_noiseless_states();
                 _last_states = states;
                 std::vector<Eigen::VectorXd> commands = simu.controller().get_commands();
                 _last_commands = commands;
@@ -129,7 +130,9 @@ namespace blackdrops {
                     Eigen::VectorXd u = commands[j];
                     Eigen::VectorXd final = states[j + 1];
 
-                    double r = world(rollout_info, init, u, final);
+                    // We want the actual reward of the system (i.e., with the noiseless states)
+                    // this is not given to the algorithm
+                    double r = world(rollout_info, noiseless_states[j], u, noiseless_states[j + 1]);
                     R.push_back(r);
                     res.push_back(std::make_tuple(init_full, u, final - init));
                 }
@@ -147,7 +150,7 @@ namespace blackdrops {
             {
                 std::vector<Eigen::VectorXd> states, commands;
 
-                int H = std::ceil(Params::blackdrops::T() / Params::blackdrops::dt());
+                int H = std::ceil(T / Params::blackdrops::dt());
                 R = std::vector<double>();
 
                 // Get the information of the rollout
@@ -190,7 +193,7 @@ namespace blackdrops {
             template <typename Policy, typename Model, typename Reward>
             double predict_policy(const Policy& policy, const Model& model, const Reward& world, double T) const
             {
-                int H = std::ceil(Params::blackdrops::T() / Params::blackdrops::dt());
+                int H = std::ceil(T / Params::blackdrops::dt());
                 double reward = 0.0;
 
                 // Get the information of the rollout
@@ -337,6 +340,7 @@ namespace blackdrops {
                 _policy.set_params(Eigen::VectorXd::Map(ctrl.data(), ctrl.size()));
 
                 _states.clear();
+                _noiseless_states.clear();
                 _coms.clear();
 
                 // set some default functions in case the user does not define them
@@ -356,7 +360,9 @@ namespace blackdrops {
                 double dt = Params::blackdrops::dt();
 
                 if (_first || (_t - _prev_time - dt) > -Params::dart_system::sim_step() / 2.0) {
-                    Eigen::VectorXd q = _add_noise(this->get_state(_robot));
+                    Eigen::VectorXd q = this->get_state(_robot);
+                    _noiseless_states.push_back(q);
+                    q = _add_noise(q);
                     Eigen::VectorXd commands = _policy.next(_policy_state(_tranform_state(q)));
                     _states.push_back(q);
                     _coms.push_back(commands);
@@ -374,6 +380,11 @@ namespace blackdrops {
             std::vector<Eigen::VectorXd> get_states() const
             {
                 return _states;
+            }
+
+            std::vector<Eigen::VectorXd> get_noiseless_states() const
+            {
+                return _noiseless_states;
             }
 
             std::vector<Eigen::VectorXd> get_commands() const
@@ -405,7 +416,7 @@ namespace blackdrops {
             Eigen::VectorXd _prev_commands;
             Policy _policy;
             std::vector<Eigen::VectorXd> _coms;
-            std::vector<Eigen::VectorXd> _states;
+            std::vector<Eigen::VectorXd> _states, _noiseless_states;
             std::function<Eigen::VectorXd(const Eigen::VectorXd&)> _tranform_state;
             std::function<Eigen::VectorXd(const Eigen::VectorXd&)> _add_noise;
             std::function<Eigen::VectorXd(const Eigen::VectorXd&)> _policy_state;

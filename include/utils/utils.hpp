@@ -56,17 +56,40 @@
 #ifndef UTILS_UTILS_HPP
 #define UTILS_UTILS_HPP
 
+#include <Eigen/Core>
+
 #include <random>
+
+#include <limbo/tools/random_generator.hpp>
 
 template <typename T>
 inline T gaussian_rand(T m = 0.0, T v = 1.0)
 {
-    static std::random_device rd;
-    static std::mt19937 gen(rd());
+    static thread_local std::mt19937 gen(randutils::auto_seed_128{}.base());
 
     std::normal_distribution<T> gaussian(m, v);
 
     return gaussian(gen);
+}
+
+inline Eigen::VectorXd gaussian_rand(const Eigen::VectorXd& mean, const Eigen::VectorXd& sigma)
+{
+    Eigen::VectorXd result(mean.size());
+    for (int i = 0; i < mean.size(); i++) {
+        result(i) = gaussian_rand(mean(i), sigma(i));
+        // double s = gaussian_rand(mean(i), sigma(i));
+        // result(i) = std::max(mean(i) - sigma(i),
+        //     std::min(s, mean(i) + sigma(i)));
+    }
+
+    return result;
+}
+
+inline Eigen::VectorXd gaussian_rand(const Eigen::VectorXd& mean, double sigma)
+{
+    Eigen::VectorXd sig = Eigen::VectorXd::Constant(mean.size(), sigma);
+
+    return gaussian_rand(mean, sig);
 }
 
 inline double angle_dist(double a, double b)

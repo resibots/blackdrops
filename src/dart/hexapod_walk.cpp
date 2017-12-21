@@ -320,7 +320,7 @@ public:
             // // std::cout << "Setting: " << ctrl_params.size() << " " << commands.size() << std::endl;
             // _simple_controller.set_parameters(ctrl_params);
             // std::cout << "Set: " << _simple_controller.parameters().size() << std::endl;
-            for (size_t i = 0; i < commands.size(); i++)
+            for (int i = 0; i < commands.size(); i++)
                 _target_positions(i + 6) = ((i % 3 == 1) ? 1.0 : -1.0) * commands[i];
 
             _states.push_back(q);
@@ -341,6 +341,11 @@ public:
     }
 
     std::vector<Eigen::VectorXd> get_states() const
+    {
+        return _states;
+    }
+
+    std::vector<Eigen::VectorXd> get_noiseless_states() const
     {
         return _states;
     }
