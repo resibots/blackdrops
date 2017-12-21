@@ -69,6 +69,7 @@
 
 #include <blackdrops/mi_model.hpp>
 
+#include <blackdrops/policy/gp_policy.hpp>
 #include <blackdrops/policy/nn_policy.hpp>
 
 #include <utils/utils.hpp>
@@ -171,6 +172,10 @@ struct Params {
         BO_PARAM(double, T, 2.5);
         BO_DYN_PARAM(bool, verbose);
         BO_DYN_PARAM(double, boundary);
+
+        BO_PARAM(bool, stochastic_evaluation, true);
+        BO_PARAM(int, num_evals, 500);
+        BO_PARAM(int, opt_evals, 1);
     };
 
     struct gp_model {
@@ -196,7 +201,7 @@ struct Params {
         BO_DYN_PARAM(int, elitism);
         BO_DYN_PARAM(bool, handle_uncertainty);
 
-        BO_PARAM(int, variant, aBIPOP_CMAES);
+        BO_PARAM(int, variant, aIPOP_CMAES);
         BO_PARAM(int, verbose, false);
         BO_PARAM(bool, fun_compute_initial, true);
         // BO_PARAM(double, fun_target, 30);
@@ -247,6 +252,22 @@ struct PolicyParams {
         BO_PARAM_ARRAY(double, limits, 10., 10., 1., 1., 1., 1.);
         BO_PARAM(double, af, 5.0);
     };
+
+    struct gp_policy {
+        BO_PARAM(size_t, state_dim, Params::blackdrops::model_input_dim());
+        BO_PARAM(size_t, action_dim, Params::blackdrops::action_dim());
+        BO_PARAM_ARRAY(double, max_u, 3.5);
+        BO_PARAM(double, pseudo_samples, 50);
+        BO_PARAM(double, noise, 0.01 * 0.01);
+        BO_PARAM_ARRAY(double, limits, 10., 10., 1., 1., 1., 1.);
+    };
+
+    struct kernel : public limbo::defaults::kernel {
+        BO_PARAM(double, noise, gp_policy::noise());
+    };
+
+    struct kernel_squared_exp_ard : public limbo::defaults::kernel_squared_exp_ard {
+    };
 };
 
 Eigen::VectorXd tip(double theta1, double theta2)
@@ -267,11 +288,15 @@ struct Pendubot : public blackdrops::system::ODESystem<Params> {
 
     Eigen::VectorXd init_state() const
     {
+        constexpr double sigma = 0.001;
+
         Eigen::VectorXd init = Eigen::VectorXd::Zero(4);
         init(2) = M_PI;
         init(3) = M_PI;
 
-        return init;
+        Eigen::VectorXd st = gaussian_rand(init, sigma);
+
+        return st;
     }
 
     Eigen::VectorXd transform_state(const Eigen::VectorXd& original_state) const
@@ -284,6 +309,15 @@ struct Pendubot : public blackdrops::system::ODESystem<Params> {
         trans_state(5) = std::sin(original_state(3));
 
         return trans_state;
+    }
+
+    Eigen::VectorXd add_noise(const Eigen::VectorXd& original_state) const
+    {
+        constexpr double sigma = 0.01;
+
+        Eigen::VectorXd noisy = gaussian_rand(original_state, sigma);
+
+        return noisy;
     }
 
     void draw_single(const Eigen::VectorXd& state) const
@@ -664,9 +698,15 @@ int main(int argc, char** argv)
     using MGP_t = blackdrops::MIModel<Params, mean_t, limbo::opt::NLOptNoGrad<Params, nlopt::LN_SBPLX>>;
 #endif
 
-    blackdrops::BlackDROPS<Params, MGP_t, Pendubot, blackdrops::policy::NNPolicy<PolicyParams>, policy_opt_t, RewardFunction> pend_system;
+#ifndef GPPOLICY
+    using policy_t = blackdrops::policy::NNPolicy<PolicyParams>;
+#else
+    using policy_t = blackdrops::policy::GPPolicy<PolicyParams>;
+#endif
 
-    pend_system.learn(1, 25, true, policy_file);
+    blackdrops::BlackDROPS<Params, MGP_t, Pendubot, policy_t, policy_opt_t, RewardFunction> pend_system;
+
+    pend_system.learn(1, 40, true, policy_file);
 
 #if defined(USE_SDL) && !defined(NODSP)
     sdl_clean();

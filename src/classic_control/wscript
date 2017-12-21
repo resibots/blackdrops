@@ -89,7 +89,8 @@ def build(bld):
                       uselib=libs,
                       uselib_local='limbo',
                       cxxflags = cxxflags + ['-D NODSP'],
-                      variants = ['SIMU', 'SIMU MEAN', 'SIMU MEAN MODELIDENT', 'SIMU MEAN MODELIDENT ONLYMI'])
+                      variants = ['SIMU', 'SIMU GPPOLICY'])
+                    #   variants = ['SIMU', 'SIMU MEAN', 'SIMU MEAN MODELIDENT', 'SIMU MEAN MODELIDENT ONLYMI'])
 
     if bld.env.DEFINES_SDL:
         limbo.create_variants(bld,
@@ -116,7 +117,8 @@ def build(bld):
                       uselib=libs,
                       uselib_local='limbo',
                       cxxflags = cxxflags,
-                      variants = ['GRAPHIC', 'GRAPHIC MEAN', 'GRAPHIC MEAN MODELIDENT', 'GRAPHIC MEAN MODELIDENT ONLYMI'])
+                      variants = ['GRAPHIC', 'GRAPHIC GPPOLICY'])
+                    #   variants = ['GRAPHIC', 'GRAPHIC MEAN', 'GRAPHIC MEAN MODELIDENT', 'GRAPHIC MEAN MODELIDENT ONLYMI'])
 
     # Find new targets
     files = glob.glob(bld.path.abspath()+"/*.cpp")

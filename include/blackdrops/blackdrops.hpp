@@ -355,14 +355,15 @@ namespace blackdrops {
 
             Eigen::VectorXd rews(N);
             limbo::tools::par::loop(0, N, [&](size_t i) {
+                // Policy objects are not thread-safe usually
                 Policy p;
                 p.set_params(policy.params());
+
                 // std::vector<double> R;
                 // _robot.execute(p, world, Params::blackdrops::T(), R, false);
 
-                // r += std::accumulate(R.begin(), R.end(), 0.0);
+                // rews(i) = std::accumulate(R.begin(), R.end(), 0.0);
 
-                // Policy objects are not thread-safe usually
                 rews(i) = _robot.predict_policy(p, _model, world, Params::blackdrops::T());
             });
             double r = rews.mean();
