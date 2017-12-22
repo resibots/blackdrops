@@ -98,6 +98,8 @@ namespace blackdrops {
                     // Policy objects are not thread-safe usually
                     Policy p;
                     p.set_params(_policy.params());
+                    if (_policy.random())
+                        p.set_random_policy();
 
                     std::vector<double> R_more;
                     _robot.execute(p, world, Params::blackdrops::T(), R_more, false);
@@ -126,8 +128,9 @@ namespace blackdrops {
                 _ofs_real << r << " ";
             _ofs_real << std::endl;
 
-            // statistics for cumulative reward (this the evaluation reward)
-            _ofs_results << r_eval << std::endl;
+            // statistics for cumulative reward (both observed and expected)
+            _ofs_results << r_new << std::endl;
+            _ofs_exp << r_eval << std::endl;
 
             // statistics for trajectories
             std::vector<Eigen::VectorXd> states = _robot.get_last_states();
@@ -235,6 +238,7 @@ namespace blackdrops {
             _random_policies = random_policies;
             // TO-DO: add prefix
             _ofs_results.open("results.dat");
+            _ofs_exp.open("expected.dat");
             _ofs_real.open("real.dat");
             _ofs_esti.open("estimates.dat");
             _ofs_opt.open("times.dat");
@@ -324,6 +328,7 @@ namespace blackdrops {
             _ofs_opt.close();
             _ofs_model.close();
             _ofs_results.close();
+            _ofs_exp.close();
             std::cout << "Experiment finished" << std::endl;
         }
 
@@ -331,7 +336,7 @@ namespace blackdrops {
         Robot _robot;
         Policy _policy;
         Model _model;
-        std::ofstream _ofs_real, _ofs_esti, _ofs_traj_real, _ofs_traj_dummy, _ofs_results, _ofs_opt, _ofs_model;
+        std::ofstream _ofs_real, _ofs_esti, _ofs_traj_real, _ofs_traj_dummy, _ofs_results, _ofs_exp, _ofs_opt, _ofs_model;
         Eigen::VectorXd _params_starting;
         double _best;
         bool _random_policies;
