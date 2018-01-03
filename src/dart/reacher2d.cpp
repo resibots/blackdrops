@@ -539,7 +539,7 @@ int main(int argc, char** argv)
     std::cout << "  tbb threads = " << cmd_arguments.threads() << std::endl;
     std::cout << std::endl;
     std::cout << "Policy parameters:" << std::endl;
-    std::cout << "Type: Neural Network with 1 hidden layer and " << PolicyParams::nn_policy::hidden_neurons() << " hidden neurons." << std::endl;
+    std::cout << "  Type: Neural Network with 1 hidden layer and " << PolicyParams::nn_policy::hidden_neurons() << " hidden neurons." << std::endl;
     std::cout << std::endl;
 
     init_simu(std::string(RESPATH) + "/skel/reacher2d.skel");

@@ -637,9 +637,9 @@ int main(int argc, char** argv)
     std::cout << std::endl;
     std::cout << "Policy parameters:" << std::endl;
 #ifndef GPPOLICY
-    std::cout << "Type: Neural Network with 1 hidden layer and " << PolicyParams::nn_policy::hidden_neurons() << " hidden neurons." << std::endl;
+    std::cout << "  Type: Neural Network with 1 hidden layer and " << PolicyParams::nn_policy::hidden_neurons() << " hidden neurons." << std::endl;
 #else
-    std::cout << "Type: Gaussian Process with " << PolicyParams::gp_policy::pseudo_samples() << " pseudo samples." << std::endl;
+    std::cout << "  Type: Gaussian Process with " << PolicyParams::gp_policy::pseudo_samples() << " pseudo samples." << std::endl;
 #endif
     std::cout << std::endl;
 #ifdef MEAN

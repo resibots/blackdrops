@@ -172,7 +172,8 @@ struct Params {
 
         BO_PARAM(bool, stochastic_evaluation, true);
         BO_PARAM(int, num_evals, 500);
-        BO_PARAM(int, opt_evals, 5);
+        // BO_PARAM(int, opt_evals, 5);
+        BO_DYN_PARAM(int, opt_evals);
     };
 
     struct gp_model {
@@ -426,6 +427,7 @@ BO_DECLARE_DYN_PARAM(int, PolicyParams::gp_policy, pseudo_samples);
 BO_DECLARE_DYN_PARAM(double, Params::blackdrops, boundary);
 BO_DECLARE_DYN_PARAM(bool, Params::blackdrops, verbose);
 BO_DECLARE_DYN_PARAM(bool, Params::blackdrops, stochastic);
+BO_DECLARE_DYN_PARAM(int, Params::blackdrops, opt_evals);
 
 BO_DECLARE_DYN_PARAM(double, Params::opt_cmaes, max_fun_evals);
 BO_DECLARE_DYN_PARAM(double, Params::opt_cmaes, fun_tolerance);
@@ -446,6 +448,7 @@ public:
     {
         // clang-format off
         this->_desc.add_options()
+                    ("opt_evals,o", po::value<int>(), "Number of rollouts for policy evaluation. Defaults to 5.")
                     ("pole_length", po::value<double>(), "Initial length of the pole for the mean function [0 to 1].")
                     ("pole_mass", po::value<double>(), "Initial mass of the pole for the mean function [0 to 1].")
                     ("cart_mass", po::value<double>(), "Initial mass of the cart for the mean function [0 to 1].")
@@ -465,6 +468,15 @@ public:
 
             po::notify(vm);
 
+            if (vm.count("opt_evals")) {
+                int pl = vm["opt_evals"].as<int>();
+                if (pl <= 0)
+                    pl = 1;
+                Params::blackdrops::set_opt_evals(pl);
+            }
+            else {
+                Params::blackdrops::set_opt_evals(5);
+            }
             // Mean Function parameters
             if (vm.count("pole_length")) {
                 double pl = vm["pole_length"].as<double>();
@@ -562,14 +574,15 @@ int main(int argc, char** argv)
     std::cout << "  elitism = " << Params::opt_cmaes::elitism() << std::endl;
     std::cout << "  handle_uncertainty = " << Params::opt_cmaes::handle_uncertainty() << std::endl;
     std::cout << "  stochastic rollouts = " << Params::blackdrops::stochastic() << std::endl;
+    std::cout << "  parallel rollouts = " << Params::blackdrops::opt_evals() << std::endl;
     std::cout << "  boundary = " << Params::blackdrops::boundary() << std::endl;
     std::cout << "  tbb threads = " << cmd_arguments.threads() << std::endl;
     std::cout << std::endl;
     std::cout << "Policy parameters:" << std::endl;
 #ifndef GPPOLICY
-    std::cout << "Type: Neural Network with 1 hidden layer and " << PolicyParams::nn_policy::hidden_neurons() << " hidden neurons." << std::endl;
+    std::cout << "  Type: Neural Network with 1 hidden layer and " << PolicyParams::nn_policy::hidden_neurons() << " hidden neurons." << std::endl;
 #else
-    std::cout << "Type: Gaussian Process with " << PolicyParams::gp_policy::pseudo_samples() << " pseudo samples." << std::endl;
+    std::cout << "  Type: Gaussian Process with " << PolicyParams::gp_policy::pseudo_samples() << " pseudo samples." << std::endl;
 #endif
     std::cout << std::endl;
 #ifdef MEAN
