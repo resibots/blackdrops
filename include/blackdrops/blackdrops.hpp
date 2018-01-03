@@ -434,7 +434,7 @@ namespace blackdrops {
 
             return std::make_tuple(errors, sigmas);
         }
-    };
+    }; // namespace blackdrops
 } // namespace blackdrops
 
 #endif

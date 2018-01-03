@@ -170,7 +170,7 @@ struct Params {
 
         BO_PARAM(bool, stochastic_evaluation, true);
         BO_PARAM(int, num_evals, 500);
-        BO_PARAM(int, opt_evals, 1);
+        BO_PARAM(int, opt_evals, 5);
     };
 
     struct gp_model {
@@ -329,7 +329,8 @@ struct CartPole : public blackdrops::system::ODESystem<Params> {
 struct RewardFunction {
     double operator()(const Eigen::VectorXd& from_state, const Eigen::VectorXd& action, const Eigen::VectorXd& to_state) const
     {
-        double s_c_sq = 0.25 * 0.25;
+        // double s_c_sq = 0.25 * 0.25;
+
         // double da = std::numeric_limits<double>::max();
         // if (std::abs(to_state(3)) < 100.0)
         //     da = angle_dist(to_state(3), Params::goal_pos());

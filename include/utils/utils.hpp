@@ -62,27 +62,37 @@
 
 #include <limbo/tools/random_generator.hpp>
 
-template <typename T>
-inline T gaussian_rand(T m = 0.0, T v = 1.0)
+inline Eigen::VectorXd gaussian_rand(const Eigen::VectorXd& mean)
 {
-    static thread_local std::mt19937 gen(randutils::auto_seed_128{}.base());
+    static std::mt19937 gen(randutils::auto_seed_128{}.base());
+    static std::normal_distribution<double> gaussian(0., 1.);
 
-    std::normal_distribution<T> gaussian(m, v);
+    Eigen::VectorXd result(mean.size());
+    for (int i = 0; i < mean.size(); i++) {
+        result(i) = mean(i) + gaussian(gen);
+    }
 
-    return gaussian(gen);
+    return result;
+}
+
+inline Eigen::VectorXd gaussian_rand(const Eigen::VectorXd& mean, const Eigen::MatrixXd& covar)
+{
+    assert(mean.size() == covar.rows() && covar.rows() == covar.cols());
+
+    Eigen::LLT<Eigen::MatrixXd> cholSolver(covar);
+    Eigen::MatrixXd transform = cholSolver.matrixL();
+
+    return transform * gaussian_rand(Eigen::VectorXd::Zero(mean.size())) + mean;
 }
 
 inline Eigen::VectorXd gaussian_rand(const Eigen::VectorXd& mean, const Eigen::VectorXd& sigma)
 {
-    Eigen::VectorXd result(mean.size());
-    for (int i = 0; i < mean.size(); i++) {
-        result(i) = gaussian_rand(mean(i), sigma(i));
-        // double s = gaussian_rand(mean(i), sigma(i));
-        // result(i) = std::max(mean(i) - sigma(i),
-        //     std::min(s, mean(i) + sigma(i)));
-    }
+    assert(mean.size() == sigma.size());
 
-    return result;
+    Eigen::MatrixXd covar = Eigen::MatrixXd::Zero(mean.size(), mean.size());
+    covar.diagonal() = sigma.array().square();
+
+    return gaussian_rand(mean, covar);
 }
 
 inline Eigen::VectorXd gaussian_rand(const Eigen::VectorXd& mean, double sigma)
@@ -90,6 +100,14 @@ inline Eigen::VectorXd gaussian_rand(const Eigen::VectorXd& mean, double sigma)
     Eigen::VectorXd sig = Eigen::VectorXd::Constant(mean.size(), sigma);
 
     return gaussian_rand(mean, sig);
+}
+
+inline double gaussian_rand(double mean, double sigma)
+{
+    Eigen::VectorXd m(1);
+    m << mean;
+
+    return gaussian_rand(m, sigma)[0];
 }
 
 inline double angle_dist(double a, double b)

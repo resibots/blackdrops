@@ -263,6 +263,6 @@ namespace blackdrops {
             MeanFunction _mean_function;
             std::vector<Eigen::VectorXd> _samples, _observations;
         };
-    }
-}
+    } // namespace model
+} // namespace blackdrops
 #endif

@@ -205,6 +205,6 @@ namespace blackdrops {
         Eigen::MatrixXd _observations;
         Eigen::VectorXd _means, _sigmas, _limits;
     };
-}
+} // namespace blackdrops
 
 #endif
