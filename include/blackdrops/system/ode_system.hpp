@@ -190,7 +190,7 @@ namespace blackdrops {
                     Eigen::VectorXd sigma;
                     std::tie(mu, sigma) = model.predictm(query_vec);
 
-                    if (Params::opt_cmaes::handle_uncertainty()) {
+                    if (Params::blackdrops::stochastic()) {
                         sigma = sigma.array().sqrt();
                         for (int i = 0; i < mu.size(); i++) {
                             double s = gaussian_rand(mu(i), sigma(i));

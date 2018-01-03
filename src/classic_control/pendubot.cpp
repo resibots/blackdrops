@@ -72,6 +72,7 @@
 #include <blackdrops/policy/gp_policy.hpp>
 #include <blackdrops/policy/nn_policy.hpp>
 
+#include <utils/cmd_args.hpp>
 #include <utils/utils.hpp>
 
 #if defined(USE_SDL) && !defined(NODSP)
@@ -171,6 +172,7 @@ struct Params {
         BO_PARAM(double, dt, 0.05);
         BO_PARAM(double, T, 2.5);
         BO_DYN_PARAM(bool, verbose);
+        BO_DYN_PARAM(bool, stochastic);
         BO_DYN_PARAM(double, boundary);
 
         BO_PARAM(bool, stochastic_evaluation, true);
@@ -257,7 +259,8 @@ struct PolicyParams {
         BO_PARAM(size_t, state_dim, Params::blackdrops::model_input_dim());
         BO_PARAM(size_t, action_dim, Params::blackdrops::action_dim());
         BO_PARAM_ARRAY(double, max_u, 3.5);
-        BO_PARAM(double, pseudo_samples, 50);
+        // BO_PARAM(double, pseudo_samples, 50);
+        BO_DYN_PARAM(int, pseudo_samples);
         BO_PARAM(double, noise, 0.01 * 0.01);
         BO_PARAM_ARRAY(double, limits, 10., 10., 1., 1., 1., 1.);
     };
@@ -453,7 +456,9 @@ protected:
 #endif
 
 BO_DECLARE_DYN_PARAM(int, PolicyParams::nn_policy, hidden_neurons);
+BO_DECLARE_DYN_PARAM(int, PolicyParams::gp_policy, pseudo_samples);
 BO_DECLARE_DYN_PARAM(bool, Params::blackdrops, verbose);
+BO_DECLARE_DYN_PARAM(bool, Params::blackdrops, stochastic);
 BO_DECLARE_DYN_PARAM(double, Params::blackdrops, boundary);
 
 BO_DECLARE_DYN_PARAM(double, Params::opt_cmaes, max_fun_evals);
@@ -471,180 +476,139 @@ BO_DECLARE_DYN_PARAM(double, Params::mean_function, length2);
 BO_DECLARE_DYN_PARAM(double, Params::mean_function, friction1);
 BO_DECLARE_DYN_PARAM(double, Params::mean_function, friction2);
 
+class PendubotArgs : public utils::CmdArgs {
+public:
+    PendubotArgs() : utils::CmdArgs()
+    {
+        // clang-format off
+        this->_desc.add_options()
+                    ("mass1", po::value<double>(), "Initial mass of the first link for the mean function [0 to 1].")
+                    ("mass2", po::value<double>(), "Initial mass of the second link for the mean function [0 to 1].")
+                    ("length1", po::value<double>(), "Initial length of the first link for the mean function [0 to 1].")
+                    ("length2", po::value<double>(), "Initial length of the second link for the mean function [0 to 1].")
+                    ("friction1", po::value<double>(), "Initial friction coefficient of the first joint for the mean function [0 to 1].")
+                    ("friction2", po::value<double>(), "Initial friction coefficient of the second joint for the mean function [0 to 1].")
+                    ("policy", po::value<std::string>(), "Path to load policy file");
+        // clang-format on
+    }
+
+    int parse(int argc, char** argv)
+    {
+        int ret = utils::CmdArgs::parse(argc, argv);
+        if (ret >= 0)
+            return ret;
+
+        try {
+            po::variables_map vm;
+            po::store(po::parse_command_line(argc, argv, this->_desc), vm);
+
+            po::notify(vm);
+
+            if (vm.count("policy")) {
+                _policy_file = vm["policy"].as<std::string>();
+            }
+
+            // Mean Function parameters
+            if (vm.count("mass1")) {
+                double m1 = vm["mass1"].as<double>();
+                if (m1 < 0.0)
+                    m1 = 0.0;
+                if (m1 > 1.0)
+                    m1 = 1.0;
+                Params::mean_function::set_mass1(m1);
+            }
+            else {
+                Params::mean_function::set_mass1(0.5);
+            }
+            if (vm.count("mass2")) {
+                double m2 = vm["mass2"].as<double>();
+                if (m2 < 0.0)
+                    m2 = 0.0;
+                if (m2 > 1.0)
+                    m2 = 1.0;
+                Params::mean_function::set_mass2(m2);
+            }
+            else {
+                Params::mean_function::set_mass2(0.5);
+            }
+            if (vm.count("length1")) {
+                double l1 = vm["length1"].as<double>();
+                if (l1 < 0.0)
+                    l1 = 0.0;
+                if (l1 > 1.0)
+                    l1 = 1.0;
+                Params::mean_function::set_length1(l1);
+            }
+            else {
+                Params::mean_function::set_length1(0.5);
+            }
+            if (vm.count("length2")) {
+                double l2 = vm["length2"].as<double>();
+                if (l2 < 0.0)
+                    l2 = 0.0;
+                if (l2 > 1.0)
+                    l2 = 1.0;
+                Params::mean_function::set_length2(l2);
+            }
+            else {
+                Params::mean_function::set_length2(0.5);
+            }
+            if (vm.count("friction1")) {
+                double fr = vm["friction1"].as<double>();
+                if (fr < 0.0)
+                    fr = 0.0;
+                if (fr > 1.0)
+                    fr = 1.0;
+                Params::mean_function::set_friction1(fr);
+            }
+            else {
+                Params::mean_function::set_friction1(0.1);
+            }
+            if (vm.count("friction2")) {
+                double fr = vm["friction2"].as<double>();
+                if (fr < 0.0)
+                    fr = 0.0;
+                if (fr > 1.0)
+                    fr = 1.0;
+                Params::mean_function::set_friction2(fr);
+            }
+            else {
+                Params::mean_function::set_friction2(0.1);
+            }
+        }
+        catch (po::error& e) {
+            std::cerr << "[Exception caught while parsing command line arguments]: " << e.what() << std::endl;
+            return 1;
+        }
+
+        return -1;
+    }
+
+    std::string policy_file() const { return _policy_file; }
+
+protected:
+    std::string _policy_file;
+};
+
 int main(int argc, char** argv)
 {
-    bool uncertainty = false;
-    int threads = tbb::task_scheduler_init::automatic;
-    bool verbose = false;
-    std::string policy_file = "";
+    PendubotArgs cmd_arguments;
+    int ret = cmd_arguments.parse(argc, argv);
+    if (ret >= 0)
+        return ret;
 
-    namespace po = boost::program_options;
-    po::options_description desc("Command line arguments");
-    // clang-format off
-    desc.add_options()("help,h", "Prints this help message")
-                      ("hidden_neurons,n", po::value<int>(), "Number of hidden neurons in NN policy.")
-                      ("boundary,b", po::value<double>(), "Boundary of the values during the optimization.")
-                      ("max_evals,m", po::value<int>(), "Max function evaluations to optimize the policy.")
-                      ("tolerance,t", po::value<double>(), "Maximum tolerance to continue optimizing the function.")
-                      ("restarts,r", po::value<int>(), "Max number of restarts to use during optimization.")
-                      ("elitism,e", po::value<int>(), "Elitism mode to use [0 to 3].")
-                      ("uncertainty,u", po::bool_switch(&uncertainty)->default_value(false), "Enable uncertainty handling.")
-                      ("threads,d", po::value<int>(), "Max number of threads used by TBB")
-                      ("verbose,v", po::bool_switch(&verbose)->default_value(false), "Enable verbose mode.")
-                      ("mass1", po::value<double>(), "Initial mass of the first link for the mean function [0 to 1].")
-                      ("mass2", po::value<double>(), "Initial mass of the second link for the mean function [0 to 1].")
-                      ("length1", po::value<double>(), "Initial length of the first link for the mean function [0 to 1].")
-                      ("length2", po::value<double>(), "Initial length of the second link for the mean function [0 to 1].")
-                      ("friction1", po::value<double>(), "Initial friction coefficient of the first joint for the mean function [0 to 1].")
-                      ("friction2", po::value<double>(), "Initial friction coefficient of the second joint for the mean function [0 to 1].")
-                      ("policy", po::value<std::string>(), "Path to load policy file");
-    // clang-format on
+    PolicyParams::nn_policy::set_hidden_neurons(cmd_arguments.neurons());
+    PolicyParams::gp_policy::set_pseudo_samples(cmd_arguments.pseudo_samples());
 
-    try {
-        po::variables_map vm;
-        po::store(po::parse_command_line(argc, argv, desc), vm);
-        if (vm.count("help")) {
-            std::cout << desc << std::endl;
-            return 0;
-        }
+    Params::blackdrops::set_boundary(cmd_arguments.boundary());
+    Params::opt_cmaes::set_lbound(-cmd_arguments.boundary());
+    Params::opt_cmaes::set_ubound(cmd_arguments.boundary());
 
-        po::notify(vm);
+    Params::opt_cmaes::set_max_fun_evals(cmd_arguments.max_fun_evals());
+    Params::opt_cmaes::set_fun_tolerance(cmd_arguments.fun_tolerance());
+    Params::opt_cmaes::set_restarts(cmd_arguments.restarts());
+    Params::opt_cmaes::set_elitism(cmd_arguments.elitism());
 
-        if (vm.count("threads"))
-            threads = vm["threads"].as<int>();
-        if (vm.count("hidden_neurons")) {
-            int c = vm["hidden_neurons"].as<int>();
-            if (c < 1)
-                c = 1;
-            PolicyParams::nn_policy::set_hidden_neurons(c);
-        }
-        else {
-            PolicyParams::nn_policy::set_hidden_neurons(5);
-        }
-        if (vm.count("boundary")) {
-            double c = vm["boundary"].as<double>();
-            if (c < 0)
-                c = 0;
-            Params::blackdrops::set_boundary(c);
-            Params::opt_cmaes::set_lbound(-c);
-            Params::opt_cmaes::set_ubound(c);
-        }
-        else {
-            Params::blackdrops::set_boundary(0);
-            Params::opt_cmaes::set_lbound(-6);
-            Params::opt_cmaes::set_ubound(6);
-        }
-        if (vm.count("policy")) {
-            policy_file = vm["policy"].as<std::string>();
-        }
-
-        // Cmaes parameters
-        if (vm.count("max_evals")) {
-            int c = vm["max_evals"].as<int>();
-            Params::opt_cmaes::set_max_fun_evals(c);
-        }
-        else {
-            Params::opt_cmaes::set_max_fun_evals(10000);
-        }
-        if (vm.count("tolerance")) {
-            double c = vm["tolerance"].as<double>();
-            if (c < 0.1)
-                c = 0.1;
-            Params::opt_cmaes::set_fun_tolerance(c);
-        }
-        else {
-            Params::opt_cmaes::set_fun_tolerance(1);
-        }
-        if (vm.count("restarts")) {
-            int c = vm["restarts"].as<int>();
-            if (c < 1)
-                c = 1;
-            Params::opt_cmaes::set_restarts(c);
-        }
-        else {
-            Params::opt_cmaes::set_restarts(3);
-        }
-        if (vm.count("elitism")) {
-            int c = vm["elitism"].as<int>();
-            if (c < 0 || c > 3)
-                c = 0;
-            Params::opt_cmaes::set_elitism(c);
-        }
-        else {
-            Params::opt_cmaes::set_elitism(0);
-        }
-        // Mean Function parameters
-        if (vm.count("mass1")) {
-            double m1 = vm["mass1"].as<double>();
-            if (m1 < 0.0)
-                m1 = 0.0;
-            if (m1 > 1.0)
-                m1 = 1.0;
-            Params::mean_function::set_mass1(m1);
-        }
-        else {
-            Params::mean_function::set_mass1(0.5);
-        }
-        if (vm.count("mass2")) {
-            double m2 = vm["mass2"].as<double>();
-            if (m2 < 0.0)
-                m2 = 0.0;
-            if (m2 > 1.0)
-                m2 = 1.0;
-            Params::mean_function::set_mass2(m2);
-        }
-        else {
-            Params::mean_function::set_mass2(0.5);
-        }
-        if (vm.count("length1")) {
-            double l1 = vm["length1"].as<double>();
-            if (l1 < 0.0)
-                l1 = 0.0;
-            if (l1 > 1.0)
-                l1 = 1.0;
-            Params::mean_function::set_length1(l1);
-        }
-        else {
-            Params::mean_function::set_length1(0.5);
-        }
-        if (vm.count("length2")) {
-            double l2 = vm["length2"].as<double>();
-            if (l2 < 0.0)
-                l2 = 0.0;
-            if (l2 > 1.0)
-                l2 = 1.0;
-            Params::mean_function::set_length2(l2);
-        }
-        else {
-            Params::mean_function::set_length2(0.5);
-        }
-        if (vm.count("friction1")) {
-            double fr = vm["friction1"].as<double>();
-            if (fr < 0.0)
-                fr = 0.0;
-            if (fr > 1.0)
-                fr = 1.0;
-            Params::mean_function::set_friction1(fr);
-        }
-        else {
-            Params::mean_function::set_friction1(0.1);
-        }
-        if (vm.count("friction2")) {
-            double fr = vm["friction2"].as<double>();
-            if (fr < 0.0)
-                fr = 0.0;
-            if (fr > 1.0)
-                fr = 1.0;
-            Params::mean_function::set_friction2(fr);
-        }
-        else {
-            Params::mean_function::set_friction2(0.1);
-        }
-    }
-    catch (po::error& e) {
-        std::cerr << "[Exception caught while parsing command line arguments]: " << e.what() << std::endl;
-        return 1;
-    }
 #if defined(USE_SDL) && !defined(NODSP)
     //Initialize
     if (!sdl_init()) {
@@ -653,19 +617,30 @@ int main(int argc, char** argv)
 #endif
 
 #ifdef USE_TBB
-    static tbb::task_scheduler_init init(threads);
+    static tbb::task_scheduler_init init(cmd_arguments.threads());
 #endif
 
-    Params::blackdrops::set_verbose(verbose);
-    Params::opt_cmaes::set_handle_uncertainty(uncertainty);
+    Params::blackdrops::set_verbose(cmd_arguments.verbose());
+    Params::blackdrops::set_stochastic(cmd_arguments.stochastic());
+    Params::opt_cmaes::set_handle_uncertainty(cmd_arguments.uncertainty());
 
+    std::cout << std::endl;
     std::cout << "Cmaes parameters:" << std::endl;
     std::cout << "  max_fun_evals = " << Params::opt_cmaes::max_fun_evals() << std::endl;
     std::cout << "  fun_tolerance = " << Params::opt_cmaes::fun_tolerance() << std::endl;
     std::cout << "  restarts = " << Params::opt_cmaes::restarts() << std::endl;
     std::cout << "  elitism = " << Params::opt_cmaes::elitism() << std::endl;
     std::cout << "  handle_uncertainty = " << Params::opt_cmaes::handle_uncertainty() << std::endl;
+    std::cout << "  stochastic rollouts = " << Params::blackdrops::stochastic() << std::endl;
     std::cout << "  boundary = " << Params::blackdrops::boundary() << std::endl;
+    std::cout << "  tbb threads = " << cmd_arguments.threads() << std::endl;
+    std::cout << std::endl;
+    std::cout << "Policy parameters:" << std::endl;
+#ifndef GPPOLICY
+    std::cout << "Type: Neural Network with 1 hidden layer and " << PolicyParams::nn_policy::hidden_neurons() << " hidden neurons." << std::endl;
+#else
+    std::cout << "Type: Gaussian Process with " << PolicyParams::gp_policy::pseudo_samples() << " pseudo samples." << std::endl;
+#endif
     std::cout << std::endl;
 #ifdef MEAN
     std::cout << "Mean parameters: " << std::endl;
@@ -706,7 +681,7 @@ int main(int argc, char** argv)
 
     blackdrops::BlackDROPS<Params, MGP_t, Pendubot, policy_t, policy_opt_t, RewardFunction> pend_system;
 
-    pend_system.learn(1, 40, true, policy_file);
+    pend_system.learn(1, 40, true, cmd_arguments.policy_file());
 
 #if defined(USE_SDL) && !defined(NODSP)
     sdl_clean();

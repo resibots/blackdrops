@@ -74,6 +74,7 @@
 
 #include <hexapod_controller/hexapod_controller_simple.hpp>
 
+#include <utils/cmd_args.hpp>
 #include <utils/utils.hpp>
 
 struct Params {
@@ -90,6 +91,7 @@ struct Params {
         BO_PARAM(double, T, 4.0);
         BO_PARAM(double, boundary, 1.0);
         BO_DYN_PARAM(bool, verbose);
+        BO_DYN_PARAM(bool, stochastic);
     };
 
     struct dart_system {
@@ -649,6 +651,7 @@ void init_simu(const std::string& robot_file, int broken_leg = -1)
 }
 
 BO_DECLARE_DYN_PARAM(bool, Params::blackdrops, verbose);
+BO_DECLARE_DYN_PARAM(bool, Params::blackdrops, stochastic);
 
 BO_DECLARE_DYN_PARAM(double, Params::opt_cmaes, max_fun_evals);
 BO_DECLARE_DYN_PARAM(double, Params::opt_cmaes, fun_tolerance);
@@ -658,101 +661,82 @@ BO_DECLARE_DYN_PARAM(int, Params::opt_cmaes, restarts);
 BO_DECLARE_DYN_PARAM(int, Params::opt_cmaes, elitism);
 BO_DECLARE_DYN_PARAM(bool, Params::opt_cmaes, handle_uncertainty);
 
+class HexaArgs : public utils::CmdArgs {
+public:
+    HexaArgs() : utils::CmdArgs()
+    {
+        // clang-format off
+        this->_desc.add_options()
+                    ("damage", po::value<int>(), "Leg to be shortened [0-5]")
+                    ("policy", po::value<std::string>(), "Path to load policy file");
+        // clang-format on
+    }
+
+    int parse(int argc, char** argv)
+    {
+        int ret = utils::CmdArgs::parse(argc, argv);
+        if (ret >= 0)
+            return ret;
+
+        try {
+            po::variables_map vm;
+            po::store(po::parse_command_line(argc, argv, this->_desc), vm);
+
+            po::notify(vm);
+
+            if (vm.count("damage")) {
+                _broken_leg = vm["damage"].as<int>();
+            }
+
+            if (vm.count("policy")) {
+                _policy_file = vm["policy"].as<std::string>();
+            }
+        }
+        catch (po::error& e) {
+            std::cerr << "[Exception caught while parsing command line arguments]: " << e.what() << std::endl;
+            return 1;
+        }
+
+        return -1;
+    }
+
+    std::string policy_file() const { return _policy_file; }
+    int broken_leg() const { return _broken_leg; }
+
+protected:
+    std::string _policy_file;
+    int _broken_leg;
+};
+
 int main(int argc, char** argv)
 {
-    bool uncertainty = false;
-    bool verbose = false;
-    int threads = tbb::task_scheduler_init::automatic;
-    int broken_leg = -1;
-    std::string policy_file = "";
-
-    namespace po = boost::program_options;
-    po::options_description desc("Command line arguments");
-    // clang-format off
-    desc.add_options()("help,h", "Prints this help message")
-                      ("max_evals,m", po::value<int>(), "Max function evaluations to optimize the policy.")
-                      ("tolerance,t", po::value<double>(), "Maximum tolerance to continue optimizing the function.")
-                      ("restarts,r", po::value<int>(), "Max number of restarts to use during optimization.")
-                      ("elitism,e", po::value<int>(), "Elitism mode to use [0 to 3].")
-                      ("uncertainty,u", po::bool_switch(&uncertainty)->default_value(false), "Enable uncertainty handling.")
-                      ("threads,d", po::value<int>(), "Max number of threads used by TBB")
-                      ("damage,p", po::value<int>(), "Leg to be shortened [0-5]")
-                      ("verbose,v", po::bool_switch(&verbose)->default_value(false), "Enable verbose mode.")
-                      ("policy", po::value<std::string>(), "Path to load policy file");
-    // clang-format on
-
-    try {
-        po::variables_map vm;
-        po::store(po::parse_command_line(argc, argv, desc), vm);
-        if (vm.count("help")) {
-            std::cout << desc << std::endl;
-            return 0;
-        }
-
-        po::notify(vm);
-
-        if (vm.count("threads")) {
-            threads = vm["threads"].as<int>();
-        }
-
-        if (vm.count("damage")) {
-            broken_leg = vm["damage"].as<int>();
-        }
-
-        if (vm.count("policy")) {
-            policy_file = vm["policy"].as<std::string>();
-        }
-
-        // Cmaes parameters
-        if (vm.count("max_evals")) {
-            int c = vm["max_evals"].as<int>();
-            Params::opt_cmaes::set_max_fun_evals(c);
-        }
-        else {
-            Params::opt_cmaes::set_max_fun_evals(10000);
-        }
-        if (vm.count("tolerance")) {
-            double c = vm["tolerance"].as<double>();
-            if (c < 0.1)
-                c = 0.1;
-            Params::opt_cmaes::set_fun_tolerance(c);
-        }
-        else {
-            Params::opt_cmaes::set_fun_tolerance(1);
-        }
-        if (vm.count("restarts")) {
-            int c = vm["restarts"].as<int>();
-            if (c < 1)
-                c = 1;
-            Params::opt_cmaes::set_restarts(c);
-        }
-        else {
-            Params::opt_cmaes::set_restarts(3);
-        }
-        if (vm.count("elitism")) {
-            int c = vm["elitism"].as<int>();
-            if (c < 0 || c > 3)
-                c = 0;
-            Params::opt_cmaes::set_elitism(c);
-        }
-        else {
-            Params::opt_cmaes::set_elitism(0);
-        }
-    }
-    catch (po::error& e) {
-        std::cerr << "[Exception caught while parsing command line arguments]: " << e.what() << std::endl;
-        return 1;
-    }
-
-#ifdef USE_TBB
-    static tbb::task_scheduler_init init(threads);
-#endif
-
-    Params::blackdrops::set_verbose(verbose);
-    Params::opt_cmaes::set_handle_uncertainty(uncertainty);
+    HexaArgs cmd_arguments;
+    int ret = cmd_arguments.parse(argc, argv);
+    if (ret >= 0)
+        return ret;
 
     Params::opt_cmaes::set_lbound(-Params::blackdrops::boundary());
     Params::opt_cmaes::set_ubound(Params::blackdrops::boundary());
+
+    Params::opt_cmaes::set_max_fun_evals(cmd_arguments.max_fun_evals());
+    Params::opt_cmaes::set_fun_tolerance(cmd_arguments.fun_tolerance());
+    Params::opt_cmaes::set_restarts(cmd_arguments.restarts());
+    Params::opt_cmaes::set_elitism(cmd_arguments.elitism());
+
+#if defined(USE_SDL) && !defined(NODSP)
+    //Initialize
+    if (!sdl_init()) {
+        return 1;
+    }
+#endif
+
+#ifdef USE_TBB
+    static tbb::task_scheduler_init init(cmd_arguments.threads());
+#endif
+
+    Params::blackdrops::set_verbose(cmd_arguments.verbose());
+    Params::blackdrops::set_stochastic(cmd_arguments.stochastic());
+    Params::opt_cmaes::set_handle_uncertainty(cmd_arguments.uncertainty());
 
     std::cout << std::endl;
     std::cout << "Cmaes parameters:" << std::endl;
@@ -761,11 +745,12 @@ int main(int argc, char** argv)
     std::cout << "  restarts = " << Params::opt_cmaes::restarts() << std::endl;
     std::cout << "  elitism = " << Params::opt_cmaes::elitism() << std::endl;
     std::cout << "  handle_uncertainty = " << Params::opt_cmaes::handle_uncertainty() << std::endl;
+    std::cout << "  stochastic rollouts = " << Params::blackdrops::stochastic() << std::endl;
     std::cout << "  boundary = " << Params::blackdrops::boundary() << std::endl;
-    std::cout << "  tbb threads = " << threads << std::endl;
+    std::cout << "  tbb threads = " << cmd_arguments.threads() << std::endl;
     std::cout << std::endl;
 
-    init_simu(std::string(RESPATH) + "/URDF/pexod.urdf", broken_leg);
+    init_simu(std::string(RESPATH) + "/URDF/pexod.urdf", cmd_arguments.broken_leg());
 
     using policy_opt_t = limbo::opt::Cmaes<Params>;
 
@@ -782,7 +767,7 @@ int main(int argc, char** argv)
 
     blackdrops::BlackDROPS<Params, MGP_t, Hexapod, FakePolicy, policy_opt_t, RewardFunction> hexa_system;
 
-    hexa_system.learn(1, 10, true, policy_file);
+    hexa_system.learn(1, 10, true, cmd_arguments.policy_file());
 
     return 0;
 }
