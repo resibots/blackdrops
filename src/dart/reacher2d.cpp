@@ -72,6 +72,7 @@
 #include <blackdrops/system/dart_system.hpp>
 
 #include <blackdrops/policy/nn_policy.hpp>
+#include <blackdrops/policy/gp_policy.hpp>
 
 #include <utils/cmd_args.hpp>
 #include <utils/dart_utils.hpp>
@@ -99,8 +100,8 @@ struct Params {
 
         BO_PARAM(bool, stochastic_evaluation, true);
         BO_PARAM(int, num_evals, 1000);
-        BO_PARAM(int, opt_evals, 10);
-        // BO_PARAM(int, opt_evals, 1);
+        BO_DYN_PARAM(int, opt_evals);
+        // BO_PARAM(int, opt_evals, 10);
     };
 
     struct dart_system {
@@ -159,13 +160,26 @@ struct PolicyParams {
     struct nn_policy {
         BO_PARAM(size_t, state_dim, Params::blackdrops::model_input_dim() + 2);
         BO_PARAM(size_t, action_dim, Params::blackdrops::action_dim());
-        // BO_PARAM_ARRAY(double, max_u, 10.0, 10.0);
-        // BO_PARAM_ARRAY(double, limits, 10., 10., 1.0, 1.0, 1.0, 1.0);
         BO_PARAM_ARRAY(double, max_u, 200.0, 200.0);
         BO_PARAM_ARRAY(double, limits, 0.2, 0.2, 30., 70., 1.0, 1.0, 1.0, 1.0);
-        // BO_PARAM_ARRAY(double, limits, 30., 70., 1.0, 1.0, 1.0, 1.0);
         BO_DYN_PARAM(int, hidden_neurons);
         BO_PARAM(double, af, 1.0);
+    };
+
+    struct gp_policy {
+        BO_PARAM(size_t, state_dim, Params::blackdrops::model_input_dim() + 2);
+        BO_PARAM(size_t, action_dim, Params::blackdrops::action_dim());
+        BO_PARAM_ARRAY(double, max_u, 200.0, 200.0);
+        BO_DYN_PARAM(int, pseudo_samples);
+        BO_PARAM(double, noise, 0.01 * 0.01);
+        BO_PARAM_ARRAY(double, limits, 0.2, 0.2, 30., 70., 1.0, 1.0, 1.0, 1.0);
+    };
+
+    struct kernel : public limbo::defaults::kernel {
+        BO_PARAM(double, noise, gp_policy::noise());
+    };
+
+    struct kernel_squared_exp_ard : public limbo::defaults::kernel_squared_exp_ard {
     };
 };
 
@@ -481,9 +495,11 @@ void init_simu(const std::string& robot_file)
 }
 
 BO_DECLARE_DYN_PARAM(int, PolicyParams::nn_policy, hidden_neurons);
+BO_DECLARE_DYN_PARAM(int, PolicyParams::gp_policy, pseudo_samples);
 BO_DECLARE_DYN_PARAM(double, Params::blackdrops, boundary);
 BO_DECLARE_DYN_PARAM(bool, Params::blackdrops, verbose);
 BO_DECLARE_DYN_PARAM(bool, Params::blackdrops, stochastic);
+BO_DECLARE_DYN_PARAM(int, Params::blackdrops, opt_evals);
 
 BO_DECLARE_DYN_PARAM(double, Params::opt_cmaes, max_fun_evals);
 BO_DECLARE_DYN_PARAM(double, Params::opt_cmaes, fun_tolerance);
@@ -493,15 +509,56 @@ BO_DECLARE_DYN_PARAM(int, Params::opt_cmaes, restarts);
 BO_DECLARE_DYN_PARAM(int, Params::opt_cmaes, elitism);
 BO_DECLARE_DYN_PARAM(bool, Params::opt_cmaes, handle_uncertainty);
 
+class ReacherArgs : public utils::CmdArgs {
+public:
+    ReacherArgs() : utils::CmdArgs()
+    {
+        // clang-format off
+        this->_desc.add_options()
+                    ("opt_evals,o", po::value<int>(), "Number of rollouts for policy evaluation. Defaults to 10.");
+        // clang-format on
+    }
+
+    int parse(int argc, char** argv)
+    {
+        int ret = utils::CmdArgs::parse(argc, argv);
+        if (ret >= 0)
+            return ret;
+
+        try {
+            po::variables_map vm;
+            po::store(po::parse_command_line(argc, argv, this->_desc), vm);
+
+            po::notify(vm);
+
+            if (vm.count("opt_evals")) {
+                int pl = vm["opt_evals"].as<int>();
+                if (pl <= 0)
+                    pl = 1;
+                Params::blackdrops::set_opt_evals(pl);
+            }
+            else {
+                Params::blackdrops::set_opt_evals(10);
+            }
+        }
+        catch (po::error& e) {
+            std::cerr << "[Exception caught while parsing command line arguments]: " << e.what() << std::endl;
+            return 1;
+        }
+
+        return -1;
+    }
+};
+
 int main(int argc, char** argv)
 {
-    utils::CmdArgs cmd_arguments;
+    ReacherArgs cmd_arguments;
     int ret = cmd_arguments.parse(argc, argv);
     if (ret >= 0)
         return ret;
 
     PolicyParams::nn_policy::set_hidden_neurons(cmd_arguments.neurons());
-    // PolicyParams::gp_policy::set_pseudo_samples(cmd_arguments.pseudo_samples());
+    PolicyParams::gp_policy::set_pseudo_samples(cmd_arguments.pseudo_samples());
 
     Params::blackdrops::set_boundary(cmd_arguments.boundary());
     Params::opt_cmaes::set_lbound(-cmd_arguments.boundary());
@@ -535,6 +592,7 @@ int main(int argc, char** argv)
     std::cout << "  elitism = " << Params::opt_cmaes::elitism() << std::endl;
     std::cout << "  handle_uncertainty = " << Params::opt_cmaes::handle_uncertainty() << std::endl;
     std::cout << "  stochastic rollouts = " << Params::blackdrops::stochastic() << std::endl;
+    std::cout << "  parallel rollouts = " << Params::blackdrops::opt_evals() << std::endl;
     std::cout << "  boundary = " << Params::blackdrops::boundary() << std::endl;
     std::cout << "  tbb threads = " << cmd_arguments.threads() << std::endl;
     std::cout << std::endl;

@@ -94,6 +94,7 @@ namespace blackdrops {
                 R = std::vector<double>();
 
                 robot_simu_t simu(params, simulated_robot);
+                simu.graphics()->set_enable(display);
                 // simulation step different from sampling rate -- we need a stable simulation
                 simu.set_step(Params::dart_system::sim_step());
                 simu.controller().set_transform_state(std::bind(&DARTSystem::transform_state, this, std::placeholders::_1));
@@ -118,9 +119,11 @@ namespace blackdrops {
 
                 std::vector<Eigen::VectorXd> states = simu.controller().get_states();
                 std::vector<Eigen::VectorXd> noiseless_states = simu.controller().get_noiseless_states();
-                _last_states = states;
+                if (display)
+                    _last_states = states;
                 std::vector<Eigen::VectorXd> commands = simu.controller().get_commands();
-                _last_commands = commands;
+                if (display)
+                    _last_commands = commands;
 
                 for (size_t j = 0; j < states.size() - 1; j++) {
                     Eigen::VectorXd init = states[j];
