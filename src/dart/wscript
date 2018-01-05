@@ -72,23 +72,23 @@ def build(bld):
     cxxflags = bld.get_env()['CXXFLAGS']
 
     limbo.create_variants(bld,
-                      source='simple_arm.cpp',
+                      source='reacher2d.cpp',
                       includes='. ../../../../src ../ ../../include',
-                      target='simple_arm',
+                      target='reacher2d',
                       uselib=dart_libs,
                       uselib_local='limbo',
                       cxxflags = cxxflags + ['-DRESPATH="' + path + '"'],
-                      variants = ['SIMU'])
+                      variants = ['SIMU', 'SIMU GPPOLICY'])
 
     if bld.get_env()['BUILD_GRAPHIC'] == True:
         limbo.create_variants(bld,
-                          source='simple_arm.cpp',
+                          source='reacher2d.cpp',
                           includes='. ../../../../src ../ ../../include',
-                          target='simple_arm',
+                          target='reacher2d',
                           uselib=dart_libs_graphic,
                           uselib_local='limbo',
                           cxxflags = cxxflags + ['-DRESPATH="' + path + '"'],
-                          variants = ['GRAPHIC'])
+                          variants = ['GRAPHIC', 'GRAPHIC GPPOLICY'])
 
     # Find new targets
     files = glob.glob(bld.path.abspath()+"/*.cpp")
@@ -96,7 +96,7 @@ def build(bld):
     for f in files:
         target_name = f[f.rfind('/')+1:-4]
         # Ignore our sample scenarios
-        if target_name != 'simple_arm':
+        if target_name != 'reacher2d':
             new_targets.append(target_name)
 
     # Compile new targets

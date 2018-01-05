@@ -189,7 +189,11 @@ namespace global {
     std::shared_ptr<robot_dart::Robot> global_robot;
     dart::dynamics::SkeletonPtr global_floor;
 
+#ifndef GPPOLICY
     using policy_t = blackdrops::policy::NNPolicy<PolicyParams>;
+#else
+    using policy_t = blackdrops::policy::GPPolicy<PolicyParams>;
+#endif
 
     Eigen::VectorXd goal(3);
 } // namespace global
@@ -493,7 +497,11 @@ int main(int argc, char** argv)
     std::cout << "  tbb threads = " << cmd_arguments.threads() << std::endl;
     std::cout << std::endl;
     std::cout << "Policy parameters:" << std::endl;
+#ifndef GPPOLICY
     std::cout << "  Type: Neural Network with 1 hidden layer and " << PolicyParams::nn_policy::hidden_neurons() << " hidden neurons." << std::endl;
+#else
+    std::cout << "  Type: Gaussian Process with " << PolicyParams::gp_policy::pseudo_samples() << " pseudo samples." << std::endl;
+#endif
     std::cout << std::endl;
 
     init_simu(std::string(RESPATH) + "/skel/reacher2d.skel");
