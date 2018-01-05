@@ -74,6 +74,8 @@
 #include <blackdrops/policy/gp_policy.hpp>
 #include <blackdrops/policy/nn_policy.hpp>
 
+#include <blackdrops/reward/reward.hpp>
+
 #include <utils/cmd_args.hpp>
 #include <utils/dart_utils.hpp>
 #include <utils/utils.hpp>
@@ -207,40 +209,6 @@ Eigen::VectorXd get_robot_state(const std::shared_ptr<robot_dart::Robot>& robot)
     return state;
 }
 
-// struct ActualReward {
-//     double operator()(const Eigen::VectorXd& from_state, const Eigen::VectorXd& action, const Eigen::VectorXd& to_state) const
-//     {
-//         using robot_simu_t = robot_dart::RobotDARTSimu<robot_dart::robot_control<robot_dart::PositionControl>>;
-
-//         std::shared_ptr<robot_dart::Robot> simulated_robot = global::global_robot->clone();
-
-//         std::vector<double> params(2, 1.0);
-//         for (int i = 0; i < 2; i++)
-//             params[i] = to_state(4 + i);
-//         robot_simu_t simu(params, simulated_robot);
-//         // Change gravity
-//         Eigen::VectorXd gravity(3);
-//         gravity << 0., -9.81, 0.;
-//         simu.world()->setGravity(gravity);
-//         simu.controller().control_root_joint(true);
-
-//         simu.run(2);
-
-//         auto bd = simulated_robot->skeleton()->getBodyNode("link2");
-//         Eigen::VectorXd eef = bd->getTransform().translation();
-//         // double s_c_sq = 0.2 * 0.2;
-//         // double dee = (eef - global::goal).norm();
-//         Eigen::VectorXd goal(3);
-//         goal << to_state(0), 0.01, to_state(1);
-//         double dee = (eef - goal).norm();
-//         double a = (action.array() / 200.0).square().sum();
-
-//         // return std::exp(-0.5 / s_c_sq * dee);
-//         return -dee - a;
-//         //  - action.squaredNorm() / (2. * PolicyParams::nn_policy::max_u(0) * PolicyParams::nn_policy::max_u(0));
-//     }
-// };
-
 Eigen::VectorXd get_random_vector(size_t dim, const Eigen::VectorXd& bounds)
 {
     Eigen::VectorXd rv = (limbo::tools::random_vector(dim).array() * 2 - 1);
@@ -369,84 +337,12 @@ struct DARTReacher : public blackdrops::system::DARTSystem<Params, PolicyControl
         simu.graphics()->set_render_period(0.03);
 #endif
     }
-
-    // template <typename Policy, typename Reward>
-    // std::vector<std::tuple<Eigen::VectorXd, Eigen::VectorXd, Eigen::VectorXd>> execute(const Policy& policy, const Reward& world, double T, std::vector<double>& R, bool display = true)
-    // {
-    //     // static int n_iter = 0;
-    //     ActualReward actual_reward;
-    //     std::vector<std::tuple<Eigen::VectorXd, Eigen::VectorXd, Eigen::VectorXd>> ret = blackdrops::system::DARTSystem<Params, PolicyControl>::execute(policy, actual_reward, T, R, display);
-
-    //     if (display) {
-    //         std::vector<Eigen::VectorXd> states = this->get_last_states();
-    //         std::vector<Eigen::VectorXd> coms = this->get_last_commands();
-
-    //         for (size_t i = 0; i < R.size(); i++) {
-    //             double r = R[i];
-    //             Eigen::VectorXd final = states[i + 1];
-    //             Eigen::VectorXd action = coms[i];
-
-    //             Eigen::VectorXd vec(6);
-    //             vec.head(2) = final.head(2);
-    //             vec.segment(2, 2) = final.tail(2);
-    //             vec.tail(2) = action;
-    //             // Eigen::VectorXd com = coms[i];
-    //             // Eigen::VectorXd vec(final.size() + com.size());
-    //             // vec.head(final.size()) = final;
-    //             // vec.tail(com.size()) = com;
-    //             // std::cout << com.transpose() << std::endl;
-    //             global::reward_gp.add_sample(vec, limbo::tools::make_vector(r));
-    //         }
-
-    //         global::reward_gp.optimize_hyperparams();
-    //         std::cout << "Learned the new reward function..." << std::endl;
-    //     }
-
-    //     // // Dump rewards
-    //     // int eval = 1000;
-    //     // Eigen::VectorXd limits(6);
-    //     // limits << 10., 10., M_PI, M_PI, 200., 200.;
-    //     // std::vector<Eigen::VectorXd> rvs = random_vectors(limits.size(), eval, limits);
-    //     // // std::vector<Eigen::VectorXd> rvs = global::reward_gp.samples();
-
-    //     // double mse = 0.0;
-    //     // std::ofstream ofs("reward_" + std::to_string(n_iter) + ".dat");
-    //     // for (size_t i = 0; i < rvs.size(); i++) {
-    //     //     Eigen::VectorXd to_state = rvs[i].head(4);
-    //     //     Eigen::VectorXd action = rvs[i].tail(2);
-    //     //     // Eigen::VectorXd eef = get_eef(to_state);
-    //     //     // double de = (eef - global::goal).norm();
-    //     //     // ofs<<"0 0 0 ";
-    //     //     for (int j = 0; j < to_state.size(); j++)
-    //     //         ofs << to_state[j] << " ";
-    //     //     double r_b = world(to_state, action, to_state, true);
-    //     //     double r_w = actual_reward(to_state, action, to_state);
-    //     //     ofs << r_b << " " << r_w << std::endl;
-    //     //     mse += (r_b - r_w) * (r_b - r_w);
-    //     // }
-    //     // ofs.close();
-    //     // std::cout << "MSE: " << mse / double(eval) << std::endl;
-    //     // n_iter++;
-
-    //     return ret;
-    // }
 };
 
-struct RewardFunction {
-    double operator()(const blackdrops::RolloutInfo& info, const Eigen::VectorXd& from_state, const Eigen::VectorXd& action, const Eigen::VectorXd& to_state, bool certain = false) const
+struct RewardFunction : public blackdrops::reward::Reward<RewardFunction> {
+    template <typename RolloutInfo>
+    double operator()(const RolloutInfo& info, const Eigen::VectorXd& from_state, const Eigen::VectorXd& action, const Eigen::VectorXd& to_state, bool certain = false) const
     {
-        // Eigen::VectorXd mu;
-        // double s;
-        // Eigen::VectorXd vec(4 + action.size());
-        // vec.head(2) = to_state.head(2);
-        // vec.segment(2, 2) = to_state.tail(2);
-        // vec.tail(action.size()) = action;
-        // std::tie(mu, s) = global::reward_gp.query(vec);
-        // if (certain || !Params::opt_cmaes::handle_uncertainty())
-        //     return mu(0);
-
-        // return std::min(0., gaussian_rand(mu(0), std::sqrt(s)));
-
         Eigen::VectorXd goal = info.target;
 
         Eigen::VectorXd links(2);

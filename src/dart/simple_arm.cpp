@@ -73,6 +73,8 @@
 
 #include <blackdrops/policy/nn_policy.hpp>
 
+#include <blackdrops/reward/gp_reward.hpp>
+
 #include <utils/cmd_args.hpp>
 #include <utils/utils.hpp>
 
@@ -157,37 +159,12 @@ struct PolicyParams {
     };
 };
 
-struct RewardParams {
-    struct kernel : public limbo::defaults::kernel {
-        BO_PARAM(double, noise, 1e-12);
-        BO_PARAM(bool, optimize_noise, true);
-    };
-
-    struct kernel_squared_exp_ard : public limbo::defaults::kernel_squared_exp_ard {
-    };
-
-    struct opt_rprop : public limbo::defaults::opt_rprop {
-        BO_PARAM(int, iterations, 300);
-        BO_PARAM(double, eps_stop, 1e-4);
-    };
-
-    struct opt_parallelrepeater : public limbo::defaults::opt_parallelrepeater {
-        BO_PARAM(int, repeats, 3);
-    };
-};
-
 namespace global {
     std::shared_ptr<robot_dart::Robot> global_robot;
 
     using policy_t = blackdrops::policy::NNPolicy<PolicyParams>;
 
     Eigen::VectorXd goal(3);
-
-    using kernel_t = limbo::kernel::SquaredExpARD<RewardParams>;
-    using mean_t = limbo::mean::Data<RewardParams>;
-
-    using GP_t = limbo::model::GP<RewardParams, kernel_t, mean_t, blackdrops::model::gp::KernelLFOpt<RewardParams>>;
-    GP_t reward_gp(4, 1);
 } // namespace global
 
 Eigen::VectorXd get_robot_state(const std::shared_ptr<robot_dart::Robot>& robot)
@@ -196,30 +173,6 @@ Eigen::VectorXd get_robot_state(const std::shared_ptr<robot_dart::Robot>& robot)
 
     return state;
 }
-
-struct ActualReward {
-    double operator()(const blackdrops::RolloutInfo& info, const Eigen::VectorXd& from_state, const Eigen::VectorXd& action, const Eigen::VectorXd& to_state) const
-    {
-        using robot_simu_t = robot_dart::RobotDARTSimu<robot_dart::robot_control<robot_dart::PositionControl>>;
-
-        std::shared_ptr<robot_dart::Robot> simulated_robot = global::global_robot->clone();
-        simulated_robot->fix_to_world();
-        simulated_robot->set_position_enforced(true);
-
-        std::vector<double> params(4, 1.0);
-        for (int i = 0; i < to_state.size(); i++)
-            params[i] = to_state(i);
-        robot_simu_t simu(params, simulated_robot);
-        simu.run(2);
-
-        auto bd = simulated_robot->skeleton()->getBodyNode("arm_link_5");
-        Eigen::VectorXd eef = bd->getTransform().translation();
-        double s_c_sq = 0.2 * 0.2;
-        double dee = (eef - global::goal).squaredNorm();
-
-        return std::exp(-0.5 / s_c_sq * dee);
-    }
-};
 
 Eigen::VectorXd get_random_vector(size_t dim, Eigen::VectorXd bounds)
 {
@@ -287,65 +240,36 @@ struct SimpleArm : public blackdrops::system::DARTSystem<Params, PolicyControl, 
         // remove collisions from goal marker
         simu.world()->getSkeleton("goal_marker")->getRootBodyNode()->setCollidable(false);
     }
-
-    template <typename Policy, typename Reward>
-    std::vector<std::tuple<Eigen::VectorXd, Eigen::VectorXd, Eigen::VectorXd>> execute(const Policy& policy, const Reward& world, double T, std::vector<double>& R, bool display = true)
-    {
-        static int n_iter = 0;
-        blackdrops::RolloutInfo info;
-
-        ActualReward actual_reward;
-        std::vector<std::tuple<Eigen::VectorXd, Eigen::VectorXd, Eigen::VectorXd>> ret = base_t::execute(policy, actual_reward, T, R, display, &info);
-
-        std::vector<Eigen::VectorXd> states = this->get_last_states();
-        for (size_t i = 0; i < R.size(); i++) {
-            double r = R[i];
-            Eigen::VectorXd final = states[i + 1];
-            global::reward_gp.add_sample(final, limbo::tools::make_vector(r));
-        }
-
-        global::reward_gp.optimize_hyperparams();
-        std::cout << "Learned the new reward function..." << std::endl;
-
-        // Dump rewards
-        int eval = 1000;
-        Eigen::VectorXd limits(4);
-        limits << M_PI, M_PI / 2.0, M_PI / 2.0, M_PI / 2.0;
-        std::vector<Eigen::VectorXd> rvs = random_vectors(limits.size(), eval, limits);
-        // std::vector<Eigen::VectorXd> rvs = global::reward_gp.samples();
-
-        double mse = 0.0;
-        std::ofstream ofs("reward_" + std::to_string(n_iter) + ".dat");
-        for (size_t i = 0; i < rvs.size(); i++) {
-            Eigen::VectorXd to_state = rvs[i];
-            // Eigen::VectorXd eef = get_eef(to_state);
-            // double de = (eef - global::goal).norm();
-            // ofs<<"0 0 0 ";
-            for (int j = 0; j < to_state.size(); j++)
-                ofs << to_state[j] << " ";
-            double r_b = world(info, to_state, to_state, to_state, true);
-            double r_w = actual_reward(info, to_state, to_state, to_state);
-            ofs << r_b << " " << r_w << std::endl;
-            mse += (r_b - r_w) * (r_b - r_w);
-        }
-        ofs.close();
-        std::cout << "MSE: " << mse / double(eval) << std::endl;
-        n_iter++;
-
-        return ret;
-    }
 };
 
-struct RewardFunction {
-    double operator()(const blackdrops::RolloutInfo& info, const Eigen::VectorXd& from_state, const Eigen::VectorXd& action, const Eigen::VectorXd& to_state, bool certain = false) const
+struct RewardFunction : public blackdrops::reward::GPReward<blackdrops::reward_defaults, RewardFunction> {
+    template <typename RolloutInfo>
+    double operator()(const RolloutInfo& info, const Eigen::VectorXd& from_state, const Eigen::VectorXd& action, const Eigen::VectorXd& to_state) const
     {
-        Eigen::VectorXd mu;
-        double s;
-        std::tie(mu, s) = global::reward_gp.query(to_state);
-        if (certain || !Params::opt_cmaes::handle_uncertainty())
-            return mu(0);
+        using robot_simu_t = robot_dart::RobotDARTSimu<robot_dart::robot_control<robot_dart::PositionControl>>;
 
-        return std::max(0., gaussian_rand(mu(0), std::sqrt(s)));
+        std::shared_ptr<robot_dart::Robot> simulated_robot = global::global_robot->clone();
+        simulated_robot->fix_to_world();
+        simulated_robot->set_position_enforced(true);
+
+        std::vector<double> params(4, 1.0);
+        for (int i = 0; i < to_state.size(); i++)
+            params[i] = to_state(i);
+        robot_simu_t simu(params, simulated_robot);
+        simu.run(2);
+
+        auto bd = simulated_robot->skeleton()->getBodyNode("arm_link_5");
+        Eigen::VectorXd eef = bd->getTransform().translation();
+        double s_c_sq = 0.2 * 0.2;
+        double dee = (eef - global::goal).squaredNorm();
+
+        return std::exp(-0.5 / s_c_sq * dee);
+    }
+
+    template <typename RolloutInfo>
+    Eigen::VectorXd get_sample(const RolloutInfo& info, const Eigen::VectorXd& from_state, const Eigen::VectorXd& action, const Eigen::VectorXd& to_state) const
+    {
+        return to_state;
     }
 };
 
@@ -451,20 +375,6 @@ int main(int argc, char** argv)
     blackdrops::BlackDROPS<Params, MGP_t, SimpleArm, blackdrops::policy::NNPolicy<PolicyParams>, policy_opt_t, RewardFunction> arm_system;
 
     arm_system.learn(1, 15, true);
-
-    ActualReward actual_reward;
-    blackdrops::RolloutInfo info;
-    std::ofstream ofs("reward_points.dat");
-    for (size_t i = 0; i < global::reward_gp.samples().size(); i++) {
-        Eigen::VectorXd to_state = global::reward_gp.samples()[i];
-        for (int j = 0; j < to_state.size(); j++)
-            ofs << to_state[j] << " ";
-        Eigen::VectorXd mu = global::reward_gp.mu(to_state);
-        double r = actual_reward(info, to_state, to_state, to_state);
-        ofs << mu(0) << " " << r;
-        ofs << std::endl;
-    }
-    ofs.close();
 
     return 0;
 }

@@ -65,7 +65,7 @@ namespace blackdrops {
         struct ODESystem {
 
             template <typename Policy, typename Reward>
-            std::vector<std::tuple<Eigen::VectorXd, Eigen::VectorXd, Eigen::VectorXd>> execute(const Policy& policy, const Reward& world, double T, std::vector<double>& R, bool display = true)
+            std::vector<std::tuple<Eigen::VectorXd, Eigen::VectorXd, Eigen::VectorXd>> execute(const Policy& policy, Reward& world, double T, std::vector<double>& R, bool display = true, RolloutInfo* info = nullptr)
             {
                 int H = std::ceil(T / Params::blackdrops::dt());
                 std::vector<std::tuple<Eigen::VectorXd, Eigen::VectorXd, Eigen::VectorXd>> res;
@@ -76,7 +76,12 @@ namespace blackdrops {
                     _last_commands.clear();
                 }
 
-                Eigen::VectorXd init_true = this->init_state();
+                // Get the information of the rollout
+                RolloutInfo rollout_info = get_rollout_info();
+                if (info != nullptr)
+                    *info = rollout_info;
+
+                Eigen::VectorXd init_true = rollout_info.init_state;
                 Eigen::VectorXd init_diff = this->add_noise(init_true);
                 if (display)
                     _last_states.push_back(init_diff);
@@ -87,7 +92,7 @@ namespace blackdrops {
                 for (int i = 0; i < H; i++) {
                     Eigen::VectorXd init = this->transform_state(init_diff);
 
-                    Eigen::VectorXd u = policy.next(init);
+                    Eigen::VectorXd u = policy.next(this->policy_transform(init, rollout_info));
 
                     std::vector<double> robot_state(init_true.size(), 0.0);
                     Eigen::VectorXd::Map(robot_state.data(), robot_state.size()) = init_true;
@@ -113,7 +118,7 @@ namespace blackdrops {
 
                     // We want the actual reward of the system (i.e., with the noiseless states)
                     // this is not given to the algorithm
-                    double r = world(init_true, u, final);
+                    double r = world.observe(rollout_info, init_true, u, final, display);
                     R.push_back(r);
 
                     init_diff = obs;
@@ -135,8 +140,12 @@ namespace blackdrops {
 
                 int H = std::ceil(T / Params::blackdrops::dt());
                 R = std::vector<double>();
-                // init state
-                Eigen::VectorXd init_diff = this->init_state();
+
+                // Get the information of the rollout
+                RolloutInfo rollout_info = get_rollout_info();
+
+                // Get initial state from info
+                Eigen::VectorXd init_diff = rollout_info.init_state;
 
                 Eigen::VectorXd init = this->transform_state(init_diff);
 
@@ -145,7 +154,7 @@ namespace blackdrops {
                 for (int i = 0; i < H; i++) {
                     Eigen::VectorXd query_vec(Params::blackdrops::model_input_dim() + Params::blackdrops::action_dim());
 
-                    Eigen::VectorXd u = policy.next(init);
+                    Eigen::VectorXd u = policy.next(this->policy_transform(init, rollout_info));
                     query_vec.head(Params::blackdrops::model_input_dim()) = init;
                     query_vec.tail(Params::blackdrops::action_dim()) = u;
 
@@ -159,7 +168,7 @@ namespace blackdrops {
 
                     states.push_back(final);
 
-                    double r = world(init_diff, mu, final);
+                    double r = world.query(rollout_info, init_diff, mu, final);
                     R.push_back(r);
 
                     init_diff = final;
@@ -175,14 +184,18 @@ namespace blackdrops {
             {
                 int H = std::ceil(T / Params::blackdrops::dt());
                 double reward = 0.0;
-                // init state
-                Eigen::VectorXd init_diff = this->init_state();
+
+                // Get the information of the rollout
+                RolloutInfo rollout_info = get_rollout_info();
+
+                // Get initial state from info
+                Eigen::VectorXd init_diff = rollout_info.init_state;
 
                 Eigen::VectorXd init = this->transform_state(init_diff);
 
                 for (int i = 0; i < H; i++) {
                     Eigen::VectorXd query_vec(Params::blackdrops::model_input_dim() + Params::blackdrops::action_dim());
-                    Eigen::VectorXd u = policy.next(init);
+                    Eigen::VectorXd u = policy.next(this->policy_transform(init, rollout_info));
                     query_vec.head(Params::blackdrops::model_input_dim()) = init;
                     query_vec.tail(Params::blackdrops::action_dim()) = u;
 
@@ -201,12 +214,24 @@ namespace blackdrops {
 
                     Eigen::VectorXd final = init_diff + mu;
 
-                    reward += world(init_diff, u, final);
+                    reward += world.query(rollout_info, init_diff, u, final);
                     init_diff = final;
                     init = this->transform_state(init_diff);
                 }
 
                 return reward;
+            }
+
+            // get information for rollout (i.e., initial state, target, etc.)
+            // this is useful if you wish to generate some different conditions
+            // that are constant throughout the same rollout, but different in different rollouts
+            // by default, we only get the initial state
+            virtual RolloutInfo get_rollout_info() const
+            {
+                RolloutInfo info;
+                info.init_state = this->init_state();
+
+                return info;
             }
 
             // transform the state input to the GPs and policy if needed
@@ -219,6 +244,13 @@ namespace blackdrops {
             // add noise to the observed state if desired
             // by default, no noise is added
             virtual Eigen::VectorXd add_noise(const Eigen::VectorXd& original_state) const
+            {
+                return original_state;
+            }
+
+            // transform the state variables that go to the policy if needed
+            // by default, no transformation is applied
+            virtual Eigen::VectorXd policy_transform(const Eigen::VectorXd& original_state, const RolloutInfo& info) const
             {
                 return original_state;
             }

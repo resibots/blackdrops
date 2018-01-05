@@ -78,7 +78,7 @@ namespace blackdrops {
 #endif
 
             template <typename Policy, typename Reward>
-            std::vector<std::tuple<Eigen::VectorXd, Eigen::VectorXd, Eigen::VectorXd>> execute(const Policy& policy, const Reward& world, double T, std::vector<double>& R, bool display = true, RolloutInfo* info = nullptr)
+            std::vector<std::tuple<Eigen::VectorXd, Eigen::VectorXd, Eigen::VectorXd>> execute(const Policy& policy, Reward& world, double T, std::vector<double>& R, bool display = true, RolloutInfo* info = nullptr)
             {
                 // Make sure that the simulation step is smaller than the sampling/control rate
                 assert(Params::dart_system::sim_step() < Params::blackdrops::dt());
@@ -135,7 +135,7 @@ namespace blackdrops {
 
                     // We want the actual reward of the system (i.e., with the noiseless states)
                     // this is not given to the algorithm
-                    double r = world(rollout_info, noiseless_states[j], u, noiseless_states[j + 1]);
+                    double r = world.observe(rollout_info, noiseless_states[j], u, noiseless_states[j + 1], display);
                     R.push_back(r);
                     res.push_back(std::make_tuple(init_full, u, final - init));
                 }
@@ -180,7 +180,7 @@ namespace blackdrops {
 
                     Eigen::VectorXd final = init_diff + mu;
 
-                    double r = world(rollout_info, init_diff, u, final);
+                    double r = world.query(rollout_info, init_diff, u, final);
                     R.push_back(r);
 
                     states.push_back(final);
@@ -228,7 +228,7 @@ namespace blackdrops {
 
                     Eigen::VectorXd final = init_diff + mu;
 
-                    reward += world(rollout_info, init_diff, u, final);
+                    reward += world.query(rollout_info, init_diff, u, final);
                     init_diff = final;
                     init = this->transform_state(init_diff);
                 }

@@ -72,6 +72,8 @@
 #include <blackdrops/model/multi_gp/multi_gp_parallel_opt.hpp>
 #include <blackdrops/system/dart_system.hpp>
 
+#include <blackdrops/reward/reward.hpp>
+
 #include <hexapod_controller/hexapod_controller_simple.hpp>
 
 #include <utils/cmd_args.hpp>
@@ -427,7 +429,7 @@ struct Hexapod : public blackdrops::system::DARTSystem<Params, PolicyControl, bl
     }
 
     template <typename Policy, typename Reward>
-    std::vector<std::tuple<Eigen::VectorXd, Eigen::VectorXd, Eigen::VectorXd>> execute(const Policy& policy, const Reward& world, double T, std::vector<double>& R, bool display = true)
+    std::vector<std::tuple<Eigen::VectorXd, Eigen::VectorXd, Eigen::VectorXd>> execute(const Policy& policy, Reward& world, double T, std::vector<double>& R, bool display = true)
     {
         blackdrops::RolloutInfo info;
 
@@ -449,8 +451,9 @@ struct Hexapod : public blackdrops::system::DARTSystem<Params, PolicyControl, bl
     }
 };
 
-struct RewardFunction {
-    double operator()(const blackdrops::RolloutInfo& info, const Eigen::VectorXd& from_state, const Eigen::VectorXd& action, const Eigen::VectorXd& to_state, bool certain = false) const
+struct RewardFunction : public blackdrops::reward::Reward<RewardFunction> {
+    template <typename RolloutInfo>
+    double operator()(const RolloutInfo& info, const Eigen::VectorXd& from_state, const Eigen::VectorXd& action, const Eigen::VectorXd& to_state) const
     {
         // TO-DO: Maybe stop when safety limits are reached
         Eigen::Vector3d rot;

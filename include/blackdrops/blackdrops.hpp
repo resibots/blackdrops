@@ -86,9 +86,8 @@ namespace blackdrops {
         void execute_and_record_data()
         {
             std::vector<double> R;
-            RewardFunction world;
             // Execute best policy so far on robot
-            auto obs_new = _robot.execute(_policy, world, Params::blackdrops::T(), R);
+            auto obs_new = _robot.execute(_policy, _reward, Params::blackdrops::T(), R);
 
             double r_eval = 0.;
 
@@ -102,7 +101,7 @@ namespace blackdrops {
                         p.set_random_policy();
 
                     std::vector<double> R_more;
-                    _robot.execute(p, world, Params::blackdrops::T(), R_more, false);
+                    _robot.execute(p, _reward, Params::blackdrops::T(), R_more, false);
 
                     rews(i) = std::accumulate(R_more.begin(), R_more.end(), 0.0);
                 });
@@ -200,8 +199,7 @@ namespace blackdrops {
             Eigen::write_binary("policy_params_" + std::to_string(i) + ".bin", _policy.params());
 
             std::vector<double> R;
-            RewardFunction world;
-            _robot.execute_dummy(_policy, _model, world, Params::blackdrops::T(), R);
+            _robot.execute_dummy(_policy, _model, _reward, Params::blackdrops::T(), R);
             std::cout << "Dummy reward: " << std::accumulate(R.begin(), R.end(), 0.0) << std::endl;
 
             _ofs_traj_dummy.open("traj_dummy_" + std::to_string(i) + ".dat");
@@ -305,6 +303,13 @@ namespace blackdrops {
                 std::cout << "Learned model..." << std::endl;
                 std::cout << "Learning time: " << learn_model_ms * 1e-3 << "s" << std::endl;
 
+                time_start = std::chrono::steady_clock::now();
+                if (_reward.learn()) {
+                    double learn_reward_ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - time_start).count();
+                    std::cout << "Learned reward..." << std::endl;
+                    std::cout << "Learning time: " << learn_reward_ms * 1e-3 << "s" << std::endl;
+                }
+
                 if (Params::blackdrops::verbose()) {
                     Eigen::VectorXd errors, sigmas;
                     std::tie(errors, sigmas) = get_accuracy();
@@ -336,6 +341,7 @@ namespace blackdrops {
         Robot _robot;
         Policy _policy;
         Model _model;
+        RewardFunction _reward;
         std::ofstream _ofs_real, _ofs_esti, _ofs_traj_real, _ofs_traj_dummy, _ofs_results, _ofs_exp, _ofs_opt, _ofs_model;
         Eigen::VectorXd _params_starting;
         double _best;
@@ -351,7 +357,6 @@ namespace blackdrops {
 
         limbo::opt::eval_t _optimize_policy(const Eigen::VectorXd& params, bool eval_grad = false)
         {
-            RewardFunction world;
             Policy policy;
 
             policy.set_params(params.array());
@@ -365,11 +370,11 @@ namespace blackdrops {
                 p.set_params(policy.params());
 
                 // std::vector<double> R;
-                // _robot.execute(p, world, Params::blackdrops::T(), R, false);
+                // _robot.execute(p, _reward, Params::blackdrops::T(), R, false);
 
                 // rews(i) = std::accumulate(R.begin(), R.end(), 0.0);
 
-                rews(i) = _robot.predict_policy(p, _model, world, Params::blackdrops::T());
+                rews(i) = _robot.predict_policy(p, _model, _reward, Params::blackdrops::T());
             });
             double r = rews.mean();
 

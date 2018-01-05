@@ -72,6 +72,8 @@
 #include <blackdrops/policy/gp_policy.hpp>
 #include <blackdrops/policy/nn_policy.hpp>
 
+#include <blackdrops/reward/reward.hpp>
+
 #include <utils/cmd_args.hpp>
 #include <utils/utils.hpp>
 
@@ -370,8 +372,9 @@ struct Pendubot : public blackdrops::system::ODESystem<Params> {
     }
 };
 
-struct RewardFunction {
-    double operator()(const Eigen::VectorXd& from_state, const Eigen::VectorXd& action, const Eigen::VectorXd& to_state) const
+struct RewardFunction : public blackdrops::reward::Reward<RewardFunction> {
+    template <typename RolloutInfo>
+    double operator()(const RolloutInfo& info, const Eigen::VectorXd& from_state, const Eigen::VectorXd& action, const Eigen::VectorXd& to_state) const
     {
         double s_c_sq = 0.5 * 0.5;
 
