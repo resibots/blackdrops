@@ -71,8 +71,8 @@
 #include <blackdrops/model/multi_gp/multi_gp_parallel_opt.hpp>
 #include <blackdrops/system/dart_system.hpp>
 
-#include <blackdrops/policy/nn_policy.hpp>
 #include <blackdrops/policy/gp_policy.hpp>
+#include <blackdrops/policy/nn_policy.hpp>
 
 #include <utils/cmd_args.hpp>
 #include <utils/dart_utils.hpp>
@@ -316,10 +316,10 @@ struct DARTReacher : public blackdrops::system::DARTSystem<Params, PolicyControl
 
     Eigen::VectorXd policy_transform(const Eigen::VectorXd& original_state, const blackdrops::RolloutInfo& info) const
     {
-        Eigen::VectorXd ret = Eigen::VectorXd::Zero(Params::blackdrops::model_input_dim() + 2);
+        Eigen::VectorXd ret = Eigen::VectorXd::Zero(original_state.size() + 2);
 
         ret.head(2) = info.target;
-        ret.tail(Params::blackdrops::model_input_dim()) = original_state;
+        ret.tail(original_state.size()) = original_state;
 
         return ret;
     }
