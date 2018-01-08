@@ -74,7 +74,7 @@
 #include <blackdrops/policy/gp_policy.hpp>
 #include <blackdrops/policy/nn_policy.hpp>
 
-#include <blackdrops/reward/reward.hpp>
+#include <blackdrops/reward/gp_reward.hpp>
 
 #include <utils/cmd_args.hpp>
 #include <utils/dart_utils.hpp>
@@ -185,6 +185,12 @@ struct PolicyParams {
     };
 };
 
+struct RewardParams : public blackdrops::reward_defaults {
+    struct mean_constant {
+        BO_PARAM(double, constant, -1.);
+    };
+};
+
 namespace global {
     std::shared_ptr<robot_dart::Robot> global_robot;
     dart::dynamics::SkeletonPtr global_floor;
@@ -258,6 +264,7 @@ struct DARTReacher : public blackdrops::system::DARTSystem<Params, PolicyControl
     {
         blackdrops::RolloutInfo info;
         info.init_state = this->init_state();
+        info.t = 0;
 
         Eigen::VectorXd limits(2);
         limits << 0.2, 0.2;
@@ -286,11 +293,11 @@ struct DARTReacher : public blackdrops::system::DARTSystem<Params, PolicyControl
         return ret;
     }
 
-    Eigen::VectorXd policy_transform(const Eigen::VectorXd& original_state, const blackdrops::RolloutInfo& info) const
+    Eigen::VectorXd policy_transform(const Eigen::VectorXd& original_state, blackdrops::RolloutInfo* info) const
     {
         Eigen::VectorXd ret = Eigen::VectorXd::Zero(original_state.size() + 2);
 
-        ret.head(2) = info.target;
+        ret.head(2) = info->target;
         ret.tail(original_state.size()) = original_state;
 
         return ret;
@@ -343,7 +350,7 @@ struct DARTReacher : public blackdrops::system::DARTSystem<Params, PolicyControl
     }
 };
 
-struct RewardFunction : public blackdrops::reward::Reward<RewardFunction> {
+struct RewardFunction : public blackdrops::reward::GPReward<RewardParams, RewardFunction> {
     template <typename RolloutInfo>
     double operator()(const RolloutInfo& info, const Eigen::VectorXd& from_state, const Eigen::VectorXd& action, const Eigen::VectorXd& to_state, bool certain = false) const
     {
@@ -377,6 +384,16 @@ struct RewardFunction : public blackdrops::reward::Reward<RewardFunction> {
         }
 
         return eef;
+    }
+
+    template <typename RolloutInfo>
+    Eigen::VectorXd get_sample(const RolloutInfo& info, const Eigen::VectorXd& from_state, const Eigen::VectorXd& action, const Eigen::VectorXd& to_state) const
+    {
+        Eigen::VectorXd vec(info.target.size() + 4);
+        vec.head(2) = info.target;
+        vec.segment(2, 2) = action;
+        vec.tail(2) = to_state.tail(2);
+        return vec;
     }
 };
 
