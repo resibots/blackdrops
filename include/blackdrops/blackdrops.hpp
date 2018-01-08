@@ -75,6 +75,7 @@ namespace blackdrops {
     struct RolloutInfo {
         Eigen::VectorXd init_state;
         Eigen::VectorXd target;
+        double t;
     };
 
     template <typename Params, typename Model, typename Robot, typename Policy, typename PolicyOptimizer, typename RewardFunction>

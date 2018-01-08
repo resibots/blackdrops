@@ -92,7 +92,7 @@ namespace blackdrops {
                 for (int i = 0; i < H; i++) {
                     Eigen::VectorXd init = this->transform_state(init_diff);
 
-                    Eigen::VectorXd u = policy.next(this->policy_transform(init, rollout_info));
+                    Eigen::VectorXd u = policy.next(this->policy_transform(init, &rollout_info));
 
                     std::vector<double> robot_state(init_true.size(), 0.0);
                     Eigen::VectorXd::Map(robot_state.data(), robot_state.size()) = init_true;
@@ -123,6 +123,7 @@ namespace blackdrops {
 
                     init_diff = obs;
                     init_true = final;
+                    rollout_info.t += Params::blackdrops::dt();
                 }
 
                 if (!policy.random() && display) {
@@ -154,7 +155,7 @@ namespace blackdrops {
                 for (int i = 0; i < H; i++) {
                     Eigen::VectorXd query_vec(Params::blackdrops::model_input_dim() + Params::blackdrops::action_dim());
 
-                    Eigen::VectorXd u = policy.next(this->policy_transform(init, rollout_info));
+                    Eigen::VectorXd u = policy.next(this->policy_transform(init, &rollout_info));
                     query_vec.head(Params::blackdrops::model_input_dim()) = init;
                     query_vec.tail(Params::blackdrops::action_dim()) = u;
 
@@ -173,6 +174,7 @@ namespace blackdrops {
 
                     init_diff = final;
                     init = this->transform_state(init_diff);
+                    rollout_info.t += Params::blackdrops::dt();
                 }
 
                 _last_dummy_states = states;
@@ -195,7 +197,7 @@ namespace blackdrops {
 
                 for (int i = 0; i < H; i++) {
                     Eigen::VectorXd query_vec(Params::blackdrops::model_input_dim() + Params::blackdrops::action_dim());
-                    Eigen::VectorXd u = policy.next(this->policy_transform(init, rollout_info));
+                    Eigen::VectorXd u = policy.next(this->policy_transform(init, &rollout_info));
                     query_vec.head(Params::blackdrops::model_input_dim()) = init;
                     query_vec.tail(Params::blackdrops::action_dim()) = u;
 
@@ -217,6 +219,7 @@ namespace blackdrops {
                     reward += world.query(rollout_info, init_diff, u, final);
                     init_diff = final;
                     init = this->transform_state(init_diff);
+                    rollout_info.t += Params::blackdrops::dt();
                 }
 
                 return reward;
@@ -230,6 +233,7 @@ namespace blackdrops {
             {
                 RolloutInfo info;
                 info.init_state = this->init_state();
+                info.t = 0.;
 
                 return info;
             }
@@ -250,7 +254,7 @@ namespace blackdrops {
 
             // transform the state variables that go to the policy if needed
             // by default, no transformation is applied
-            virtual Eigen::VectorXd policy_transform(const Eigen::VectorXd& original_state, const RolloutInfo& info) const
+            virtual Eigen::VectorXd policy_transform(const Eigen::VectorXd& original_state, RolloutInfo* info) const
             {
                 return original_state;
             }

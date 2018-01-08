@@ -105,7 +105,8 @@ namespace blackdrops {
                 if (info != nullptr)
                     *info = rollout_info;
 
-                simu.controller().set_policy_function(std::bind(&DARTSystem::policy_transform, this, std::placeholders::_1, rollout_info));
+                simu.controller().set_update_function(std::bind([&](double t) { rollout_info.t = t; }, std::placeholders::_1));
+                simu.controller().set_policy_function(std::bind(&DARTSystem::policy_transform, this, std::placeholders::_1, &rollout_info));
 
                 // Add extra to simu object
                 this->add_extra_to_simu(simu, rollout_info);
@@ -168,7 +169,7 @@ namespace blackdrops {
 
                 for (int i = 0; i < H; i++) {
                     Eigen::VectorXd query_vec(Params::blackdrops::model_input_dim() + Params::blackdrops::action_dim());
-                    Eigen::VectorXd u = policy.next(this->policy_transform(init, rollout_info));
+                    Eigen::VectorXd u = policy.next(this->policy_transform(init, &rollout_info));
                     query_vec.head(Params::blackdrops::model_input_dim()) = init;
                     query_vec.tail(Params::blackdrops::action_dim()) = u;
 
@@ -187,6 +188,7 @@ namespace blackdrops {
 
                     init_diff = final;
                     init = this->transform_state(init_diff);
+                    rollout_info.t += Params::blackdrops::dt();
                 }
 
                 _last_dummy_states = states;
@@ -209,7 +211,7 @@ namespace blackdrops {
 
                 for (int i = 0; i < H; i++) {
                     Eigen::VectorXd query_vec(Params::blackdrops::model_input_dim() + Params::blackdrops::action_dim());
-                    Eigen::VectorXd u = policy.next(this->policy_transform(init, rollout_info));
+                    Eigen::VectorXd u = policy.next(this->policy_transform(init, &rollout_info));
                     query_vec.head(Params::blackdrops::model_input_dim()) = init;
                     query_vec.tail(Params::blackdrops::action_dim()) = u;
 
@@ -231,6 +233,7 @@ namespace blackdrops {
                     reward += world.query(rollout_info, init_diff, u, final);
                     init_diff = final;
                     init = this->transform_state(init_diff);
+                    rollout_info.t += Params::blackdrops::dt();
                 }
 
                 return reward;
@@ -244,6 +247,7 @@ namespace blackdrops {
             {
                 RolloutInfo info;
                 info.init_state = this->init_state();
+                info.t = 0;
 
                 return info;
             }
@@ -267,7 +271,7 @@ namespace blackdrops {
 
             // transform the state variables that go to the policy if needed
             // by default, no transformation is applied
-            virtual Eigen::VectorXd policy_transform(const Eigen::VectorXd& original_state, const RolloutInfo& info) const
+            virtual Eigen::VectorXd policy_transform(const Eigen::VectorXd& original_state, RolloutInfo* info) const
             {
                 return original_state;
             }
@@ -350,11 +354,13 @@ namespace blackdrops {
                 set_transform_state(std::bind(&BaseDARTPolicyControl::transform_state, this, std::placeholders::_1));
                 set_noise_function(std::bind(&BaseDARTPolicyControl::transform_state, this, std::placeholders::_1));
                 set_policy_function(std::bind(&BaseDARTPolicyControl::transform_state, this, std::placeholders::_1));
+                set_update_function(std::bind(&BaseDARTPolicyControl::dummy, this, std::placeholders::_1));
             }
 
             void update(double t)
             {
                 _t = t;
+                _update_func(t);
                 set_commands();
             }
 
@@ -410,6 +416,11 @@ namespace blackdrops {
                 _policy_state = func;
             }
 
+            void set_update_function(std::function<void(double)> func)
+            {
+                _update_func = func;
+            }
+
             virtual Eigen::VectorXd get_state(const robot_t& robot) const = 0;
 
         protected:
@@ -423,11 +434,14 @@ namespace blackdrops {
             std::function<Eigen::VectorXd(const Eigen::VectorXd&)> _tranform_state;
             std::function<Eigen::VectorXd(const Eigen::VectorXd&)> _add_noise;
             std::function<Eigen::VectorXd(const Eigen::VectorXd&)> _policy_state;
+            std::function<void(double)> _update_func;
 
             Eigen::VectorXd transform_state(const Eigen::VectorXd& original_state) const
             {
                 return original_state;
             }
+
+            void dummy(double) const {}
         };
     } // namespace system
 } // namespace blackdrops
