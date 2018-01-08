@@ -242,7 +242,7 @@ struct SimpleArm : public blackdrops::system::DARTSystem<Params, PolicyControl, 
     }
 };
 
-struct RewardFunction : public blackdrops::reward::GPReward<blackdrops::reward_defaults, RewardFunction> {
+struct RewardFunction : public blackdrops::reward::GPReward<RewardFunction> {
     template <typename RolloutInfo>
     double operator()(const RolloutInfo& info, const Eigen::VectorXd& from_state, const Eigen::VectorXd& action, const Eigen::VectorXd& to_state) const
     {

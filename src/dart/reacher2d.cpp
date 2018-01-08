@@ -350,7 +350,7 @@ struct DARTReacher : public blackdrops::system::DARTSystem<Params, PolicyControl
     }
 };
 
-struct RewardFunction : public blackdrops::reward::GPReward<RewardParams, RewardFunction> {
+struct RewardFunction : public blackdrops::reward::GPReward<RewardFunction, blackdrops::RewardGP<RewardParams>> {
     template <typename RolloutInfo>
     double operator()(const RolloutInfo& info, const Eigen::VectorXd& from_state, const Eigen::VectorXd& action, const Eigen::VectorXd& to_state, bool certain = false) const
     {

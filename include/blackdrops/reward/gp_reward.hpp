@@ -80,12 +80,13 @@ namespace blackdrops {
         };
     };
 
+    template <typename Params>
+    using RewardGP = limbo::model::GP<Params, limbo::kernel::SquaredExpARD<Params>, limbo::mean::Constant<Params>, blackdrops::model::gp::KernelLFOpt<Params, limbo::opt::Rprop<Params>>>;
+
     namespace reward {
 
-        template <typename Params, typename MyReward>
+        template <typename MyReward, typename GP = RewardGP<reward_defaults>>
         struct GPReward : public Reward<MyReward> {
-            using GP_t = limbo::model::GP<Params, limbo::kernel::SquaredExpARD<Params>, limbo::mean::Constant<Params>, blackdrops::model::gp::KernelLFOpt<Params, limbo::opt::Rprop<Params>>>;
-
             template <typename RolloutInfo>
             double observe(const RolloutInfo& info, const Eigen::VectorXd& from_state, const Eigen::VectorXd& action, const Eigen::VectorXd& to_state, bool keep = true)
             {
@@ -130,7 +131,7 @@ namespace blackdrops {
 
         protected:
             std::vector<Eigen::VectorXd> _samples, _obs;
-            GP_t _model;
+            GP _model;
         };
     } // namespace reward
 } // namespace blackdrops
