@@ -78,7 +78,11 @@ namespace blackdrops {
         double t;
     };
 
-    template <typename Params, typename Model, typename Robot, typename Policy, typename PolicyOptimizer, typename RewardFunction>
+    struct MeanEvaluator {
+        double operator()(const Eigen::VectorXd& rews) const { return rews.mean(); }
+    };
+
+    template <typename Params, typename Model, typename Robot, typename Policy, typename PolicyOptimizer, typename RewardFunction, typename Evaluator = MeanEvaluator>
     class BlackDROPS {
     public:
         BlackDROPS() : _best(-std::numeric_limits<double>::max()) {}
@@ -377,7 +381,7 @@ namespace blackdrops {
 
                 rews(i) = _robot.predict_policy(p, _model, _reward, Params::blackdrops::T());
             });
-            double r = rews.mean();
+            double r = Evaluator()(rews);
 
             _iter_mutex.lock();
             _opt_iters++;

@@ -72,8 +72,8 @@
 #include <blackdrops/policy/gp_policy.hpp>
 #include <blackdrops/policy/nn_policy.hpp>
 
-#include <blackdrops/reward/reward.hpp>
 #include <blackdrops/reward/gp_reward.hpp>
+#include <blackdrops/reward/reward.hpp>
 
 #include <utils/cmd_args.hpp>
 #include <utils/utils.hpp>
@@ -172,6 +172,11 @@ struct Params {
         BO_DYN_PARAM(double, boundary);
         BO_DYN_PARAM(bool, verbose);
         BO_DYN_PARAM(bool, stochastic);
+#ifdef UCBEVAL
+        struct ucb_evaluator {
+            BO_DYN_PARAM(double, alpha);
+        };
+#endif
 
         BO_PARAM(bool, stochastic_evaluation, true);
         BO_PARAM(int, num_evals, 500);
@@ -433,6 +438,10 @@ BO_DECLARE_DYN_PARAM(bool, Params::blackdrops, verbose);
 BO_DECLARE_DYN_PARAM(bool, Params::blackdrops, stochastic);
 BO_DECLARE_DYN_PARAM(int, Params::blackdrops, opt_evals);
 
+#ifdef UCBEVAL
+BO_DECLARE_DYN_PARAM(double, Params::blackdrops::ucb_evaluator, alpha);
+#endif
+
 BO_DECLARE_DYN_PARAM(double, Params::opt_cmaes, max_fun_evals);
 BO_DECLARE_DYN_PARAM(double, Params::opt_cmaes, fun_tolerance);
 BO_DECLARE_DYN_PARAM(double, Params::opt_cmaes, lbound);
@@ -453,6 +462,9 @@ public:
         // clang-format off
         this->_desc.add_options()
                     ("opt_evals,o", po::value<int>(), "Number of rollouts for policy evaluation. Defaults to 5.")
+#ifdef UCBEVAL
+                    ("alpha,a", po::value<double>(), "Alpha value for UCB evaluator. Defaults to 0.2.")
+#endif
                     ("pole_length", po::value<double>(), "Initial length of the pole for the mean function [0 to 1].")
                     ("pole_mass", po::value<double>(), "Initial mass of the pole for the mean function [0 to 1].")
                     ("cart_mass", po::value<double>(), "Initial mass of the cart for the mean function [0 to 1].")
@@ -481,6 +493,15 @@ public:
             else {
                 Params::blackdrops::set_opt_evals(5);
             }
+#ifdef UCBEVAL
+            if (vm.count("alpha")) {
+                _alpha = vm["alpha"].as<double>();
+                if (_alpha < 0.)
+                    _alpha = 0.;
+            }
+            else
+                _alpha = 0.2;
+#endif
             // Mean Function parameters
             if (vm.count("pole_length")) {
                 double pl = vm["pole_length"].as<double>();
@@ -534,7 +555,35 @@ public:
 
         return -1;
     }
+
+#ifdef UCBEVAL
+    double alpha() const
+    {
+        return _alpha;
+    }
+
+protected:
+    double _alpha;
+#endif
 };
+
+#ifdef UCBEVAL
+template <typename Params>
+struct UCBEvaluator {
+    double operator()(const Eigen::VectorXd& rews) const
+    {
+        double val = rews.mean();
+        double sigma = 0.;
+
+        for (int i = 0; i < rews.size(); i++) {
+            sigma += (rews[i] - val) * (rews[i] - val);
+        }
+        sigma /= double(rews.size());
+
+        return val + Params::blackdrops::ucb_evaluator::alpha() * std::sqrt(sigma);
+    }
+};
+#endif
 
 int main(int argc, char** argv)
 {
@@ -568,6 +617,9 @@ int main(int argc, char** argv)
 
     Params::blackdrops::set_verbose(cmd_arguments.verbose());
     Params::blackdrops::set_stochastic(cmd_arguments.stochastic());
+#ifdef UCBEVAL
+    Params::blackdrops::ucb_evaluator::set_alpha(cmd_arguments.alpha());
+#endif
     Params::opt_cmaes::set_handle_uncertainty(cmd_arguments.uncertainty());
 
     std::cout << std::endl;
@@ -624,10 +676,16 @@ int main(int argc, char** argv)
     using MGP_t = blackdrops::GPModel<Params, GP_t>;
 #endif
 
-#ifndef GPPOLICY
-    blackdrops::BlackDROPS<Params, MGP_t, CartPole, blackdrops::policy::NNPolicy<PolicyParams>, policy_opt_t, RewardFunction> cp_system;
+#ifndef UCBEVAL
+    using Evaluator = blackdrops::MeanEvaluator;
 #else
-    blackdrops::BlackDROPS<Params, MGP_t, CartPole, blackdrops::policy::GPPolicy<PolicyParams>, policy_opt_t, RewardFunction> cp_system;
+    using Evaluator = UCBEvaluator<Params>;
+#endif
+
+#ifndef GPPOLICY
+    blackdrops::BlackDROPS<Params, MGP_t, CartPole, blackdrops::policy::NNPolicy<PolicyParams>, policy_opt_t, RewardFunction, Evaluator> cp_system;
+#else
+    blackdrops::BlackDROPS<Params, MGP_t, CartPole, blackdrops::policy::GPPolicy<PolicyParams>, policy_opt_t, RewardFunction, Evaluator> cp_system;
 #endif
 
     cp_system.learn(1, 15);
