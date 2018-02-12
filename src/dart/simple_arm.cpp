@@ -331,13 +331,6 @@ int main(int argc, char** argv)
     Params::opt_cmaes::set_restarts(cmd_arguments.restarts());
     Params::opt_cmaes::set_elitism(cmd_arguments.elitism());
 
-#if defined(USE_SDL) && !defined(NODSP)
-    //Initialize
-    if (!sdl_init()) {
-        return 1;
-    }
-#endif
-
 #ifdef USE_TBB
     static tbb::task_scheduler_init init(cmd_arguments.threads());
 #endif
