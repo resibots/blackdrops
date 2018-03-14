@@ -23,7 +23,7 @@ In BibTex:
 
 or:
 
-Chatzilygeroudis, K., & Mouret, J. B. (2018). [Using Parameterized Black-Box Priors to Scale Up Model-Based Policy Search for Robotics](https://arxiv.org/pdf/1709.06917). *Proceedings of the International Conference on Robotics and Automation (ICRA)*.
+Chatzilygeroudis, K., & Mouret, J.-B. (2018). [Using Parameterized Black-Box Priors to Scale Up Model-Based Policy Search for Robotics](https://arxiv.org/pdf/1709.06917). *Proceedings of the International Conference on Robotics and Automation (ICRA)*.
 
 In BibTex:
   
