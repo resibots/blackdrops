@@ -106,7 +106,7 @@ namespace blackdrops {
                 }
 
                 //--- Query the GPs with state
-                Eigen::VectorXd nstate = state.array() / _limits.array();;
+                Eigen::VectorXd nstate = state.array() / _limits.array();
                 Eigen::VectorXd action(_adim);
                 tbb::parallel_for(size_t(0), _adim, size_t(1), [&](size_t i) {
                     Eigen::VectorXd a = _gp_policies[i].mu(nstate);
