@@ -65,13 +65,16 @@ import limbo
 def options(opt):
     opt.load('sdl')
     opt.load('robot_dart')
+    opt.load('hexapod_controller')
 
 def configure(conf):
     conf.load('sdl')
     conf.load('robot_dart')
+    conf.load('hexapod_controller')
 
     conf.check_sdl()
     conf.check_robot_dart()
+    conf.check_hexapod_controller()
 
     conf.env.LIB_THREADS = ['pthread']
 

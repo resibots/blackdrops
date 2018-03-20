@@ -1,6 +1,9 @@
 ## Black-DROPS algorithm
 
-Code for the IROS 2017 paper: "Black-Box Data-efficient Policy Search for Robotics"
+Code for the:
+- IROS 2017 paper: "Black-Box Data-efficient Policy Search for Robotics"
+- ICRA 2018 paper: "
+Using Parameterized Black-Box Priors to Scale Up Model-Based Policy Search for Robotics"
 
 ### Citing Black-DROPS
 
@@ -15,6 +18,20 @@ In BibTex:
         author={Chatzilygeroudis, Konstantinos and Rama, Roberto and Kaushik, Rituraj and Goepp, Dorian and Vassiliades, Vassilis and Mouret, Jean-Baptiste},
         booktitle={Proceedings of the IEEE/RSJ International Conference on Intelligent Robots and Systems},
         year={2017},
+        organization={IEEE}
+    }
+
+or:
+
+Chatzilygeroudis, K., & Mouret, J.-B. (2018). [Using Parameterized Black-Box Priors to Scale Up Model-Based Policy Search for Robotics](https://arxiv.org/pdf/1709.06917). *Proceedings of the International Conference on Robotics and Automation (ICRA)*.
+
+In BibTex:
+  
+    @inproceedings{chatzilygeroudis2018using,
+        title={{Using Parameterized Black-Box Priors to Scale Up Model-Based Policy Search for Robotics}},
+        author={Chatzilygeroudis, Konstantinos and Mouret, Jean-Baptiste},
+        booktitle={Proceedings of the International Conference on Robotics and Automation},
+        year={2018},
         organization={IEEE}
     }
 

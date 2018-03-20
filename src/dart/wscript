@@ -101,6 +101,9 @@ def build(bld):
 
     # Compile new targets
     for target in new_targets:
+        # ignore hexapod experiment if no hexapod_controller is found
+        if target == 'hexapod_walk' and len(bld.env.INCLUDES_HEXAPOD_CONTROLLER) == 0:
+            continue
         limbo.create_variants(bld,
                         source=target+'.cpp',
                         includes='. ../../../../src ../ ../../include',
