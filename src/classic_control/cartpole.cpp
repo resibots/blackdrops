@@ -66,8 +66,10 @@
 #include <blackdrops/model/multi_gp/multi_gp_parallel_opt.hpp>
 #include <blackdrops/model/multi_gp/multi_gp_whole_opt.hpp>
 #include <blackdrops/system/ode_system.hpp>
-#include <limbo/experimental/model/poegp.hpp>
-#include <limbo/experimental/model/poegp/poegp_lf_opt.hpp>
+
+#ifdef SPGPS
+#include <limbo/model/sparsified_gp.hpp>
+#endif
 
 #include <blackdrops/policy/gp_policy.hpp>
 #include <blackdrops/policy/nn_policy.hpp>
@@ -188,14 +190,14 @@ struct Params {
         BO_PARAM(double, noise, 0.01);
     };
 
-    struct model_poegp : public limbo::defaults::model_poegp {
-        BO_PARAM(int, leaf_size, 100);
-        BO_PARAM(double, tau, 0.05);
-    };
-
+#ifdef SPGPS
     struct model_gpmm : public ::blackdrops::defaults::model_gpmm {
         BO_PARAM(int, threshold, 200);
     };
+    struct model_sparse_gp : public limbo::defaults::model_sparse_gp {
+        BO_PARAM(int, max_points, 200);
+    };
+#endif
 
     struct mean_constant {
         BO_PARAM(double, constant, 0.0);
@@ -666,9 +668,9 @@ int main(int argc, char** argv)
 
 #ifdef SPGPS
 #ifndef MODELIDENT
-    using SPGP_t = blackdrops::model::MultiGP<Params, limbo::experimental::model::POEGP, kernel_t, mean_t, blackdrops::model::multi_gp::MultiGPParallelLFOpt<Params, limbo::experimental::model::poegp::POEKernelLFOpt<Params>>>;
+    using SPGP_t = blackdrops::model::MultiGP<Params, limbo::model::SparsifiedGP, kernel_t, mean_t, blackdrops::model::multi_gp::MultiGPParallelLFOpt<Params, blackdrops::model::gp::KernelLFOpt<Params>>>;
 #else
-    using SPGP_t = blackdrops::model::MultiGP<Params, limbo::experimental::model::POEGP, kernel_t, mean_t, blackdrops::model::multi_gp::MultiGPWholeLFOpt<Params, limbo::opt::NLOptNoGrad<Params, nlopt::LN_SBPLX>, limbo::experimental::model::poegp::POEKernelLFOpt<Params>>>;
+    using SPGP_t = blackdrops::model::MultiGP<Params, limbo::model::SparsifiedGP, kernel_t, mean_t, blackdrops::model::multi_gp::MultiGPWholeLFOpt<Params, limbo::opt::NLOptNoGrad<Params, nlopt::LN_SBPLX>, blackdrops::model::gp::KernelLFOpt<Params>>>;
 #endif
     using GPMM_t = blackdrops::GPMultiModel<Params, GP_t, SPGP_t>;
     using MGP_t = blackdrops::GPModel<Params, GPMM_t>;
