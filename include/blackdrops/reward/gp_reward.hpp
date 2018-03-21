@@ -58,6 +58,8 @@
 
 #include <blackdrops/reward/reward.hpp>
 
+#include <limbo/kernel/squared_exp_ard.hpp>
+#include <limbo/mean/constant.hpp>
 #include <limbo/model/gp.hpp>
 
 namespace blackdrops {
