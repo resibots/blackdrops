@@ -14,15 +14,15 @@ The classic pendulum swing-up task from the robot control literature with the fo
 
 The recommended parameters to use are the following:
 
-- 10000 maximum functions evaluations for CMA-ES
-- 5 restarts for CMA-ES
+- Let CMA-ES converge (i.e., -1 for maximum functions evaluations)
+- 1 restart for CMA-ES
 - Enable elitism for CMA-ES
 - 10 hidden neurons for the neural network policy
 - [-5,5] the boundaries for the parameters of the policy
 
-In short, you should run: `./deps/limbo/build/exp/blackdrops/src/classic_control/pendulum_simu -m 10000 -r 5 -n 10 -b 5 -e 1 -u`
+In short, you should run: `./deps/limbo/build/exp/blackdrops/src/classic_control/pendulum_simu -m -1 -r 1 -n 10 -b 5 -e 1 -u -s`
 
-If you want to try with the Gaussian process (GP) policy, you should run: `./deps/limbo/build/exp/blackdrops/src/classic_control/pendulum_simu_gppolicy -m 10000 -r 5 -b 1 -e 1 -u`
+If you want to try with the Gaussian process (GP) policy, you should run: `./deps/limbo/build/exp/blackdrops/src/classic_control/pendulum_simu_gppolicy -m -1 -r 1 -p 10 -b 1 -e 1 -u -s`
 
 #### Results
 
@@ -42,15 +42,15 @@ The classic cart-pole swing-up task from the robot control literature with the f
 
 The recommended parameters to use are the following:
 
-- 40000 maximum functions evaluations for CMA-ES
-- 5 restarts for CMA-ES
+- Let CMA-ES converge (i.e., -1 for maximum functions evaluations)
+- 1 restart for CMA-ES
 - Enable elitism for CMA-ES
 - 10 hidden neurons for the neural network policy
 - [-5,5] the boundaries for the parameters of the policy
 
-In short, you should run: `./deps/limbo/build/exp/blackdrops/src/classic_control/cartpole_simu -m 40000 -r 5 -n 10 -b 5 -e 1 -u`
+In short, you should run: `./deps/limbo/build/exp/blackdrops/src/classic_control/cartpole_simu -m -1 -r 1 -n 10 -b 5 -e 1 -u -s`
 
-If you want to try with the Gaussian process (GP) policy, you should run: `./deps/limbo/build/exp/blackdrops/src/classic_control/cartpole_simu_gppolicy -m 40000 -r 5 -b 1 -e 1 -u`
+If you want to try with the Gaussian process (GP) policy, you should run: `./deps/limbo/build/exp/blackdrops/src/classic_control/cartpole_simu_gppolicy -m -1 -r 1 -p 20 -b 5 -e 1 -u -s`
 
 #### Results
 
@@ -75,15 +75,15 @@ This scenario was designed to replicate as close as possible the real robot scen
 
 The recommended parameters to use are the following:
 
-- 5000 maximum functions evaluations for CMA-ES
-- 5 restarts for CMA-ES
+- Let CMA-ES converge (i.e., -1 for maximum functions evaluations)
+- 1 restart for CMA-ES
 - Enable elitism for CMA-ES
 - 10 hidden neurons for the neural network policy
 - [-1,1] the boundaries for the parameters of the policy
 
-In short, you should run: `./deps/limbo/build/exp/blackdrops/src/dart/simple_arm_graphic -m 5000 -r 5 -n 10 -b 1 -e 1 -u`
+In short, you should run: `./deps/limbo/build/exp/blackdrops/src/dart/simple_arm_graphic -m -1 -r 1 -n 10 -b 1 -e 1 -u -s`
 
-If you want to run it without graphics: `./deps/limbo/build/exp/blackdrops/src/dart/simple_arm_simu -m 5000 -r 5 -n 10 -b 1 -e 1 -u`
+If you want to run it without graphics: `./deps/limbo/build/exp/blackdrops/src/dart/simple_arm_simu -m -1 -r 1 -n 10 -b 1 -e 1 -u -s`
 
 #### Results
 
