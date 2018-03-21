@@ -8,7 +8,16 @@ if [ $OS = "Darwin" ]; then
     brew install cmake eigen3 boost
     brew install autoconf automake
 else
-    echo "Installing for Ubuntun via apt-get"
+    # check if we have Ubuntu or not
+    distro_str="$(cat /etc/*-release | grep -s DISTRIB_ID)"
+    distro=$(echo $distro_str | cut -f2 -d'=')
+
+    if [ $disto != "Ubuntu" ]l then
+        echo "ERROR: We need an Ubuntu system to use this script"
+        exit 1
+    fi
+
+    echo "Installing for Ubuntu via apt-get"
     sudo apt-get -qq update
     # install Eigen 3, Boost
     sudo apt-get --yes --force-yes install cmake libeigen3-dev libboost-serialization-dev libboost-filesystem-dev libboost-test-dev libboost-program-options-dev libboost-thread-dev libboost-regex-dev

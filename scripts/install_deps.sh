@@ -4,7 +4,16 @@ OS=$(uname)
 echo "Detected OS: $OS"
 
 if [ $OS = "Darwin" ]; then
-    echo "ERROR: OSX is only for install_deps_req.sh"
+    echo "ERROR: OSX can only be used with install_deps_req.sh"
+    exit 1
+fi
+
+# check if we have Ubuntu or not
+distro_str="$(cat /etc/*-release | grep -s DISTRIB_ID)"
+distro=$(echo $distro_str | cut -f2 -d'=')
+
+if [ $disto != "Ubuntu" ]l then
+    echo "ERROR: We need an Ubuntu system to use this script"
     exit 1
 fi
 
@@ -46,9 +55,24 @@ make install
 # go back to original directory
 cd ../..
 
+# get ubuntu version
+version_str="$(cat /etc/*-release | grep -s DISTRIB_RELEASE)"
+version=$(echo $version_str | cut -f2 -d'=')
+major_version=$(echo $version | cut -f1 -d'.')
+minor_version=$(echo $version | cut -f2 -d'.')
+
+# if less than 14.04, exit
+if [ "$(($major_version))" -lt "14" ]; then
+    echo "ERROR: We need Ubuntu >= 14.04 for this script to work"
+    exit 1
+fi
+
 # install DART dependencies
-sudo apt-add-repository ppa:libccd-debs/ppa -y
-sudo apt-add-repository ppa:fcl-debs/ppa -y
+# if we have less than 16.04, we need some extra stuff
+if [ "$(($major_version))" -lt "16" ]; then
+    sudo apt-add-repository ppa:libccd-debs/ppa -y
+    sudo apt-add-repository ppa:fcl-debs/ppa -y
+fi
 sudo apt-add-repository ppa:dartsim/ppa -y
 sudo apt-get -qq update
 sudo apt-get --yes --force-yes install build-essential pkg-config libassimp-dev libccd-dev libfcl-dev
