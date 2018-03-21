@@ -187,7 +187,7 @@ struct Params {
     };
 
     struct opt_cmaes : public limbo::defaults::opt_cmaes {
-        BO_DYN_PARAM(double, max_fun_evals);
+        BO_DYN_PARAM(int, max_fun_evals);
         BO_DYN_PARAM(double, fun_tolerance);
         BO_DYN_PARAM(int, restarts);
         BO_DYN_PARAM(int, elitism);
@@ -230,7 +230,7 @@ Eigen::VectorXd tip(double theta1, double theta2)
     // @end-effector - here you should compute the end-effector position given the joint angles
 }
 
-struct PlanarArm : public blackdrops::system::ODESystem<Params> {
+struct PlanarArm : public blackdrops::system::ODESystem<Params, blackdrops::RolloutInfo> {
     Eigen::VectorXd init_state() const
     {
         Eigen::VectorXd init = Eigen::VectorXd::Zero(4);
@@ -285,7 +285,7 @@ BO_DECLARE_DYN_PARAM(bool, Params::blackdrops, verbose);
 BO_DECLARE_DYN_PARAM(bool, Params::blackdrops, stochastic);
 BO_DECLARE_DYN_PARAM(double, Params::blackdrops, boundary);
 
-BO_DECLARE_DYN_PARAM(double, Params::opt_cmaes, max_fun_evals);
+BO_DECLARE_DYN_PARAM(int, Params::opt_cmaes, max_fun_evals);
 BO_DECLARE_DYN_PARAM(double, Params::opt_cmaes, fun_tolerance);
 BO_DECLARE_DYN_PARAM(double, Params::opt_cmaes, lbound);
 BO_DECLARE_DYN_PARAM(double, Params::opt_cmaes, ubound);

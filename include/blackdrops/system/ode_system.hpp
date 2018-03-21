@@ -61,7 +61,7 @@
 
 namespace blackdrops {
     namespace system {
-        template <typename Params>
+        template <typename Params, typename RolloutInfo>
         struct ODESystem {
 
             template <typename Policy, typename Reward>

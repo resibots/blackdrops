@@ -221,7 +221,7 @@ struct Params {
     };
 
     struct opt_cmaes : public limbo::defaults::opt_cmaes {
-        BO_DYN_PARAM(double, max_fun_evals);
+        BO_DYN_PARAM(int, max_fun_evals);
         BO_DYN_PARAM(double, fun_tolerance);
         BO_DYN_PARAM(int, restarts);
         BO_DYN_PARAM(int, elitism);
@@ -280,7 +280,7 @@ struct PolicyParams {
     };
 };
 
-struct CartPole : public blackdrops::system::ODESystem<Params> {
+struct CartPole : public blackdrops::system::ODESystem<Params, blackdrops::RolloutInfo> {
     Eigen::VectorXd init_state() const
     {
         constexpr double sigma = 0.001;
@@ -444,7 +444,7 @@ BO_DECLARE_DYN_PARAM(int, Params::blackdrops, opt_evals);
 BO_DECLARE_DYN_PARAM(double, Params::blackdrops::ucb_evaluator, alpha);
 #endif
 
-BO_DECLARE_DYN_PARAM(double, Params::opt_cmaes, max_fun_evals);
+BO_DECLARE_DYN_PARAM(int, Params::opt_cmaes, max_fun_evals);
 BO_DECLARE_DYN_PARAM(double, Params::opt_cmaes, fun_tolerance);
 BO_DECLARE_DYN_PARAM(double, Params::opt_cmaes, lbound);
 BO_DECLARE_DYN_PARAM(double, Params::opt_cmaes, ubound);
