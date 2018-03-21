@@ -57,13 +57,6 @@
 
 #include <boost/program_options.hpp>
 
-#include <robot_dart/position_control.hpp>
-#include <robot_dart/robot_dart_simu.hpp>
-
-#ifdef GRAPHIC
-#include <robot_dart/graphics.hpp>
-#endif
-
 #include <blackdrops/blackdrops.hpp>
 #include <blackdrops/gp_model.hpp>
 #include <blackdrops/model/gp/kernel_lf_opt.hpp>
@@ -81,11 +74,6 @@
 #include <utils/utils.hpp>
 
 struct Params {
-#ifdef GRAPHIC
-    struct graphics : robot_dart::defaults::graphics {
-    };
-#endif
-
     struct blackdrops : public ::blackdrops::defaults::blackdrops {
         BO_PARAM(size_t, action_dim, 2);
         // BO_PARAM(size_t, model_input_dim, 8);
@@ -238,11 +226,16 @@ struct PolicyControl : public blackdrops::system::BaseDARTPolicyControl<Params, 
     using base_t = blackdrops::system::BaseDARTPolicyControl<Params, global::policy_t>;
 
     PolicyControl() : base_t() {}
-    PolicyControl(const std::vector<double>& ctrl, base_t::robot_t robot) : base_t(ctrl, robot) {}
+    PolicyControl(const std::vector<double>& ctrl) : base_t(ctrl) {}
 
     Eigen::VectorXd get_state(const base_t::robot_t& robot) const
     {
         return get_robot_state(robot);
+    }
+
+    std::shared_ptr<robot_dart::control::RobotControl> clone() const override
+    {
+        return std::make_shared<PolicyControl>(*this);
     }
 };
 
@@ -329,21 +322,27 @@ struct DARTReacher : public blackdrops::system::DARTSystem<Params, PolicyControl
         Eigen::VectorXd goal(3);
         goal << rollout_info.target(0), global::goal(1), rollout_info.target(1);
         goal_pose.tail(3) = goal;
-        // pose, dims, type, mass, color, name
-        simu.add_ellipsoid(goal_pose, {0.025, 0.025, 0.025}, "fixed", 1., dart::Color::Green(1.0), "goal_marker");
+        // dims, pose, type, mass, color, name
+        auto ellipsoid = robot_dart::Robot::create_ellipsoid({0.025, 0.025, 0.025}, goal_pose, "fixed", 1., dart::Color::Green(1.0), "goal_marker");
         // remove collisions from goal marker
-        simu.world()->getSkeleton("goal_marker")->getRootBodyNode()->setCollidable(false);
+        ellipsoid->skeleton()->getRootBodyNode()->setCollidable(false);
+        // add ellipsoid to simu
+        simu.add_robot(ellipsoid);
 
         auto ground = global::global_floor->clone();
         Eigen::Vector6d floor_pose = Eigen::Vector6d::Zero();
         floor_pose(4) = -0.0125;
-        simu.add_skeleton(ground, floor_pose, "fixed");
+        auto floor_robot = std::make_shared<robot_dart::Robot>(ground, "ground");
+        floor_robot->skeleton()->setPositions(floor_pose);
+        floor_robot->fix_to_world();
+        // add floor to simu
+        simu.add_robot(floor_robot);
 
 #ifdef GRAPHIC
-        Eigen::Vector3d camera_pos = Eigen::Vector3d(0., 3., 0.);
+        Eigen::Vector3d camera_pos = Eigen::Vector3d(0., 2., 0.);
         Eigen::Vector3d look_at = Eigen::Vector3d(0., 0., 0.);
         Eigen::Vector3d up = Eigen::Vector3d(0., 1., 0.);
-        simu.graphics()->fixed_camera(camera_pos, look_at, up);
+        std::static_pointer_cast<robot_dart::graphics::Graphics>(simu.graphics())->look_at(camera_pos, look_at, up);
         // slow down visualization because 0.5 seconds is too fast
         simu.graphics()->set_render_period(0.03);
 #endif

@@ -104,11 +104,14 @@ def build(bld):
         # ignore hexapod experiment if no hexapod_controller is found
         if target == 'hexapod_walk' and len(bld.env.INCLUDES_HEXAPOD_CONTROLLER) == 0:
             continue
+        extra_libs = ''
+        if target == 'hexapod_walk':
+            extra_libs = ' HEXAPOD_CONTROLLER'
         limbo.create_variants(bld,
                         source=target+'.cpp',
                         includes='. ../../../../src ../ ../../include',
                         target=target,
-                        uselib=dart_libs,
+                        uselib=dart_libs + extra_libs,
                         uselib_local='limbo',
                         cxxflags = cxxflags + ['-DRESPATH="' + path + '"'],
                         variants = ['SIMU'])
@@ -118,7 +121,7 @@ def build(bld):
                             source=target+'.cpp',
                             includes='. ../../../../src ../ ../../include',
                             target=target,
-                            uselib=dart_libs_graphic,
+                            uselib=dart_libs_graphic + extra_libs,
                             uselib_local='limbo',
                             cxxflags = cxxflags + ['-DRESPATH="' + path + '"'],
                             variants = ['GRAPHIC'])

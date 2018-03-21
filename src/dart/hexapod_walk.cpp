@@ -58,13 +58,6 @@
 
 #include <boost/program_options.hpp>
 
-#include <robot_dart/position_control.hpp>
-#include <robot_dart/robot_dart_simu.hpp>
-
-#ifdef GRAPHIC
-#include <robot_dart/graphics.hpp>
-#endif
-
 #include <blackdrops/blackdrops.hpp>
 #include <blackdrops/gp_model.hpp>
 #include <blackdrops/model/gp/kernel_lf_opt.hpp>
@@ -74,17 +67,15 @@
 
 #include <blackdrops/reward/reward.hpp>
 
+#include <dart/dynamics/BoxShape.hpp>
+#include <dart/dynamics/CylinderShape.hpp>
+
 #include <hexapod_controller/hexapod_controller_simple.hpp>
 
 #include <utils/cmd_args.hpp>
 #include <utils/utils.hpp>
 
 struct Params {
-#ifdef GRAPHIC
-    struct graphics : robot_dart::defaults::graphics {
-    };
-#endif
-
     struct blackdrops : public ::blackdrops::defaults::blackdrops {
         BO_PARAM(size_t, action_dim, 18);
         BO_PARAM(size_t, model_input_dim, 49);
@@ -268,49 +259,39 @@ Eigen::VectorXd get_robot_state(const std::shared_ptr<robot_dart::Robot>& robot)
     return state;
 }
 
-struct PolicyControl : public robot_dart::RobotControl {
+struct PolicyControl : public robot_dart::control::RobotControl {
 public:
     using robot_t = std::shared_ptr<robot_dart::Robot>;
 
     PolicyControl() {}
-    PolicyControl(const std::vector<double>& ctrl, robot_t robot)
-        : robot_dart::RobotControl(ctrl, robot)
-    {
-        size_t _start_dof = 0;
-        if (!_robot->fixed_to_world()) {
-            _start_dof = 6;
-        }
-        _p = Eigen::VectorXd::Zero(_dof);
-        _target_positions = _robot->skeleton()->getPositions();
+    PolicyControl(const std::vector<double>& ctrl)
+        : robot_dart::control::RobotControl(ctrl) {}
 
-        std::vector<size_t> indices;
-        std::vector<dart::dynamics::Joint::ActuatorType> types;
-        for (size_t i = _start_dof; i < _dof; i++) {
+    void configure() override
+    {
+        _p = Eigen::VectorXd::Zero(_dof);
+        for (size_t i = 6; i < _dof; i++) {
             _p(i) = 1.0;
-            auto j = _robot->skeleton()->getDof(i)->getJoint();
-            indices.push_back(_robot->skeleton()->getIndexOf(j));
-            types.push_back(Params::dart_policy_control::joint_type());
         }
-        _robot->set_actuator_types(indices, types);
+        _target_positions = _robot->skeleton()->getPositions();
 
         _prev_time = 0.0;
         _t = 0.0;
 
-        _policy.set_params(Eigen::VectorXd::Map(ctrl.data(), ctrl.size()));
+        _policy.set_params(Eigen::VectorXd::Map(_ctrl.data(), _ctrl.size()));
 
         _states.clear();
         _coms.clear();
         _first = true;
+
+        if (Params::blackdrops::action_dim() == _control_dof)
+            _active = true;
     }
 
-    void update(double t)
+    Eigen::VectorXd calculate(double t) override
     {
         _t = t;
-        set_commands();
-    }
 
-    void set_commands()
-    {
         double dt = Params::blackdrops::dt();
 
         if (_first || (_t - _prev_time - dt) > -Params::dart_system::sim_step() / 2.0) {
@@ -340,8 +321,9 @@ public:
         Eigen::VectorXd vel = q_err * gain;
         vel = vel.cwiseProduct(_p);
         assert(_dof == (size_t)vel.size());
-        _robot->skeleton()->setCommands(vel);
-        _prev_commands = vel;
+        // _robot->skeleton()->setCommands(vel);
+        _prev_commands = vel.tail(_control_dof);
+        return _prev_commands;
     }
 
     std::vector<Eigen::VectorXd> get_states() const
@@ -371,6 +353,11 @@ public:
     void set_policy_function(std::function<Eigen::VectorXd(const Eigen::VectorXd&)> func) {}
 
     void set_update_function(std::function<void(double)> func) {}
+
+    std::shared_ptr<robot_dart::control::RobotControl> clone() const override
+    {
+        return std::make_shared<PolicyControl>(*this);
+    }
 
 protected:
     double _prev_time;
@@ -415,18 +402,25 @@ struct Hexapod : public blackdrops::system::DARTSystem<Params, PolicyControl, bl
         // add floor
         simu.add_floor();
 
+        // free the first 6-DOF
+        for (size_t i = 0; i < 6; i++) {
+            simu.robot(0)->set_actuator_type(i, dart::dynamics::Joint::FORCE);
+        }
+
 #ifdef GRAPHIC
         Eigen::Vector3d pos = {0., 3.5, 2.};
         Eigen::Vector3d look_at = {0.75, 0., 0.};
-        simu.graphics()->fixed_camera(pos, look_at);
+        std::static_pointer_cast<robot_dart::graphics::Graphics>(simu.graphics())->look_at(pos, look_at);
 
         // Add init position marker
         Eigen::Vector6d init_pose = Eigen::Vector6d::Zero();
         init_pose.tail(3) = this->init_state().segment(27, 3);
-        // pose, dims, type, mass, color, name
-        simu.add_ellipsoid(init_pose, {0.1, 0.1, 0.1}, "fixed", 1., dart::Color::Green(1.0), "init_marker");
+        // dims, pose, type, mass, color, name
+        auto ellipsoid = robot_dart::Robot::create_ellipsoid({0.1, 0.1, 0.1}, init_pose, "fixed", 1., dart::Color::Green(1.0), "init_marker");
         // remove collisions from init marker
-        simu.world()->getSkeleton("init_marker")->getRootBodyNode()->setCollidable(false);
+        ellipsoid->skeleton()->getRootBodyNode()->setCollidable(false);
+        // add ellipsoid to simu
+        simu.add_robot(ellipsoid);
 #endif
     }
 
@@ -473,49 +467,38 @@ struct RewardFunction : public blackdrops::reward::Reward<RewardFunction> {
     }
 };
 
-struct PolicyControlSimple : public robot_dart::RobotControl {
+struct PolicyControlSimple : public robot_dart::control::RobotControl {
 public:
     using robot_t = std::shared_ptr<robot_dart::Robot>;
 
     PolicyControlSimple() {}
-    PolicyControlSimple(const std::vector<double>& ctrl, robot_t robot)
-        : robot_dart::RobotControl(ctrl, robot)
+    PolicyControlSimple(const std::vector<double>& ctrl)
+        : robot_dart::control::RobotControl(ctrl) {}
+
+    void configure() override
     {
-        size_t _start_dof = 0;
-        if (!_robot->fixed_to_world()) {
-            _start_dof = 6;
-        }
         _p = Eigen::VectorXd::Zero(_dof);
         _target_positions = _robot->skeleton()->getPositions();
-
-        std::vector<size_t> indices;
-        std::vector<dart::dynamics::Joint::ActuatorType> types;
-        for (size_t i = _start_dof; i < _dof; i++) {
-            _p(i) = 1.0;
-            auto j = _robot->skeleton()->getDof(i)->getJoint();
-            indices.push_back(_robot->skeleton()->getIndexOf(j));
-            types.push_back(Params::dart_policy_control::joint_type());
-        }
-        _robot->set_actuator_types(indices, types);
-
         _prev_time = 0.0;
         _t = 0.0;
 
-        for (size_t i = 0; i < ctrl.size(); i++)
-            _target_positions(i + 6) = ((i % 3 == 1) ? 1.0 : -1.0) * ctrl[i];
+        for (size_t i = 6; i < _dof; i++) {
+            _p(i) = 1.0;
+        }
+
+        for (size_t i = 0; i < _ctrl.size(); i++)
+            _target_positions(i + 6) = ((i % 3 == 1) ? 1.0 : -1.0) * _ctrl[i];
 
         _states.clear();
         _first = true;
+
+        if (Params::blackdrops::action_dim() == _control_dof)
+            _active = true;
     }
 
-    void update(double t)
+    Eigen::VectorXd calculate(double t) override
     {
         _t = t;
-        set_commands();
-    }
-
-    void set_commands()
-    {
         double dt = Params::blackdrops::dt();
 
         if (_first || (_t - _prev_time - dt) > -Params::dart_system::sim_step() / 2.0) {
@@ -534,8 +517,9 @@ public:
         Eigen::VectorXd vel = q_err * gain;
         vel = vel.cwiseProduct(_p);
         assert(_dof == (size_t)vel.size());
-        _robot->skeleton()->setCommands(vel);
-        _prev_commands = vel;
+        // _robot->skeleton()->setCommands(vel);
+        _prev_commands = vel.tail(_control_dof);
+        return _prev_commands;
     }
 
     std::vector<Eigen::VectorXd> get_states() const
@@ -546,6 +530,11 @@ public:
     Eigen::VectorXd get_state(const robot_t& robot) const
     {
         return get_robot_state(robot);
+    }
+
+    std::shared_ptr<robot_dart::control::RobotControl> clone() const override
+    {
+        return std::make_shared<PolicyControlSimple>(*this);
     }
 
 protected:
@@ -559,7 +548,7 @@ protected:
 };
 
 struct MeanFunc {
-    using robot_simu_t = robot_dart::RobotDARTSimu<robot_dart::robot_control<PolicyControlSimple>>;
+    using robot_simu_t = robot_dart::RobotDARTSimu;
 
     MeanFunc(int dim_out = 1) {}
 
@@ -591,8 +580,12 @@ struct MeanFunc {
         simulated_robot->skeleton()->setVelocities(state.head(24));
         simulated_robot->skeleton()->setPositions(state.segment(24, 24));
 
-        robot_simu_t simu(params, simulated_robot);
+        auto controller = std::make_shared<PolicyControlSimple>(params);
+        simulated_robot->add_controller(controller);
+
+        robot_simu_t simu;
         simu.add_floor();
+        simu.add_robot(simulated_robot);
         // simulation step different from sampling rate -- we need a stable simulation
         simu.set_step(Params::dart_system::sim_step());
         simu.world()->setTime(t);
@@ -602,7 +595,7 @@ struct MeanFunc {
         // if (simu.controller().get_states().size() == 0)
         //     std::cout << "ERROR: " << state.transpose() << std::endl;
 
-        Eigen::VectorXd final = simu.controller().get_states().back();
+        Eigen::VectorXd final = controller->get_states().back();
 
         release_robot(rob);
 
@@ -612,7 +605,7 @@ struct MeanFunc {
 
 void init_simu(const std::string& robot_file, int broken_leg = -1)
 {
-    global::global_robot = std::make_shared<robot_dart::Robot>(robot_dart::Robot(robot_file, {}, "hexapod", true));
+    global::global_robot = std::make_shared<robot_dart::Robot>(robot_file, "hexapod");
 
     if (broken_leg >= 0 && broken_leg <= 5) {
         std::cout << "Shortened leg: " << broken_leg << std::endl;
@@ -644,7 +637,12 @@ void init_simu(const std::string& robot_file, int broken_leg = -1)
     }
 
     // Quick hack for not proper cloning of shapes in DART
-    auto sim_robot = std::make_shared<robot_dart::Robot>(robot_dart::Robot(robot_file, {}, "hexapod", true));
+    auto sim_robot = std::make_shared<robot_dart::Robot>(robot_file, "hexapod");
+    sim_robot->set_actuator_types(Params::dart_policy_control::joint_type());
+    // free the first 6-DOF
+    for (size_t i = 0; i < 6; i++) {
+        sim_robot->set_actuator_type(i, dart::dynamics::Joint::FORCE);
+    }
 
     global::available_robots.clear();
     global::used_robots.clear();

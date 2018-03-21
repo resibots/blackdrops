@@ -58,10 +58,15 @@
 
 #include <functional>
 
+#include <robot_dart/control/robot_control.hpp>
+#include <robot_dart/robot.hpp>
 #include <robot_dart/robot_dart_simu.hpp>
+#include <robot_dart/utils.hpp>
+
+#include <dart/dynamics/BodyNode.hpp>
 
 #ifdef GRAPHIC
-#include <robot_dart/graphics.hpp>
+#include <robot_dart/graphics/graphics.hpp>
 #endif
 
 #include <utils/utils.hpp>
@@ -70,12 +75,7 @@ namespace blackdrops {
     namespace system {
         template <typename Params, typename PolicyController, typename RolloutInfo>
         struct DARTSystem {
-
-#ifdef GRAPHIC
-            using robot_simu_t = robot_dart::RobotDARTSimu<robot_dart::robot_control<PolicyController>, robot_dart::graphics<robot_dart::Graphics<Params>>>;
-#else
-            using robot_simu_t = robot_dart::RobotDARTSimu<robot_dart::robot_control<PolicyController>>;
-#endif
+            using robot_simu_t = robot_dart::RobotDARTSimu;
 
             template <typename Policy, typename Reward>
             std::vector<std::tuple<Eigen::VectorXd, Eigen::VectorXd, Eigen::VectorXd>> execute(const Policy& policy, Reward& world, double T, std::vector<double>& R, bool display = true, RolloutInfo* info = nullptr)
@@ -85,28 +85,40 @@ namespace blackdrops {
 
                 std::vector<std::tuple<Eigen::VectorXd, Eigen::VectorXd, Eigen::VectorXd>> res;
 
-                Eigen::VectorXd pp = policy.params();
-                std::vector<double> params(pp.size());
-                Eigen::VectorXd::Map(params.data(), pp.size()) = pp;
-
-                std::shared_ptr<robot_dart::Robot> simulated_robot = this->get_robot();
-
                 R = std::vector<double>();
 
-                robot_simu_t simu(params, simulated_robot);
+                robot_simu_t simu;
+#ifdef GRAPHIC
+                simu.set_graphics(std::make_shared<robot_dart::graphics::Graphics>(simu.world()));
                 simu.graphics()->set_enable(display);
+#endif
                 // simulation step different from sampling rate -- we need a stable simulation
                 simu.set_step(Params::dart_system::sim_step());
-                simu.controller().set_transform_state(std::bind(&DARTSystem::transform_state, this, std::placeholders::_1));
-                simu.controller().set_noise_function(std::bind(&DARTSystem::add_noise, this, std::placeholders::_1));
 
                 // Get the information of the rollout
                 RolloutInfo rollout_info = get_rollout_info();
                 if (info != nullptr)
                     *info = rollout_info;
 
-                simu.controller().set_update_function(std::bind([&](double t) { rollout_info.t = t; }, std::placeholders::_1));
-                simu.controller().set_policy_function(std::bind(&DARTSystem::policy_transform, this, std::placeholders::_1, &rollout_info));
+                // setup robot
+                Eigen::VectorXd pp = policy.params();
+                std::vector<double> params(pp.size());
+                Eigen::VectorXd::Map(params.data(), pp.size()) = pp;
+
+                std::shared_ptr<robot_dart::Robot> simulated_robot = this->get_robot();
+                simulated_robot->set_actuator_types(Params::dart_policy_control::joint_type());
+
+                // setup the controller
+                auto controller = std::make_shared<PolicyController>(params);
+                controller->set_transform_state(std::bind(&DARTSystem::transform_state, this, std::placeholders::_1));
+                controller->set_noise_function(std::bind(&DARTSystem::add_noise, this, std::placeholders::_1));
+                controller->set_update_function(std::bind([&](double t) { rollout_info.t = t; }, std::placeholders::_1));
+                controller->set_policy_function(std::bind(&DARTSystem::policy_transform, this, std::placeholders::_1, &rollout_info));
+
+                // add the controller to the robot
+                simulated_robot->add_controller(controller);
+                // add the robot to the simulation
+                simu.add_robot(simulated_robot);
 
                 // Add extra to simu object
                 this->add_extra_to_simu(simu, rollout_info);
@@ -118,11 +130,11 @@ namespace blackdrops {
 
                 simu.run(T + Params::dart_system::sim_step());
 
-                std::vector<Eigen::VectorXd> states = simu.controller().get_states();
-                std::vector<Eigen::VectorXd> noiseless_states = simu.controller().get_noiseless_states();
+                std::vector<Eigen::VectorXd> states = controller->get_states();
+                std::vector<Eigen::VectorXd> noiseless_states = controller->get_noiseless_states();
                 if (display)
                     _last_states = states;
-                std::vector<Eigen::VectorXd> commands = simu.controller().get_commands();
+                std::vector<Eigen::VectorXd> commands = controller->get_commands();
                 if (display)
                     _last_commands = commands;
 
@@ -319,37 +331,14 @@ namespace blackdrops {
         };
 
         template <typename Params, typename Policy>
-        struct BaseDARTPolicyControl : public robot_dart::RobotControl {
+        class BaseDARTPolicyControl : public robot_dart::control::RobotControl {
         public:
             using robot_t = std::shared_ptr<robot_dart::Robot>;
 
             BaseDARTPolicyControl() {}
-            BaseDARTPolicyControl(const std::vector<double>& ctrl, robot_t robot)
-                : robot_dart::RobotControl(ctrl, robot)
+            BaseDARTPolicyControl(const std::vector<double>& ctrl, bool full_control = false)
+                : robot_dart::control::RobotControl(ctrl, full_control)
             {
-                size_t _start_dof = 0;
-                if (!_robot->fixed_to_world()) {
-                    _start_dof = 6;
-                }
-                std::vector<size_t> indices;
-                std::vector<dart::dynamics::Joint::ActuatorType> types;
-                for (size_t i = _start_dof; i < _dof; i++) {
-                    auto j = _robot->skeleton()->getDof(i)->getJoint();
-                    indices.push_back(_robot->skeleton()->getIndexOf(j));
-                    types.push_back(Params::dart_policy_control::joint_type());
-                }
-                _robot->set_actuator_types(indices, types);
-
-                _prev_time = 0.0;
-                _t = 0.0;
-                _first = true;
-
-                _policy.set_params(Eigen::VectorXd::Map(ctrl.data(), ctrl.size()));
-
-                _states.clear();
-                _noiseless_states.clear();
-                _coms.clear();
-
                 // set some default functions in case the user does not define them
                 set_transform_state(std::bind(&BaseDARTPolicyControl::transform_state, this, std::placeholders::_1));
                 set_noise_function(std::bind(&BaseDARTPolicyControl::transform_state, this, std::placeholders::_1));
@@ -357,15 +346,27 @@ namespace blackdrops {
                 set_update_function(std::bind(&BaseDARTPolicyControl::dummy, this, std::placeholders::_1));
             }
 
-            void update(double t)
+            void configure() override
+            {
+                _prev_time = 0.0;
+                _t = 0.0;
+                _first = true;
+
+                _policy.set_params(Eigen::VectorXd::Map(_ctrl.data(), _ctrl.size()));
+
+                _states.clear();
+                _noiseless_states.clear();
+                _coms.clear();
+
+                if (Params::blackdrops::action_dim() == _control_dof)
+                    _active = true;
+            }
+
+            Eigen::VectorXd calculate(double t) override
             {
                 _t = t;
                 _update_func(t);
-                set_commands();
-            }
 
-            void set_commands()
-            {
                 double dt = Params::blackdrops::dt();
 
                 if (_first || (_t - _prev_time - dt) > -Params::dart_system::sim_step() / 2.0) {
@@ -376,14 +377,13 @@ namespace blackdrops {
                     _states.push_back(q);
                     _coms.push_back(commands);
 
-                    assert(_dof == (size_t)commands.size());
-                    _robot->skeleton()->setCommands(commands);
+                    ROBOT_DART_ASSERT(_control_dof == static_cast<size_t>(commands.size()), "BaseDARTPolicyControl: Policy output size is not the same as the control DOFs of the robot", Eigen::VectorXd::Zero(_control_dof));
                     _prev_commands = commands;
                     _prev_time = _t;
                     _first = false;
                 }
-                else
-                    _robot->skeleton()->setCommands(_prev_commands);
+
+                return _prev_commands;
             }
 
             std::vector<Eigen::VectorXd> get_states() const

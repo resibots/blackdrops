@@ -57,13 +57,6 @@
 
 #include <boost/program_options.hpp>
 
-#include <robot_dart/position_control.hpp>
-#include <robot_dart/robot_dart_simu.hpp>
-
-#ifdef GRAPHIC
-#include <robot_dart/graphics.hpp>
-#endif
-
 #include <blackdrops/blackdrops.hpp>
 #include <blackdrops/gp_model.hpp>
 #include <blackdrops/model/gp/kernel_lf_opt.hpp>
@@ -79,11 +72,6 @@
 #include <utils/utils.hpp>
 
 struct Params {
-#ifdef GRAPHIC
-    struct graphics : robot_dart::defaults::graphics {
-    };
-#endif
-
     struct blackdrops : public ::blackdrops::defaults::blackdrops {
         BO_PARAM(size_t, action_dim, 4);
         BO_PARAM(size_t, model_input_dim, 8);
@@ -194,11 +182,16 @@ struct PolicyControl : public blackdrops::system::BaseDARTPolicyControl<Params, 
     using base_t = blackdrops::system::BaseDARTPolicyControl<Params, global::policy_t>;
 
     PolicyControl() : base_t() {}
-    PolicyControl(const std::vector<double>& ctrl, base_t::robot_t robot) : base_t(ctrl, robot) {}
+    PolicyControl(const std::vector<double>& ctrl) : base_t(ctrl) {}
 
     Eigen::VectorXd get_state(const robot_t& robot) const
     {
         return get_robot_state(robot);
+    }
+
+    std::shared_ptr<robot_dart::control::RobotControl> clone() const override
+    {
+        return std::make_shared<PolicyControl>(*this);
     }
 };
 
@@ -235,10 +228,12 @@ struct SimpleArm : public blackdrops::system::DARTSystem<Params, PolicyControl, 
         // Add goal marker
         Eigen::Vector6d goal_pose = Eigen::Vector6d::Zero();
         goal_pose.tail(3) = global::goal;
-        // pose, dims, type, mass, color, name
-        simu.add_ellipsoid(goal_pose, {0.1, 0.1, 0.1}, "fixed", 1., dart::Color::Green(1.0), "goal_marker");
+        // dims, pose, type, mass, color, name
+        auto ellipsoid = robot_dart::Robot::create_ellipsoid({0.1, 0.1, 0.1}, goal_pose, "fixed", 1., dart::Color::Green(1.0), "goal_marker");
         // remove collisions from goal marker
-        simu.world()->getSkeleton("goal_marker")->getRootBodyNode()->setCollidable(false);
+        ellipsoid->skeleton()->getRootBodyNode()->setCollidable(false);
+        // add ellipsoid to simu
+        simu.add_robot(ellipsoid);
     }
 };
 
@@ -246,17 +241,11 @@ struct RewardFunction : public blackdrops::reward::GPReward<RewardFunction> {
     template <typename RolloutInfo>
     double operator()(const RolloutInfo& info, const Eigen::VectorXd& from_state, const Eigen::VectorXd& action, const Eigen::VectorXd& to_state) const
     {
-        using robot_simu_t = robot_dart::RobotDARTSimu<robot_dart::robot_control<robot_dart::PositionControl>>;
-
         std::shared_ptr<robot_dart::Robot> simulated_robot = global::global_robot->clone();
         simulated_robot->fix_to_world();
         simulated_robot->set_position_enforced(true);
 
-        std::vector<double> params(4, 1.0);
-        for (int i = 0; i < to_state.size(); i++)
-            params[i] = to_state(i);
-        robot_simu_t simu(params, simulated_robot);
-        simu.run(2);
+        simulated_robot->skeleton()->setPositions(to_state);
 
         auto bd = simulated_robot->skeleton()->getBodyNode("arm_link_5");
         Eigen::VectorXd eef = bd->getTransform().translation();
@@ -275,24 +264,17 @@ struct RewardFunction : public blackdrops::reward::GPReward<RewardFunction> {
 
 void init_simu(const std::string& robot_file)
 {
-    global::global_robot = std::make_shared<robot_dart::Robot>(robot_dart::Robot(robot_file, {}, "arm", true));
+    global::global_robot = std::make_shared<robot_dart::Robot>(robot_file, "arm");
 
     // get goal position
     std::shared_ptr<robot_dart::Robot> simulated_robot = global::global_robot->clone();
     simulated_robot->fix_to_world();
     simulated_robot->set_position_enforced(true);
-
-    // #ifdef GRAPHIC
-    //     using robot_simu_t = robot_dart::RobotDARTSimu<robot_dart::robot_control<robot_dart::PositionControl>, robot_dart::graphics<robot_dart::Graphics<Params>>>;
-    // #else
-    using robot_simu_t = robot_dart::RobotDARTSimu<robot_dart::robot_control<robot_dart::PositionControl>>;
-    // #endif
-
     // here set goal position
-    std::vector<double> params = {M_PI / 4.0, M_PI / 8.0, M_PI / 8.0, M_PI / 8.0};
+    Eigen::VectorXd positions(4);
+    positions << M_PI / 4.0, M_PI / 8.0, M_PI / 8.0, M_PI / 8.0;
+    simulated_robot->skeleton()->setPositions(positions);
 
-    robot_simu_t simu(params, simulated_robot);
-    simu.run(2);
     auto bd = simulated_robot->skeleton()->getBodyNode("arm_link_5");
     global::goal = bd->getTransform().translation();
 
