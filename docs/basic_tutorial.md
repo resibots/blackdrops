@@ -55,22 +55,39 @@ Now you should fill the above values into the appropriate parts of the code (sea
 Next we should define our robot/system that will be simulated by integrating an ODE. In Black-DROPS, this is done by defining a struct/class with the following signature:
 
 ```cpp
-struct SystemName : public blackdrops::system::ODESystem<Params> {
-    
-    void draw_single(const Eigen::VectorXd& state) const
+struct SystemName : public blackdrops::system::ODESystem<Params, blackdrops::RolloutInfo> {
+    Eigen::VectorXd init_state() const
     {
-        // You can optionally add a visualization
+        // return the initial state of the robot/system
+        // if you omit this function, the zero state is returned
     }
 
     Eigen::VectorXd transform_state(const Eigen::VectorXd& original_state) const
     {
         // Code to transform your state (for GP and policy input) if needed
         // if not needed, just return the original state
+        // if you omit this function, no transformation is applied
     }
 
-    Eigen::VectorXd init_state() const
+    Eigen::VectorXd add_noise(const Eigen::VectorXd& original_state) const
     {
-        // return the initial state of your robot
+        // Code to add observation noise to the system
+        // you should return the full noisy state, not just the noise
+        // if no noise is desired, just return the original state
+        // if you omit this function, no noise is added
+    }
+
+    Eigen::VectorXd policy_transform(const Eigen::VectorXd& original_state, RolloutInfo* info) const
+    {
+        // Code to transform the state variables that go to the policy if needed
+        // the input original_state is the transformed state (by the transform_state variable)
+    }
+
+    void draw_single(const Eigen::VectorXd& state) const
+    {
+#if defined(USE_SDL) && !defined(NODSP)
+        // You can optionally add a visualization
+#endif
     }
 
     void dynamics(const std::vector<double>& x, std::vector<double>& dx, double t, const Eigen::VectorXd& u) const
@@ -83,7 +100,7 @@ struct SystemName : public blackdrops::system::ODESystem<Params> {
 };
 ```
 
-It should be straight-forward for you by now to fill the code in `init_state` and `transform_state` (if you're having trouble with Eigen, you can have a look at the following: [quick reference](https://eigen.tuxfamily.org/dox/group__QuickRefPage.html) and [matlab to eigen quick reference](https://eigen.tuxfamily.org/dox/AsciiQuickReference.txt)).
+It should be straight-forward for you by now to fill the code in `init_state` and `transform_state` (if you're having trouble with Eigen, you can have a look at the following: [quick reference](https://eigen.tuxfamily.org/dox/group__QuickRefPage.html) and [matlab to eigen quick reference](https://eigen.tuxfamily.org/dox/AsciiQuickReference.txt)). We do not need the `add_noise` and `policy_transform` for this simple example, so you can omit them.
 
 #### Simulating the system with an ODE solver
 
@@ -106,8 +123,9 @@ For simulating our system, we need to write the (member) function for the transi
 In Black-DROPS the immediate reward function is defined as a struct/class with the following signature:
 
 ```cpp
-struct RewardFunction {
-    double operator()(const Eigen::VectorXd& from_state, const Eigen::VectorXd& action, const Eigen::VectorXd& to_state) const
+struct RewardFunction : public blackdrops::reward::Reward<RewardFunction> {
+    template <typename RolloutInfo>
+    double operator()(const RolloutInfo& info, const Eigen::VectorXd& from_state, const Eigen::VectorXd& action, const Eigen::VectorXd& to_state) const
     {
         double immediate_reward = ... // compute immediate reward r(x,u,x')
         return immediate_reward;
@@ -138,9 +156,9 @@ Eigen::VectorXd tip(double theta1, double theta2)
 The goal position of the arm is located at [0,1] and the immediate reward would be the negative distance of the end-effector's position to this goal position (search for `@reward` in the code):
 
 ```cpp
-struct RewardFunction {
-    double operator()(const Eigen::VectorXd& from_state, const Eigen::VectorXd& action, const Eigen::VectorXd& to_state) const
-    {
+struct RewardFunction : public blackdrops::reward::Reward<RewardFunction> {
+    template <typename RolloutInfo>
+    double operator()(const RolloutInfo& info, const Eigen::VectorXd& from_state, const Eigen::VectorXd& action, const Eigen::VectorXd& to_state) const
         Eigen::VectorXd tip_pos = tip(to_state(2), to_state(3));
         Eigen::VectorXd tip_goal(2);
         tip_goal << 0., 1.;
@@ -170,7 +188,7 @@ You should now do the following:
 If there's no error, you should be able to run your scenario:
 
 - `source ./scripts/paths.sh` (this should be done only once for each terminal --- it should be run from the root of the repo)
-- `./deps/limbo/build/exp/blackdrops/src/tutorials/planar_arm_graphic -m 5000 -r 5 -n 10 -e 1 -u -b 5`
+- `./deps/limbo/build/exp/blackdrops/src/tutorials/planar_arm_graphic -m -1 -r 1 -n 10 -e 1 -u -s -b 5`
 
 You should now watch your planar arm learning to reach a point using the Black-DROPS algorithm. Good scores are values >= -25.
 
@@ -184,7 +202,7 @@ If you have used the advanced installation procedure, then you should do the fol
 - `./waf configure --exp blackdrops`
 - `./waf --exp blackdrops -j4`
 
-If there's no error, you should be able to run your scenario: `./build/exp/blackdrops/src/tutorials/planar_arm_graphic -m 5000 -r 5 -n 10 -e 1 -u -b 5`
+If there's no error, you should be able to run your scenario: `./build/exp/blackdrops/src/tutorials/planar_arm_graphic -m -1 -r 1 -n 10 -e 1 -u -s -b 5`
 
 If you are having trouble with completing some parts of the tutorial, you can check the `src/tutorials/planar_arm_finished.cpp` file.
 
