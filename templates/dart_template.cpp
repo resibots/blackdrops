@@ -177,7 +177,6 @@ struct PolicyControl : public blackdrops::system::BaseDARTPolicyControl<Params, 
     Eigen::VectorXd get_state(const robot_t& robot) const
     {
         // TO-CHANGE: write code to get the state of your robot
-        // if full equals true, then you should return the transformed state
     }
 
     std::shared_ptr<robot_dart::control::RobotControl> clone() const override

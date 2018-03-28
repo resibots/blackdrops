@@ -76,36 +76,62 @@ struct PolicyControl : public blackdrops::system::BaseDARTPolicyControl<Params, 
     using base_t = blackdrops::system::BaseDARTPolicyControl<Params, global::policy_t>;
 
     PolicyControl() : base_t() {}
-    PolicyControl(const std::vector<double>& ctrl, base_t::robot_t robot) : base_t(ctrl, robot) {}
+    PolicyControl(const std::vector<double>& ctrl) : base_t(ctrl) {}
 
-    Eigen::VectorXd get_state(const base_t::robot_t& robot, bool full) const
+    Eigen::VectorXd get_state(const robot_t& robot) const
     {
-        // here goes the code for getting the robot state
+        // write code to get the state of your robot
+    }
+
+    std::shared_ptr<robot_dart::control::RobotControl> clone() const override
+    {
+        return std::make_shared<PolicyControl>(*this);
     }
 };
 
-struct MyDARTSystem : public blackdrops::system::DARTSystem<Params, PolicyControl> {
-    using base_t = blackdrops::system::DARTSystem<Params, PolicyControl>;
+struct MyDARTSystem : public blackdrops::system::DARTSystem<Params, PolicyControl, blackdrops::RolloutInfo> {
+    using base_t = blackdrops::system::DARTSystem<Params, PolicyControl, blackdrops::RolloutInfo>;
 
     Eigen::VectorXd init_state() const
     {
-        // same as in the ODESystem
+        // return the initial state of the robot
+        // if you omit this function, the zero state is returned
     }
 
     Eigen::VectorXd transform_state(const Eigen::VectorXd& original_state) const
     {
-        // same as in the ODESystem
+        // Code to transform your state (for GP and policy input) if needed
+        // if not needed, just return the original state
+        // if you omit this function, no transformation is applied
+    }
+
+    Eigen::VectorXd add_noise(const Eigen::VectorXd& original_state) const
+    {
+        // Code to add observation noise to the system
+        // you should return the full noisy state, not just the noise
+        // if no noise is desired, just return the original state
+        // if you omit this function, no noise is added
+    }
+
+    Eigen::VectorXd policy_transform(const Eigen::VectorXd& original_state, RolloutInfo* info) const
+    {
+        // Code to transform the state variables that go to the policy if needed
+        // the input original_state is the transformed state (by the transform_state variable)
     }
 
     std::shared_ptr<robot_dart::Robot> get_robot() const
     {
-        // write code to get a robot for simulation
+        // create the robot to be simulated
     }
 
-    void add_extra_to_simu(base_t::robot_simu_t& simu) const
+    void add_extra_to_simu(base_t::robot_simu_t& simu, const blackdrops::RolloutInfo& info) const
     {
-        // optionally we can add extra things to the simulation
-        // e.g. markers for the goal position (etc.)
+        // if you want, you can add some extra to your simulator object (this is called once before its episode on a newly-created simulator object)
+    }
+
+    void set_robot_state(const std::shared_ptr<robot_dart::Robot>& robot, const Eigen::VectorXd& state) const
+    {
+        // This is called whenever is needed to set the robot in a specific state
     }
 };
 ```
@@ -124,35 +150,25 @@ The initial state should be the zero state and the transform state should be sim
 To get the state of the robot we use some DART functions:
 
 ```cpp
-Eigen::VectorXd get_robot_state(const std::shared_ptr<robot_dart::Robot>& robot, bool full = false)
+Eigen::VectorXd get_robot_state(const std::shared_ptr<robot_dart::Robot>& robot)
 {
     Eigen::VectorXd vel = robot->skeleton()->getVelocities();
     Eigen::VectorXd pos = robot->skeleton()->getPositions();
 
     size_t size = pos.size() + vel.size();
-    if (full)
-        size += pos.size();
 
     Eigen::VectorXd state(size);
 
     state.head(vel.size()) = vel;
+    state.tail(pos.size()) = pos;
 
-    if (!full) {
-        state.tail(pos.size()) = pos;
-    }
-    else {
-        for (int i = 0; i < pos.size(); i++) {
-            state(vel.size() + 2 * i) = std::cos(pos(i));
-            state(vel.size() + 2 * i + 1) = std::sin(pos(i));
-        }
-    }
     return state;
 }
 
-//...
-    Eigen::VectorXd get_state(const base_t::robot_t& robot, bool full) const
+//... in PolicyControl
+    Eigen::VectorXd get_state(const base_t::robot_t& robot) const
     {
-        return get_robot_state(robot, full);
+        return get_robot_state(robot);
     }
 //...
 ```
@@ -160,33 +176,49 @@ Eigen::VectorXd get_robot_state(const std::shared_ptr<robot_dart::Robot>& robot,
 We add some extras to the simulation:
 
 ```cpp
-    void add_extra_to_simu(base_t::robot_simu_t& simu) const
+    void add_extra_to_simu(base_t::robot_simu_t& simu, const blackdrops::RolloutInfo& info) const
     {
-        // Change gravity (as can be seen if you read the SKEL file)
+        // Change gravity
         Eigen::VectorXd gravity(3);
         gravity << 0., -9.81, 0.;
         simu.world()->setGravity(gravity);
         // Add goal marker
         Eigen::Vector6d goal_pose = Eigen::Vector6d::Zero();
         goal_pose.tail(3) = global::goal;
-        // pose, dims, type, mass, color, name
-        simu.add_ellipsoid(goal_pose, {0.025, 0.025, 0.025}, "fixed", 1., dart::Color::Green(1.0), "goal_marker");
+        // dims, pose, type, mass, color, name
+        auto ellipsoid = robot_dart::Robot::create_ellipsoid({0.025, 0.025, 0.025}, goal_pose, "fixed", 1., dart::Color::Green(1.0), "goal_marker");
         // remove collisions from goal marker
-        simu.world()->getSkeleton("goal_marker")->getRootBodyNode()->setCollidable(false);
+        ellipsoid->skeleton()->getRootBodyNode()->setCollidable(false);
+        // add ellipsoid to simu
+        simu.add_robot(ellipsoid);
 
         auto ground = global::global_floor->clone();
         Eigen::Vector6d floor_pose = Eigen::Vector6d::Zero();
         floor_pose(4) = -0.0125;
-        simu.add_skeleton(ground, floor_pose, "fixed");
+        auto floor_robot = std::make_shared<robot_dart::Robot>(ground, "ground");
+        floor_robot->skeleton()->setPositions(floor_pose);
+        floor_robot->fix_to_world();
+        // add floor to simu
+        simu.add_robot(floor_robot);
 
 #ifdef GRAPHIC
         Eigen::Vector3d camera_pos = Eigen::Vector3d(0., 2., 0.);
         Eigen::Vector3d look_at = Eigen::Vector3d(0., 0., 0.);
         Eigen::Vector3d up = Eigen::Vector3d(0., 1., 0.);
-        simu.graphics()->fixed_camera(camera_pos, look_at, up);
+        std::static_pointer_cast<robot_dart::graphics::Graphics>(simu.graphics())->look_at(camera_pos, look_at, up);
         // slow down visualization because 0.5 seconds is too fast
         simu.graphics()->set_render_period(0.03);
 #endif
+    }
+```
+
+Implement the function to set the robot state:
+
+```cpp
+    void set_robot_state(const std::shared_ptr<robot_dart::Robot>& robot, const Eigen::VectorXd& state) const
+    {
+        robot->skeleton()->setVelocities(state.head(2));
+        robot->skeleton()->setPositions(state.tail(2));
     }
 ```
 
@@ -210,114 +242,55 @@ struct Params {
 
 #### Learning the reward function
 
-If we want to learn the reward function from data (both for DART-based and ODE-based scenarios), we need to do the following:
-
-- Create a Gaussian process for learning the reward function:
+If we want to learn the reward function from data (both for DART-based and ODE-based scenarios), we need to use the `GPReward` struct of Black-DROPS:
 
 ```cpp
-struct RewardParams {
-    struct kernel : public limbo::defaults::kernel {
-        BO_PARAM(double, noise, 1e-12);
-        BO_PARAM(bool, optimize_noise, true);
-    };
-
-    struct kernel_squared_exp_ard : public limbo::defaults::kernel_squared_exp_ard {
-    };
-
-    struct opt_rprop : public limbo::defaults::opt_rprop {
-        BO_PARAM(int, iterations, 300);
-        BO_PARAM(double, eps_stop, 1e-4);
-    };
-
-    struct opt_parallelrepeater : public limbo::defaults::opt_parallelrepeater {
-        BO_PARAM(int, repeats, 3);
-    };
-};
-
-namespace global {
-    // other code in global namespace ...
-
-    using kernel_t = limbo::kernel::SquaredExpARD<RewardParams>;
-    using mean_t = limbo::mean::Data<Params>;
-    using GP_t = limbo::model::GP<RewardParams, kernel_t, mean_t, blackdrops::model::gp::KernelLFOpt<RewardParams>>;
-
-    GP_t reward_gp(4, 1);
-}
-```
-
-- Create a reward function struct for the actual immediate reward (this would be unknown to the algorithm):
-
-```cpp
-struct ActualReward {
-    double operator()(const Eigen::VectorXd& from_state, const Eigen::VectorXd& action, const Eigen::VectorXd& to_state) const
+struct RewardFunction : public blackdrops::reward::GPReward<RewardFunction, blackdrops::RewardGP<RewardParams>> {
+    // here we define the actual immediate reward function -- in this case, the negative distance of the end-effector to the goal
+    template <typename RolloutInfo>
+    double operator()(const RolloutInfo& info, const Eigen::VectorXd& from_state, const Eigen::VectorXd& action, const Eigen::VectorXd& to_state, bool certain = false) const
     {
-        using robot_simu_t = robot_dart::RobotDARTSimu<robot_dart::robot_control<robot_dart::PositionControl>>;
+        Eigen::VectorXd goal(2);
+        goal << global::goal(0), global::goal(2);
 
-        std::shared_ptr<robot_dart::Robot> simulated_robot = global::global_robot->clone();
+        Eigen::VectorXd links(2);
+        links << 0.1, 0.11;
+        Eigen::VectorXd eef = tip(to_state.tail(2), links);
 
-        std::vector<double> params(2, 1.0);
-        for (int i = 0; i < 2; i++)
-            params[i] = to_state(2 + i);
-        robot_simu_t simu(params, simulated_robot);
-        // Change gravity
-        Eigen::VectorXd gravity(3);
-        gravity << 0., -9.81, 0.;
-        simu.world()->setGravity(gravity);
-        simu.controller().control_root_joint(true);
-
-        simu.run(2);
-
-        auto bd = simulated_robot->skeleton()->getBodyNode("link2");
-        Eigen::VectorXd eef = bd->getTransform().translation();
-        double dee = (eef - global::goal).norm();
+        double dee = (eef - goal).norm();
 
         return -dee;
     }
-};
-```
 
-- Create a reward function to be used for the policy optimization:
-
-```cpp
-struct RewardFunction {
-    double operator()(const Eigen::VectorXd& from_state, const Eigen::VectorXd& action, const Eigen::VectorXd& to_state, bool certain = false) const
+    // this is a helper function to compute the end-effector
+    Eigen::VectorXd tip(const Eigen::VectorXd& theta, const Eigen::VectorXd& links) const
     {
-        Eigen::VectorXd mu;
-        double s;
-        std::tie(mu, s) = global::reward_gp.query(to_state);
-        if (certain || !Params::opt_cmaes::handle_uncertainty())
-            return mu(0);
+        Eigen::VectorXd eef(2);
 
-        return gaussian_rand(mu(0), std::sqrt(s));
-    }
-};
-```
+        eef(0) = links(0) * std::cos(theta(0));
+        eef(1) = links(0) * std::sin(-theta(0));
 
-- The system struct needs to override the `execute(const Policy& policy, const Reward& world, double T, std::vector<double>& R, bool display)` member function:
+        for (int i = 1; i < theta.size(); i++) {
+            double th = 0.;
+            for (int j = 0; j <= i; j++) {
+                th += theta[j];
+            }
 
-```cpp
-template <typename Policy, typename Reward>
-    std::vector<std::tuple<Eigen::VectorXd, Eigen::VectorXd, Eigen::VectorXd>> execute(const Policy& policy, const Reward& world, double T, std::vector<double>& R, bool display = true)
-    {
-        // Run the policy on the system collecting the real reward samples
-        ActualReward actual_reward;
-        std::vector<std::tuple<Eigen::VectorXd, Eigen::VectorXd, Eigen::VectorXd>> ret = blackdrops::system::DARTSystem<Params, PolicyControl>::execute(policy, actual_reward, T, R, display);
-
-        // Add new samples to the reward GP
-        std::vector<Eigen::VectorXd> states = this->get_last_states();
-
-        for (size_t i = 0; i < R.size(); i++) {
-            double r = R[i];
-            Eigen::VectorXd final = states[i + 1];
-            global::reward_gp.add_sample(final, limbo::tools::make_vector(r));
+            eef(0) += links(i) * std::cos(th);
+            eef(1) += links(i) * std::sin(-th);
         }
 
-        // Optimize the hyper-parameters of the reward GP
-        global::reward_gp.optimize_hyperparams();
-        std::cout << "Learned the new reward function..." << std::endl;
-
-        return ret;
+        return eef;
     }
+
+    // this function defines the input to the GP that learns the reward
+    // in this case, the immediate reward function depends only on the joint positions
+    template <typename RolloutInfo>
+    Eigen::VectorXd get_sample(const RolloutInfo& info, const Eigen::VectorXd& from_state, const Eigen::VectorXd& action, const Eigen::VectorXd& to_state) const
+    {
+        return to_state.tail(2);
+    }
+};
 ```
 
 #### Defining random and learning episodes
@@ -339,7 +312,7 @@ You should now do the following:
 If there's no error, you should be able to run your scenario:
 
 - `source ./scripts/paths.sh` (this should be done only once for each terminal --- it should be run from the root of the repo)
-- `./deps/limbo/build/exp/blackdrops/src/tutorials/dart_reacher2d_graphic -n 10 -m 5000 -e 1 -r 5 -b 1 -u`
+- `./deps/limbo/build/exp/blackdrops/src/tutorials/dart_reacher2d_graphic -n 10 -m -1 -e 1 -r 1 -b 1 -u -s`
 
 You should now watch this simple robot trying to reach the target location. The task is considered solved for cumulative rewards >= -1. One minor remark is that this scenario can take quite some time between each episode (depending on your CPU capabilities).
 
@@ -353,7 +326,7 @@ If you have used the advanced installation procedure, then you should do the fol
 - `./waf configure --exp blackdrops`
 - `./waf --exp blackdrops -j4`
 
-If there's no error, you should be able to run your scenario: `./build/exp/blackdrops/src/tutorials/dart_reacher2d_graphic -n 10 -m 5000 -e 1 -r 5 -b 1 -u`
+If there's no error, you should be able to run your scenario: `./build/exp/blackdrops/src/tutorials/dart_reacher2d_graphic -n 10 -m -1 -e 1 -r 1 -b 1 -u -s`
 
 ### Where to put the files of my new DART-based scenario
 

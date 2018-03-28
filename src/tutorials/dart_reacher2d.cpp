@@ -274,6 +274,12 @@ struct DARTReacher : public blackdrops::system::DARTSystem<Params, PolicyControl
         simu.graphics()->set_render_period(0.03);
 #endif
     }
+
+    void set_robot_state(const std::shared_ptr<robot_dart::Robot>& robot, const Eigen::VectorXd& state) const
+    {
+        robot->skeleton()->setVelocities(state.head(2));
+        robot->skeleton()->setPositions(state.tail(2));
+    }
 };
 
 struct RewardFunction : public blackdrops::reward::GPReward<RewardFunction, blackdrops::RewardGP<RewardParams>> {
