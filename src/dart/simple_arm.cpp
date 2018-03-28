@@ -55,8 +55,6 @@
 //|
 #include <limbo/limbo.hpp>
 
-#include <boost/program_options.hpp>
-
 #include <blackdrops/blackdrops.hpp>
 #include <blackdrops/gp_model.hpp>
 #include <blackdrops/model/gp/kernel_lf_opt.hpp>

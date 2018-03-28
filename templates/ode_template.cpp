@@ -53,11 +53,8 @@
 //| The fact that you are presently reading this means that you have had
 //| knowledge of the CeCILL-C license and that you accept its terms.
 //|
-// #define MEAN // uncomment this if you want to use a mean function
+// #define MEAN // TO-CHANGE (optional): uncomment this if you want to use a mean function
 #include <limbo/limbo.hpp>
-#include <limbo/mean/constant.hpp>
-
-#include <boost/program_options.hpp>
 
 #include <blackdrops/blackdrops.hpp>
 #include <blackdrops/gp_model.hpp>
