@@ -89,9 +89,13 @@ cd ../../..
 # just as fail-safe
 sudo ldconfig
 
+# configure paths to find DART related libraries properly
+source ./scripts/paths.sh
+
 # install robot_dart
 cd deps/robot_dart
 ./waf configure --dart=${cwd}/install --prefix=${cwd}/install
+./waf
 ./waf install
 # go back to original directory
 cd ../..
