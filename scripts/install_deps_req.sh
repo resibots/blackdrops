@@ -12,7 +12,7 @@ else
     distro_str="$(cat /etc/*-release | grep -s DISTRIB_ID)"
     distro=$(echo $distro_str | cut -f2 -d'=')
 
-    if [ $disto != "Ubuntu" ]l then
+    if [ "$distro" != "Ubuntu" ]; then
         echo "ERROR: We need an Ubuntu system to use this script"
         exit 1
     fi
