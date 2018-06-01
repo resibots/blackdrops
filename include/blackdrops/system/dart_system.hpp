@@ -370,7 +370,7 @@ namespace blackdrops {
                 double dt = Params::blackdrops::dt();
 
                 if (_first || (_t - _prev_time - dt) > -Params::dart_system::sim_step() / 2.0) {
-                    Eigen::VectorXd q = this->get_state(_robot);
+                    Eigen::VectorXd q = this->get_state(_robot.lock());
                     _noiseless_states.push_back(q);
                     q = _add_noise(q);
                     Eigen::VectorXd commands = _policy.next(_policy_state(_tranform_state(q)));

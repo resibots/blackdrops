@@ -273,7 +273,7 @@ public:
         for (size_t i = 6; i < _dof; i++) {
             _p(i) = 1.0;
         }
-        _target_positions = _robot->skeleton()->getPositions();
+        _target_positions = _robot.lock()->skeleton()->getPositions();
 
         _prev_time = 0.0;
         _t = 0.0;
@@ -293,9 +293,10 @@ public:
         _t = t;
 
         double dt = Params::blackdrops::dt();
+        auto robot = _robot.lock();
 
         if (_first || (_t - _prev_time - dt) > -Params::dart_system::sim_step() / 2.0) {
-            Eigen::VectorXd q = this->get_state(_robot);
+            Eigen::VectorXd q = this->get_state(robot);
             q.conservativeResize(q.size() + 1);
             q.tail(1) = limbo::tools::make_vector(_t);
 
@@ -315,13 +316,13 @@ public:
             _first = false;
         }
 
-        Eigen::VectorXd q_err = _target_positions - _robot->skeleton()->getPositions();
+        Eigen::VectorXd q_err = _target_positions - robot->skeleton()->getPositions();
 
-        double gain = 1.0 / (M_PI * _robot->skeleton()->getTimeStep());
+        double gain = 1.0 / (M_PI * robot->skeleton()->getTimeStep());
         Eigen::VectorXd vel = q_err * gain;
         vel = vel.cwiseProduct(_p);
         assert(_dof == (size_t)vel.size());
-        // _robot->skeleton()->setCommands(vel);
+        // robot->skeleton()->setCommands(vel);
         _prev_commands = vel.tail(_control_dof);
         return _prev_commands;
     }
@@ -478,7 +479,7 @@ public:
     void configure() override
     {
         _p = Eigen::VectorXd::Zero(_dof);
-        _target_positions = _robot->skeleton()->getPositions();
+        _target_positions = _robot.lock()->skeleton()->getPositions();
         _prev_time = 0.0;
         _t = 0.0;
 
@@ -500,9 +501,10 @@ public:
     {
         _t = t;
         double dt = Params::blackdrops::dt();
+        auto robot = _robot.lock();
 
         if (_first || (_t - _prev_time - dt) > -Params::dart_system::sim_step() / 2.0) {
-            Eigen::VectorXd q = this->get_state(_robot);
+            Eigen::VectorXd q = this->get_state(robot);
             q.conservativeResize(q.size() + 1);
             q.tail(1) = limbo::tools::make_vector(_t);
             _states.push_back(q);
@@ -511,13 +513,13 @@ public:
             _first = false;
         }
 
-        Eigen::VectorXd q_err = _target_positions - _robot->skeleton()->getPositions();
+        Eigen::VectorXd q_err = _target_positions - robot->skeleton()->getPositions();
 
-        double gain = 1.0 / (M_PI * _robot->skeleton()->getTimeStep());
+        double gain = 1.0 / (M_PI * robot->skeleton()->getTimeStep());
         Eigen::VectorXd vel = q_err * gain;
         vel = vel.cwiseProduct(_p);
         assert(_dof == (size_t)vel.size());
-        // _robot->skeleton()->setCommands(vel);
+        // robot->skeleton()->setCommands(vel);
         _prev_commands = vel.tail(_control_dof);
         return _prev_commands;
     }
