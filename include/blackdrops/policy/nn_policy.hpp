@@ -56,35 +56,45 @@
 #ifndef BLACKDROPS_POLICY_NN_POLICY_HPP
 #define BLACKDROPS_POLICY_NN_POLICY_HPP
 
-#define EIGEN3_ENABLED
-#include "nn2/mlp.hpp"
+#include <simple_nn/neural_net.hpp>
 
 namespace blackdrops {
     namespace policy {
+
+        template <typename Params>
+        struct Tanh {
+            static Eigen::MatrixXd f(const Eigen::MatrixXd& input)
+            {
+                return (Params::nn_policy::af() * input.array()).tanh();
+            }
+
+            static Eigen::MatrixXd df(const Eigen::MatrixXd& input)
+            {
+                Eigen::MatrixXd value = f(input);
+                return 1. - value.array().square();
+            }
+        };
+
         template <typename Params>
         struct NNPolicy {
-
-            using nn_t = nn::Mlp<nn::Neuron<nn::PfWSum<>, nn::AfTanhNoBias<>>, nn::Connection<double, double>>;
+        public:
+            using nn_t = simple_nn::NeuralNet;
 
             NNPolicy()
             {
                 _boundary = Params::blackdrops::boundary();
                 _random = false;
-                _nn = std::make_shared<nn_t>(
-                    Params::nn_policy::state_dim(),
-                    Params::nn_policy::hidden_neurons(),
-                    Params::nn_policy::action_dim());
-                _nn->init();
-                _params = Eigen::VectorXd::Zero(_nn->get_nb_connections());
+
+                _nn.add_layer<simple_nn::FullyConnectedLayer<Tanh<Params>>>(Params::nn_policy::state_dim(), Params::nn_policy::hidden_neurons());
+                _nn.add_layer<simple_nn::FullyConnectedLayer<Tanh<Params>>>(Params::nn_policy::hidden_neurons(), Params::nn_policy::action_dim());
+
+                _params = Eigen::VectorXd::Zero(_nn.num_weights());
                 _limits = Eigen::VectorXd::Constant(Params::nn_policy::state_dim(), 1.0);
 
                 // Get the limits
                 for (int i = 0; i < _limits.size(); i++) {
                     _limits(i) = Params::nn_policy::limits(i);
                 }
-
-                std::vector<float> afs(_nn->get_nb_neurons(), Params::nn_policy::af());
-                _nn->set_all_afparams(afs);
             }
 
             Eigen::VectorXd next(const Eigen::VectorXd& state) const
@@ -97,16 +107,8 @@ namespace blackdrops {
                     return act;
                 }
 
-                Eigen::VectorXd nstate = state.array() / _limits.array(); //((state - _means).array() / (_sigmas * 3).array()); //state.array() / _limits.array();
-
-                std::vector<double> inputs(Params::nn_policy::state_dim());
-                Eigen::VectorXd::Map(inputs.data(), inputs.size()) = nstate;
-
-                _nn->step(inputs);
-                _nn->step(inputs);
-
-                std::vector<double> outputs = _nn->get_outf();
-                Eigen::VectorXd act = Eigen::VectorXd::Map(outputs.data(), outputs.size());
+                Eigen::VectorXd nstate = state.array() / _limits.array();
+                Eigen::VectorXd act = _nn.forward(nstate);
 
                 for (int i = 0; i < act.size(); i++) {
                     act(i) = act(i) * Params::nn_policy::max_u(i);
@@ -128,20 +130,18 @@ namespace blackdrops {
             {
                 _params = params;
                 _random = false;
-                std::vector<double> weights(params.size());
-                Eigen::VectorXd::Map(weights.data(), weights.size()) = params;
-                _nn->set_all_weights(weights);
-                _nn->init();
+                _nn.set_weights(params);
             }
 
             Eigen::VectorXd params() const
             {
                 if (_random || _params.size() == 0)
-                    return limbo::tools::random_vector(_nn->get_nb_connections()).array() * 2.0 * _boundary - _boundary;
+                    return limbo::tools::random_vector(_nn.num_weights()).array() * 2.0 * _boundary - _boundary;
                 return _params;
             }
 
-            std::shared_ptr<nn_t> _nn;
+        protected:
+            nn_t _nn;
             Eigen::VectorXd _params;
             bool _random;
 
@@ -151,6 +151,6 @@ namespace blackdrops {
 
             double _boundary;
         };
-    }
-}
+    } // namespace policy
+} // namespace blackdrops
 #endif

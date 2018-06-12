@@ -60,7 +60,7 @@ import glob
 from waflib import Logs
 
 def build(bld):
-    dart_libs = 'TBB EIGEN BOOST LIMBO LIBCMAES NLOPT SFERES2 BOOST_CHRONO RT ROBOT_DART DART BOOST_DART THREADS '
+    dart_libs = 'TBB EIGEN BOOST LIMBO LIBCMAES NLOPT SFERES2 ROBOT_DART DART BOOST_DART THREADS SIMPLE_NN '
     dart_libs_graphic = dart_libs + 'DART_GRAPHIC'
 
     path = bld.path.abspath()[:-len('src/dart')] + 'res'

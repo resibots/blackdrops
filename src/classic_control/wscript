@@ -59,7 +59,7 @@ import limbo
 import glob
 
 def build(bld):
-    libs = 'TBB EIGEN BOOST LIMBO LIBCMAES NLOPT SFERES2 BOOST_CHRONO RT SDL '
+    libs = 'TBB EIGEN BOOST LIMBO LIBCMAES NLOPT SFERES2 SDL SIMPLE_NN '
 
     cxxflags = bld.get_env()['CXXFLAGS']
 

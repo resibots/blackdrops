@@ -62,7 +62,7 @@ namespace blackdrops {
     namespace policy {
         template <typename Params>
         struct LinearPolicy {
-
+        public:
             LinearPolicy() { _random = false; }
 
             Eigen::VectorXd next(const Eigen::VectorXd& state) const
@@ -121,10 +121,11 @@ namespace blackdrops {
                 return _params;
             }
 
+        protected:
             Eigen::MatrixXd _alpha;
             Eigen::VectorXd _constant, _params;
             bool _random;
         };
-    }
-}
+    } // namespace policy
+} // namespace blackdrops
 #endif
