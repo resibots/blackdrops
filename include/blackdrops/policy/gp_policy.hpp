@@ -57,10 +57,10 @@
 #define BLACKDROPS_POLICY_GP_POLICY_HPP
 
 #include <Eigen/Core>
+
 #include <limbo/kernel/squared_exp_ard.hpp>
 #include <limbo/mean/data.hpp>
 #include <limbo/model/gp.hpp>
-#include <limbo/tools.hpp>
 #include <limbo/tools/macros.hpp>
 #include <limbo/tools/random_generator.hpp>
 
@@ -78,7 +78,7 @@ namespace blackdrops {
         struct GPPolicy {
         public:
             using kernel_t = limbo::kernel::SquaredExpARD<Params>;
-            using mean_t = limbo::mean::Data<Params>;
+            using mean_t = limbo::mean::Data<Params>; // TO-DO: Maybe this needs to be the NullFunction
             using gp_t = limbo::model::GP<Params, kernel_t, mean_t>;
 
             GPPolicy()

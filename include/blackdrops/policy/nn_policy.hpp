@@ -56,6 +56,10 @@
 #ifndef BLACKDROPS_POLICY_NN_POLICY_HPP
 #define BLACKDROPS_POLICY_NN_POLICY_HPP
 
+#include <Eigen/Core>
+
+#include <limbo/tools/random_generator.hpp>
+
 #include <simple_nn/neural_net.hpp>
 
 namespace blackdrops {
