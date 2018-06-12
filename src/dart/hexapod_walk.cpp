@@ -54,9 +54,12 @@
 //| knowledge of the CeCILL-C license and that you accept its terms.
 //|
 #define MEAN
-#include <limbo/limbo.hpp>
-
-#include <boost/program_options.hpp>
+#include <limbo/kernel/squared_exp_ard.hpp>
+#include <limbo/mean/constant.hpp>
+#include <limbo/model/gp.hpp>
+#include <limbo/opt/cmaes.hpp>
+#include <limbo/opt/nlopt_grad.hpp>
+#include <limbo/opt/nlopt_no_grad.hpp>
 
 #include <blackdrops/blackdrops.hpp>
 #include <blackdrops/gp_model.hpp>
