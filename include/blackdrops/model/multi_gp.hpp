@@ -113,7 +113,7 @@ namespace blackdrops {
                     }
                 }
 
-                tbb::parallel_for(size_t(0), (size_t)_dim_out, size_t(1), [&](size_t i) {
+                limbo::tools::par::loop(0, _dim_out, [&](size_t i) {
                     // _gp_models[i].mean_function().set_id(i);
                     _gp_models[i].compute(samples, obs[i], compute_kernel);
                 });
@@ -153,7 +153,7 @@ namespace blackdrops {
                 Eigen::VectorXd mean_vector = _mean_function(sample, *this);
                 assert(mean_vector.size() == _dim_out);
 
-                tbb::parallel_for(size_t(0), (size_t)_dim_out, size_t(1), [&](size_t i) {
+                limbo::tools::par::loop(0, _dim_out, [&](size_t i) {
                     // _gp_models[i].mean_function().set_id(i);
                     _gp_models[i].add_sample(sample, limbo::tools::make_vector(observation[i] - mean_vector[i]));
                 });
@@ -167,7 +167,7 @@ namespace blackdrops {
                 Eigen::VectorXd mean_vector = _mean_function(v, *this);
 
 #ifndef ONLYMI
-                tbb::parallel_for(size_t(0), (size_t)_dim_out, size_t(1), [&](size_t i) {
+                limbo::tools::par::loop(0, _dim_out, [&](size_t i) {
                     Eigen::VectorXd tmp;
                     std::tie(tmp, sigma(i)) = _gp_models[i].query(v);
                     mu(i) = tmp(0) + mean_vector(i);
@@ -189,7 +189,7 @@ namespace blackdrops {
                 Eigen::VectorXd mu(_dim_out);
                 Eigen::VectorXd mean_vector = _mean_function(v, *this);
 
-                tbb::parallel_for(size_t(0), (size_t)_dim_out, size_t(1), [&](size_t i) {
+                limbo::tools::par::loop(0, _dim_out, [&](size_t i) {
                     mu(i) = _gp_models[i].mu(v) + mean_vector(i);
                 });
 
@@ -200,7 +200,7 @@ namespace blackdrops {
             {
                 Eigen::VectorXd sigma(_dim_out);
 
-                tbb::parallel_for(size_t(0), (size_t)_dim_out, size_t(1), [&](size_t i) {
+                limbo::tools::par::loop(0, _dim_out, [&](size_t i) {
                     sigma(i) = _gp_models[i].sigma(v);
                 });
 
@@ -234,7 +234,7 @@ namespace blackdrops {
                 if (update_obs_mean)
                     return compute(_samples, _observations, update_full_kernel);
 
-                tbb::parallel_for(size_t(0), (size_t)_dim_out, size_t(1), [&](size_t i) {
+                limbo::tools::par::loop(0, _dim_out, [&](size_t i) {
                     _gp_models[i].recompute(update_obs_mean, update_full_kernel);
                 });
             }

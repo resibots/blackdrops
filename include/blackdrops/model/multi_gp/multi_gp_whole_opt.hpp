@@ -83,7 +83,7 @@ namespace blackdrops {
                     gp.recompute(true, false);
                     auto& gps = gp.gp_models();
                     // for (auto& small_gp : gps)
-                    tbb::parallel_for(size_t(0), gps.size(), size_t(1), [&](size_t i) {
+                    limbo::tools::par::loop(0, gps.size(), [&](size_t i) {
                         OptimizerLocal hp_optimize;
                         hp_optimize(gps[i]);
                     });
@@ -109,7 +109,7 @@ namespace blackdrops {
                         gp_all.recompute(true, false);
 
                         auto& small_gps = gp_all.gp_models();
-                        tbb::parallel_for(size_t(0), small_gps.size(), size_t(1), [&](size_t i) {
+                        limbo::tools::par::loop(0, small_gps.size(), [&](size_t i) {
                             OptimizerLocal hp_optimize;
                             hp_optimize(small_gps[i]);
                         });
@@ -146,7 +146,7 @@ namespace blackdrops {
                     const GP& _original_gp;
                 };
             };
-        }
-    }
-}
+        } // namespace multi_gp
+    } // namespace model
+} // namespace blackdrops
 #endif

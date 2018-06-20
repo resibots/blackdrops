@@ -59,7 +59,7 @@
 #include <Eigen/Core>
 
 #include <limbo/kernel/squared_exp_ard.hpp>
-#include <limbo/mean/data.hpp>
+#include <limbo/mean/null_function.hpp>
 #include <limbo/model/gp.hpp>
 #include <limbo/tools/macros.hpp>
 #include <limbo/tools/random_generator.hpp>
@@ -78,7 +78,7 @@ namespace blackdrops {
         struct GPPolicy {
         public:
             using kernel_t = limbo::kernel::SquaredExpARD<Params>;
-            using mean_t = limbo::mean::Data<Params>; // TO-DO: Maybe this needs to be the NullFunction
+            using mean_t = limbo::mean::NullFunction<Params>; // TO-DO: Maybe this needs to be the NullFunction
             using gp_t = limbo::model::GP<Params, kernel_t, mean_t>;
 
             GPPolicy()
@@ -111,7 +111,7 @@ namespace blackdrops {
                 //--- Query the GPs with state
                 Eigen::VectorXd nstate = state.array() / _limits.array();
                 Eigen::VectorXd action(_adim);
-                tbb::parallel_for(size_t(0), _adim, size_t(1), [&](size_t i) {
+                limbo::tools::par::loop(0, _adim, [&](size_t i) {
                     Eigen::VectorXd a = _gp_policies[i].mu(nstate);
                     action(i) = Params::gp_policy::max_u(i) * (9.0 * std::sin(a(0)) / 8.0 + std::sin(3 * a(0)) / 8.0);
                 });
@@ -165,7 +165,7 @@ namespace blackdrops {
 
                 //-- instantiating gp policy
                 _gp_policies.resize(_adim, gp_t(_sdim, 1));
-                tbb::parallel_for(size_t(0), _adim, size_t(1), [&](size_t i) {
+                limbo::tools::par::loop(0, _adim, [&](size_t i) {
                     _gp_policies[i].kernel_function().set_h_params(ells[i]);
                     _gp_policies[i].compute(pseudo_samples, pseudo_observations[i]);
                 });
