@@ -145,6 +145,15 @@ namespace utils {
                 else {
                     _elitism = 0;
                 }
+                if (vm.count("lambda")) {
+                    int l = vm["lambda"].as<int>();
+                    if (l < 0)
+                        l = -1;
+                    _lambda = l;
+                }
+                else {
+                    _lambda = -1;
+                }
             }
             catch (po::error& e) {
                 std::cerr << "[Exception caught while parsing command line arguments]: " << e.what() << std::endl;
@@ -164,13 +173,14 @@ namespace utils {
         int max_fun_evals() const { return _max_fun_evals; }
         int restarts() const { return _restarts; }
         int elitism() const { return _elitism; }
+        int lambda() const { return _lambda; }
 
         double boundary() const { return _boundary; }
         double fun_tolerance() const { return _fun_tolerance; }
 
     protected:
         bool _verbose, _stochastic, _uncertainty;
-        int _threads, _neurons, _pseudo_samples, _max_fun_evals, _restarts, _elitism;
+        int _threads, _neurons, _pseudo_samples, _max_fun_evals, _restarts, _elitism, _lambda;
         double _boundary, _fun_tolerance;
 
         po::options_description _desc;
@@ -186,6 +196,7 @@ namespace utils {
                                ("tolerance,t", po::value<double>(), "Maximum tolerance to continue optimizing the function.")
                                ("restarts,r", po::value<int>(), "Max number of restarts to use during optimization.")
                                ("elitism,e", po::value<int>(), "Elitism mode to use [0 to 3].")
+                               ("lambda,l", po::value<int>(), "Initial population of CMA-ES. Defaults to -1 (i.e., automatically determined).")
                                ("uncertainty,u", po::bool_switch(&_uncertainty)->default_value(false), "Enable uncertainty handling in CMA-ES.")
                                ("stochastic,s", po::bool_switch(&_stochastic)->default_value(false), "Enable stochastic rollouts (i.e., not use the mean model).")
                                ("threads,d", po::value<int>(), "Max number of threads used by TBB")

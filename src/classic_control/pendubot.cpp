@@ -207,6 +207,8 @@ struct Params {
         BO_DYN_PARAM(int, elitism);
         BO_DYN_PARAM(bool, handle_uncertainty);
 
+        BO_DYN_PARAM(int, lambda);
+
         BO_PARAM(int, variant, aIPOP_CMAES);
         BO_PARAM(int, verbose, false);
         BO_PARAM(bool, fun_compute_initial, true);
@@ -472,6 +474,7 @@ BO_DECLARE_DYN_PARAM(double, Params::opt_cmaes, lbound);
 BO_DECLARE_DYN_PARAM(double, Params::opt_cmaes, ubound);
 BO_DECLARE_DYN_PARAM(int, Params::opt_cmaes, restarts);
 BO_DECLARE_DYN_PARAM(int, Params::opt_cmaes, elitism);
+BO_DECLARE_DYN_PARAM(int, Params::opt_cmaes, lambda);
 BO_DECLARE_DYN_PARAM(bool, Params::opt_cmaes, handle_uncertainty);
 
 BO_DECLARE_DYN_PARAM(double, Params::mean_function, mass1);
@@ -613,6 +616,7 @@ int main(int argc, char** argv)
     Params::opt_cmaes::set_fun_tolerance(cmd_arguments.fun_tolerance());
     Params::opt_cmaes::set_restarts(cmd_arguments.restarts());
     Params::opt_cmaes::set_elitism(cmd_arguments.elitism());
+    Params::opt_cmaes::set_lambda(cmd_arguments.lambda());
 
 #if defined(USE_SDL) && !defined(NODSP)
     //Initialize
