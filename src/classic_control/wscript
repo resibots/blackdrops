@@ -72,16 +72,6 @@ def build(bld):
                       cxxflags = cxxflags + ['-D NODSP'],
                       variants = ['SIMU', 'SIMU GPPOLICY', 'SIMU LINEAR'])
 
-    limbo.create_variants(bld,
-                      source='pendubot.cpp',
-                      includes='. ../../../../src ../ ../../include',
-                      target='pendubot',
-                      uselib=libs,
-                      uselib_local='limbo',
-                      cxxflags = cxxflags + ['-D NODSP'],
-                      variants = ['SIMU', 'SIMU GPPOLICY'])
-                    #   variants = ['SIMU', 'SIMU MEAN', 'SIMU MEAN MODELIDENT', 'SIMU MEAN MODELIDENT ONLYMI'])
-
     if bld.env.DEFINES_SDL:
         limbo.create_variants(bld,
                         source='pendulum.cpp',
@@ -91,15 +81,6 @@ def build(bld):
                         uselib_local='limbo',
                         cxxflags = cxxflags,
                         variants = ['GRAPHIC', 'GRAPHIC GPPOLICY', 'GRAPHIC LINEAR'])
-        limbo.create_variants(bld,
-                      source='pendubot.cpp',
-                      includes='. ../../../../src ../ ../../include',
-                      target='pendubot',
-                      uselib=libs,
-                      uselib_local='limbo',
-                      cxxflags = cxxflags,
-                      variants = ['GRAPHIC', 'GRAPHIC GPPOLICY'])
-                    #   variants = ['GRAPHIC', 'GRAPHIC MEAN', 'GRAPHIC MEAN MODELIDENT', 'GRAPHIC MEAN MODELIDENT ONLYMI'])
 
     # Find new targets
     files = glob.glob(bld.path.abspath()+"/*.cpp")
@@ -107,7 +88,7 @@ def build(bld):
     for f in files:
         target_name = f[f.rfind('/')+1:-4]
         # Ignore our sample scenarios
-        if target_name != 'pendulum' and target_name != 'pendubot':
+        if target_name != 'pendulum':
             new_targets.append(target_name)
 
     # Compile new targets

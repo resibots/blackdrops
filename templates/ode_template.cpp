@@ -58,8 +58,6 @@
 #include <limbo/mean/constant.hpp>
 #include <limbo/model/gp.hpp>
 #include <limbo/opt/cmaes.hpp>
-#include <limbo/opt/nlopt_grad.hpp>
-#include <limbo/opt/nlopt_no_grad.hpp>
 
 #include <blackdrops/blackdrops.hpp>
 #include <blackdrops/gp_model.hpp>
@@ -172,10 +170,6 @@ struct Params {
     struct opt_rprop : public limbo::defaults::opt_rprop {
         BO_PARAM(int, iterations, 300);
         BO_PARAM(double, eps_stop, 1e-4);
-    };
-
-    struct opt_parallelrepeater : public limbo::defaults::opt_parallelrepeater {
-        BO_PARAM(int, repeats, 3);
     };
 
     struct opt_cmaes : public limbo::defaults::opt_cmaes {
@@ -340,7 +334,7 @@ int main(int argc, char** argv)
     using kernel_t = limbo::kernel::SquaredExpARD<Params>;
     using mean_t = limbo::mean::Constant<Params>;
 
-    using GP_t = blackdrops::model::MultiGP<Params, limbo::model::GP, kernel_t, mean_t, blackdrops::model::multi_gp::MultiGPParallelLFOpt<Params, limbo::model::gp::KernelLFOpt<Params>>>;
+    using GP_t = blackdrops::model::MultiGP<Params, limbo::model::GP, kernel_t, mean_t, blackdrops::model::multi_gp::MultiGPParallelLFOpt<Params, blackdrops::model::gp::KernelLFOpt<Params>>>;
 
     using MGP_t = blackdrops::GPModel<Params, GP_t>;
 
