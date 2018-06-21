@@ -69,6 +69,8 @@ def options(opt):
     opt.load('simple_nn')
     opt.load('hexapod_controller')
 
+    opt.add_option('--paper-scenarios', action='store_true', help='whether to compile the scenarios of the Black-DROPS papers', dest='paper')
+
 def configure(conf):
     conf.load('sdl')
     conf.load('dart')

@@ -57,8 +57,6 @@
 #include <limbo/mean/constant.hpp>
 #include <limbo/model/gp.hpp>
 #include <limbo/opt/cmaes.hpp>
-#include <limbo/opt/nlopt_grad.hpp>
-#include <limbo/opt/nlopt_no_grad.hpp>
 
 #include <blackdrops/blackdrops.hpp>
 #include <blackdrops/gp_model.hpp>
@@ -129,10 +127,6 @@ struct Params {
     struct opt_rprop : public limbo::defaults::opt_rprop {
         BO_PARAM(int, iterations, 300);
         BO_PARAM(double, eps_stop, 1e-4);
-    };
-
-    struct opt_parallelrepeater : public limbo::defaults::opt_parallelrepeater {
-        BO_PARAM(int, repeats, 3);
     };
 };
 

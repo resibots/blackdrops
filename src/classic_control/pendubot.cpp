@@ -57,8 +57,8 @@
 #include <limbo/mean/constant.hpp>
 #include <limbo/model/gp.hpp>
 #include <limbo/opt/cmaes.hpp>
-#include <limbo/opt/nlopt_grad.hpp>
 #include <limbo/opt/nlopt_no_grad.hpp>
+#include <limbo/opt/rprop.hpp>
 
 #include <blackdrops/blackdrops.hpp>
 
@@ -220,10 +220,6 @@ struct Params {
     struct opt_rprop : public limbo::defaults::opt_rprop {
         BO_PARAM(int, iterations, 300);
         BO_PARAM(double, eps_stop, 1e-4);
-    };
-
-    struct opt_parallelrepeater : public limbo::defaults::opt_parallelrepeater {
-        BO_PARAM(int, repeats, 3);
     };
 
     struct opt_nloptnograd : public limbo::defaults::opt_nloptnograd {
@@ -669,7 +665,7 @@ int main(int argc, char** argv)
 #endif
 
 #ifndef MODELIDENT
-    using GP_t = blackdrops::model::MultiGP<Params, limbo::model::GP, kernel_t, mean_t, blackdrops::model::multi_gp::MultiGPParallelLFOpt<Params, blackdrops::model::gp::KernelLFOpt<Params>>>;
+    using GP_t = blackdrops::model::MultiGP<Params, limbo::model::GP, kernel_t, mean_t, blackdrops::model::multi_gp::MultiGPParallelLFOpt<Params, blackdrops::model::gp::KernelLFOpt<Params, limbo::opt::Rprop<Params>>>>;
 #else
     using GP_t = blackdrops::model::MultiGP<Params, limbo::model::GP, kernel_t, mean_t, blackdrops::model::multi_gp::MultiGPWholeLFOpt<Params, limbo::opt::NLOptNoGrad<Params, nlopt::LN_SBPLX>>>;
 #endif

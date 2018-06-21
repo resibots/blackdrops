@@ -60,3 +60,5 @@ def build(bld):
     bld.recurse('tutorials/')
     bld.recurse('classic_control/')
     bld.recurse('dart/')
+    if bld.options.paper:
+        bld.recurse('paper/')

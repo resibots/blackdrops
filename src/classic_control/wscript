@@ -64,16 +64,6 @@ def build(bld):
     cxxflags = bld.get_env()['CXXFLAGS']
 
     limbo.create_variants(bld,
-                      source='cartpole.cpp',
-                      includes='. ../../../../src ../ ../../include',
-                      target='cartpole',
-                      uselib=libs,
-                      uselib_local='limbo',
-                      cxxflags = cxxflags + ['-D NODSP'],
-                      variants = ['SIMU', 'SIMU UCBEVAL', 'SIMU GPPOLICY', 'SIMU GPPOLICY UCBEVAL'])
-                    #   variants = ['SIMU', 'SIMU MEAN', 'SIMU MEAN MODELIDENT', 'SIMU MEAN MODELIDENT ONLYMI', 'SIMU SPGPS', 'SIMU GPPOLICY', 'SIMU GPPOLICY SPGPS'])
-
-    limbo.create_variants(bld,
                       source='pendulum.cpp',
                       includes='. ../../../../src ../ ../../include',
                       target='pendulum',
@@ -93,15 +83,6 @@ def build(bld):
                     #   variants = ['SIMU', 'SIMU MEAN', 'SIMU MEAN MODELIDENT', 'SIMU MEAN MODELIDENT ONLYMI'])
 
     if bld.env.DEFINES_SDL:
-        limbo.create_variants(bld,
-                        source='cartpole.cpp',
-                        includes='. ../../../../src ../ ../../include',
-                        target='cartpole',
-                        uselib=libs,
-                        uselib_local='limbo',
-                        cxxflags = cxxflags,
-                        variants = ['GRAPHIC', 'GRAPHIC UCBEVAL', 'GRAPHIC GPPOLICY', 'GRAPHIC GPPOLICY UCBEVAL'])
-                        # variants = ['GRAPHIC', 'GRAPHIC MEAN', 'GRAPHIC MEAN MODELIDENT', 'GRAPHIC MEAN MODELIDENT ONLYMI', 'GRAPHIC SPGPS', 'GRAPHIC GPPOLICY', 'GRAPHIC GPPOLICY SPGPS'])
         limbo.create_variants(bld,
                         source='pendulum.cpp',
                         includes='. ../../../../src ../ ../../include',
@@ -126,7 +107,7 @@ def build(bld):
     for f in files:
         target_name = f[f.rfind('/')+1:-4]
         # Ignore our sample scenarios
-        if target_name != 'cartpole' and target_name != 'pendulum' and target_name != 'pendubot':
+        if target_name != 'pendulum' and target_name != 'pendubot':
             new_targets.append(target_name)
 
     # Compile new targets

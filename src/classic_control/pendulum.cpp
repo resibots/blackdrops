@@ -57,8 +57,7 @@
 #include <limbo/mean/constant.hpp>
 #include <limbo/model/gp.hpp>
 #include <limbo/opt/cmaes.hpp>
-#include <limbo/opt/nlopt_grad.hpp>
-#include <limbo/opt/nlopt_no_grad.hpp>
+#include <limbo/opt/rprop.hpp>
 
 #include <blackdrops/blackdrops.hpp>
 #include <blackdrops/gp_model.hpp>
@@ -179,16 +178,17 @@ struct Params {
         BO_PARAM(double, constant, 0.0);
     };
 
-    struct opt_nloptgrad : public limbo::defaults::opt_nloptgrad {
-        BO_PARAM(int, iterations, 1000);
-    };
-
     struct kernel : public limbo::defaults::kernel {
         BO_PARAM(double, noise, gp_model::noise());
         BO_PARAM(bool, optimize_noise, true);
     };
 
     struct kernel_squared_exp_ard : public limbo::defaults::kernel_squared_exp_ard {
+    };
+
+    struct opt_rprop : public limbo::defaults::opt_rprop {
+        BO_PARAM(int, iterations, 300);
+        BO_PARAM(double, eps_stop, 1e-4);
     };
 
     struct opt_cmaes : public limbo::defaults::opt_cmaes {
@@ -377,10 +377,9 @@ int main(int argc, char** argv)
 
     using kernel_t = limbo::kernel::SquaredExpARD<Params>;
     using mean_t = limbo::mean::Constant<Params>;
-    using GP_t = blackdrops::model::MultiGP<Params, limbo::model::GP, kernel_t, mean_t, blackdrops::model::multi_gp::MultiGPParallelLFOpt<Params, blackdrops::model::gp::KernelLFOpt<Params, limbo::opt::NLOptGrad<Params, nlopt::LD_SLSQP>>>>;
+    using GP_t = blackdrops::model::MultiGP<Params, limbo::model::GP, kernel_t, mean_t, blackdrops::model::multi_gp::MultiGPParallelLFOpt<Params, blackdrops::model::gp::KernelLFOpt<Params, limbo::opt::Rprop<Params>>>>;
 
     using policy_opt_t = limbo::opt::Cmaes<Params>;
-    //using policy_opt_t = limbo::opt::NLOptGrad<Params>;
     using MGP_t = blackdrops::GPModel<Params, GP_t>;
 #ifdef GPPOLICY
     blackdrops::BlackDROPS<Params, MGP_t, Pendulum, blackdrops::policy::GPPolicy<PolicyParams>, policy_opt_t, RewardFunction> pend_system;

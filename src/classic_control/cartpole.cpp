@@ -57,8 +57,7 @@
 #include <limbo/mean/constant.hpp>
 #include <limbo/model/gp.hpp>
 #include <limbo/opt/cmaes.hpp>
-#include <limbo/opt/nlopt_grad.hpp>
-#include <limbo/opt/nlopt_no_grad.hpp>
+#include <limbo/opt/rprop.hpp>
 
 #include <blackdrops/blackdrops.hpp>
 #include <blackdrops/gp_model.hpp>
@@ -66,17 +65,10 @@
 #include <blackdrops/model/gp/kernel_lf_opt.hpp>
 #include <blackdrops/model/multi_gp.hpp>
 #include <blackdrops/model/multi_gp/multi_gp_parallel_opt.hpp>
-#include <blackdrops/model/multi_gp/multi_gp_whole_opt.hpp>
 #include <blackdrops/system/ode_system.hpp>
 
-#ifdef SPGPS
-#include <limbo/model/sparsified_gp.hpp>
-#endif
-
-#include <blackdrops/policy/gp_policy.hpp>
 #include <blackdrops/policy/nn_policy.hpp>
 
-#include <blackdrops/reward/gp_reward.hpp>
 #include <blackdrops/reward/reward.hpp>
 
 #include <utils/cmd_args.hpp>
@@ -176,11 +168,6 @@ struct Params {
         BO_DYN_PARAM(double, boundary);
         BO_DYN_PARAM(bool, verbose);
         BO_DYN_PARAM(bool, stochastic);
-#ifdef UCBEVAL
-        struct ucb_evaluator {
-            BO_DYN_PARAM(double, alpha);
-        };
-#endif
 
         BO_PARAM(bool, stochastic_evaluation, true);
         BO_PARAM(int, num_evals, 500);
@@ -191,15 +178,6 @@ struct Params {
     struct gp_model {
         BO_PARAM(double, noise, 0.01);
     };
-
-#ifdef SPGPS
-    struct model_gpmm : public ::blackdrops::defaults::model_gpmm {
-        BO_PARAM(int, threshold, 200);
-    };
-    struct model_sparse_gp : public limbo::defaults::model_sparse_gp {
-        BO_PARAM(int, max_points, 200);
-    };
-#endif
 
     struct mean_constant {
         BO_PARAM(double, constant, 0.0);
@@ -218,10 +196,6 @@ struct Params {
         BO_PARAM(double, eps_stop, 1e-4);
     };
 
-    struct opt_parallelrepeater : public limbo::defaults::opt_parallelrepeater {
-        BO_PARAM(int, repeats, 3);
-    };
-
     struct opt_cmaes : public limbo::defaults::opt_cmaes {
         BO_DYN_PARAM(int, max_fun_evals);
         BO_DYN_PARAM(double, fun_tolerance);
@@ -237,19 +211,6 @@ struct Params {
         BO_DYN_PARAM(double, ubound);
         BO_DYN_PARAM(double, lbound);
     };
-
-    struct opt_nloptnograd : public limbo::defaults::opt_nloptnograd {
-        BO_PARAM(int, iterations, 1000);
-        BO_PARAM(double, fun_tolerance, 1e-4);
-        BO_PARAM(double, xrel_tolerance, 1e-4);
-    };
-
-    struct mean_function {
-        BO_DYN_PARAM(double, pole_length);
-        BO_DYN_PARAM(double, pole_mass);
-        BO_DYN_PARAM(double, cart_mass);
-        BO_DYN_PARAM(double, friction);
-    };
 };
 
 struct PolicyParams {
@@ -263,22 +224,6 @@ struct PolicyParams {
         BO_DYN_PARAM(int, hidden_neurons);
         BO_PARAM_ARRAY(double, limits, 5., 5., 10., 1., 1.);
         BO_PARAM(double, af, 1.0);
-    };
-
-    struct gp_policy {
-        BO_PARAM(size_t, state_dim, Params::blackdrops::model_input_dim());
-        BO_PARAM(size_t, action_dim, Params::blackdrops::action_dim());
-        BO_PARAM_ARRAY(double, max_u, 10.0);
-        BO_DYN_PARAM(int, pseudo_samples);
-        BO_PARAM(double, noise, 0.01 * 0.01);
-        BO_PARAM_ARRAY(double, limits, 5., 5., 10., 1., 1.);
-    };
-
-    struct kernel : public limbo::defaults::kernel {
-        BO_PARAM(double, noise, gp_policy::noise());
-    };
-
-    struct kernel_squared_exp_ard : public limbo::defaults::kernel_squared_exp_ard {
     };
 };
 
@@ -345,106 +290,22 @@ struct RewardFunction : public blackdrops::reward::Reward<RewardFunction> {
     template <typename RolloutInfo>
     double operator()(const RolloutInfo& info, const Eigen::VectorXd& from_state, const Eigen::VectorXd& action, const Eigen::VectorXd& to_state) const
     {
-        // double s_c_sq = 0.25 * 0.25;
+        double s_c_sq = 0.25 * 0.25;
 
-        // double da = std::numeric_limits<double>::max();
-        // if (std::abs(to_state(3)) < 100.0)
-        //     da = angle_dist(to_state(3), Params::goal_pos());
-        // // double dsin = std::sin(to_state(3)); // - std::sin(Params::goal_pos());
-        // // double dcos = std::cos(to_state(3)); // - std::cos(Params::goal_pos());
-        // // double dy = to_state(2) - Params::goal_vel();
-        // // double dz = to_state(1) - Params::goal_vel_x();
-        // double dx = to_state(0); // - Params::goal_pos_x();
-        // // exp(-0.5/sigma*(Δcos^2/4 + Δx*(Δsin/2 + Δx) + Δsin*(Δsin/4 + Δx/2))
-        // // double derr = (dcos * dcos) / 4.0 + dsin * (dsin / 4.0 + dx / 2.0) + dx * (dsin / 2.0 + dx);
-        // // double derr = dx * dx + 2 * dx * 0.5 * dsin + 2 * 0.5 * 0.5 + 2 * 0.5 * 0.5 * dcos;
-        // // return std::exp(-0.5 / s_c_sq * derr);
-        //
-        // return std::exp(-0.5 / s_c_sq * (dx * dx + da * da));
+        double x = to_state(0);
+        double theta = to_state(3);
+        double l = 0.5;
 
-        double dcos = std::cos(to_state(3)) - std::cos(Params::goal_pos());
-        double dsin = std::sin(to_state(3)) - std::sin(Params::goal_pos());
-        double dx = to_state(0);
-
-        return -(dx * dx + dcos * dcos + dsin * dsin); //std::exp(-0.5 / s_c_sq * (dx * dx + dcos * dcos + dsin * dsin));
-        // return std::exp(-0.5 / s_c_sq * (dx * dx + dcos * dcos + dsin * dsin));
-
-        // double x = to_state(0);
-        // double theta = to_state(3);
-        // double l = 0.5;
-
-        // double derr = x * x + 2. * x * l * std::sin(theta) + 2. * l * l + 2. * l * l * std::cos(theta);
-        // if (std::sqrt(derr) < 0.25)
-        //     return 0;
-
-        // return -1.;
-        // return -derr;
-        // // return std::exp(-0.5 / s_c_sq * derr);
+        double derr = x * x + 2. * x * l * std::sin(theta) + 2. * l * l + 2. * l * l * std::cos(theta);
+        return std::exp(-0.5 / s_c_sq * derr);
     }
 };
-
-#ifdef MEAN
-struct MeanFunc {
-    MeanFunc(int dim_out = 1)
-    {
-        _params = Eigen::VectorXd::Zero(3);
-        _params << Params::mean_function::pole_length(), Params::mean_function::pole_mass(), Params::mean_function::cart_mass();
-    }
-
-    template <typename GP>
-    Eigen::VectorXd operator()(const Eigen::VectorXd& v, const GP& gp) const
-    {
-        double dt = Params::blackdrops::dt();
-
-        std::vector<double> cp_state(4, 0.0);
-        cp_state[0] = v(0);
-        cp_state[1] = v(1);
-        cp_state[2] = v(2);
-        cp_state[3] = std::atan2(v(4), v(3));
-        double u = v(5);
-
-        Eigen::VectorXd init = Eigen::VectorXd::Map(cp_state.data(), cp_state.size());
-
-        boost::numeric::odeint::integrate_const(boost::numeric::odeint::make_dense_output(1e-12, 1e-12, boost::numeric::odeint::runge_kutta_dopri5<std::vector<double>>()),
-            std::bind(&MeanFunc::dynamics, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, u),
-            cp_state, 0.0, dt, dt / 2.0);
-
-        Eigen::VectorXd final = Eigen::VectorXd::Map(cp_state.data(), cp_state.size());
-        return (final - init);
-    }
-
-    Eigen::VectorXd h_params() const { return _params; }
-
-    void set_h_params(const Eigen::VectorXd& params)
-    {
-        _params = params;
-    }
-
-    void dynamics(const std::vector<double>& x, std::vector<double>& dx, double t, double u) const
-    {
-        double l = _params(0), m = _params(1), M = _params(2), g = 9.82, b = Params::mean_function::friction();
-
-        dx[0] = x[1];
-        dx[1] = (2 * m * l * std::pow(x[2], 2.0) * std::sin(x[3]) + 3 * m * g * std::sin(x[3]) * std::cos(x[3]) + 4 * u - 4 * b * x[1]) / (4 * (M + m) - 3 * m * std::pow(std::cos(x[3]), 2.0));
-        dx[2] = (-3 * m * l * std::pow(x[2], 2.0) * std::sin(x[3]) * std::cos(x[3]) - 6 * (M + m) * g * std::sin(x[3]) - 6 * (u - b * x[1]) * std::cos(x[3])) / (4 * l * (m + M) - 3 * m * l * std::pow(std::cos(x[3]), 2.0));
-        dx[3] = x[2];
-    }
-
-protected:
-    Eigen::VectorXd _params;
-};
-#endif
 
 BO_DECLARE_DYN_PARAM(int, PolicyParams::nn_policy, hidden_neurons);
-BO_DECLARE_DYN_PARAM(int, PolicyParams::gp_policy, pseudo_samples);
 BO_DECLARE_DYN_PARAM(double, Params::blackdrops, boundary);
 BO_DECLARE_DYN_PARAM(bool, Params::blackdrops, verbose);
 BO_DECLARE_DYN_PARAM(bool, Params::blackdrops, stochastic);
 BO_DECLARE_DYN_PARAM(int, Params::blackdrops, opt_evals);
-
-#ifdef UCBEVAL
-BO_DECLARE_DYN_PARAM(double, Params::blackdrops::ucb_evaluator, alpha);
-#endif
 
 BO_DECLARE_DYN_PARAM(int, Params::opt_cmaes, max_fun_evals);
 BO_DECLARE_DYN_PARAM(double, Params::opt_cmaes, fun_tolerance);
@@ -455,25 +316,13 @@ BO_DECLARE_DYN_PARAM(int, Params::opt_cmaes, elitism);
 BO_DECLARE_DYN_PARAM(int, Params::opt_cmaes, lambda);
 BO_DECLARE_DYN_PARAM(bool, Params::opt_cmaes, handle_uncertainty);
 
-BO_DECLARE_DYN_PARAM(double, Params::mean_function, pole_length);
-BO_DECLARE_DYN_PARAM(double, Params::mean_function, pole_mass);
-BO_DECLARE_DYN_PARAM(double, Params::mean_function, cart_mass);
-BO_DECLARE_DYN_PARAM(double, Params::mean_function, friction);
-
 class CartpoleArgs : public utils::CmdArgs {
 public:
     CartpoleArgs() : utils::CmdArgs()
     {
         // clang-format off
         this->_desc.add_options()
-                    ("opt_evals,o", po::value<int>(), "Number of rollouts for policy evaluation. Defaults to 5.")
-#ifdef UCBEVAL
-                    ("alpha,a", po::value<double>(), "Alpha value for UCB evaluator. Defaults to 0.2.")
-#endif
-                    ("pole_length", po::value<double>(), "Initial length of the pole for the mean function [0 to 1].")
-                    ("pole_mass", po::value<double>(), "Initial mass of the pole for the mean function [0 to 1].")
-                    ("cart_mass", po::value<double>(), "Initial mass of the cart for the mean function [0 to 1].")
-                    ("friction", po::value<double>(), "Initial friction coefficient for the mean function [0 to 1].");
+                    ("opt_evals,o", po::value<int>(), "Number of rollouts for policy evaluation. Defaults to 5.");
         // clang-format on
     }
 
@@ -498,60 +347,6 @@ public:
             else {
                 Params::blackdrops::set_opt_evals(5);
             }
-#ifdef UCBEVAL
-            if (vm.count("alpha")) {
-                _alpha = vm["alpha"].as<double>();
-                if (_alpha < 0.)
-                    _alpha = 0.;
-            }
-            else
-                _alpha = 0.2;
-#endif
-            // Mean Function parameters
-            if (vm.count("pole_length")) {
-                double pl = vm["pole_length"].as<double>();
-                if (pl < 0.0)
-                    pl = 0.0;
-                if (pl > 1.0)
-                    pl = 1.0;
-                Params::mean_function::set_pole_length(pl);
-            }
-            else {
-                Params::mean_function::set_pole_length(0.5);
-            }
-            if (vm.count("pole_mass")) {
-                double pm = vm["pole_mass"].as<double>();
-                if (pm < 0.0)
-                    pm = 0.0;
-                if (pm > 1.0)
-                    pm = 1.0;
-                Params::mean_function::set_pole_mass(pm);
-            }
-            else {
-                Params::mean_function::set_pole_mass(0.5);
-            }
-            if (vm.count("cart_mass")) {
-                double cm = vm["cart_mass"].as<double>();
-                if (cm < 0.0)
-                    cm = 0.0;
-                if (cm > 1.0)
-                    cm = 1.0;
-                Params::mean_function::set_cart_mass(cm);
-            }
-            else {
-                Params::mean_function::set_cart_mass(0.5);
-            }
-            if (vm.count("friction")) {
-                double fr = vm["friction"].as<double>();
-                if (fr < 0.0)
-                    fr = 0.0;
-                if (fr > 1.0)
-                    fr = 1.0;
-                Params::mean_function::set_friction(fr);
-            }
-            else {
-                Params::mean_function::set_friction(0.1);
-            }
         }
         catch (po::error& e) {
             std::cerr << "[Exception caught while parsing command line arguments]: " << e.what() << std::endl;
@@ -560,35 +355,7 @@ public:
 
         return -1;
     }
-
-#ifdef UCBEVAL
-    double alpha() const
-    {
-        return _alpha;
-    }
-
-protected:
-    double _alpha;
-#endif
 };
-
-#ifdef UCBEVAL
-template <typename Params>
-struct UCBEvaluator {
-    double operator()(const Eigen::VectorXd& rews) const
-    {
-        double val = rews.mean();
-        double sigma = 0.;
-
-        for (int i = 0; i < rews.size(); i++) {
-            sigma += (rews[i] - val) * (rews[i] - val);
-        }
-        sigma /= double(rews.size());
-
-        return val + Params::blackdrops::ucb_evaluator::alpha() * std::sqrt(sigma);
-    }
-};
-#endif
 
 int main(int argc, char** argv)
 {
@@ -598,7 +365,7 @@ int main(int argc, char** argv)
         return ret;
 
     PolicyParams::nn_policy::set_hidden_neurons(cmd_arguments.neurons());
-    PolicyParams::gp_policy::set_pseudo_samples(cmd_arguments.pseudo_samples());
+    // PolicyParams::gp_policy::set_pseudo_samples(cmd_arguments.pseudo_samples());
 
     Params::blackdrops::set_boundary(cmd_arguments.boundary());
     Params::opt_cmaes::set_lbound(-cmd_arguments.boundary());
@@ -623,9 +390,6 @@ int main(int argc, char** argv)
 
     Params::blackdrops::set_verbose(cmd_arguments.verbose());
     Params::blackdrops::set_stochastic(cmd_arguments.stochastic());
-#ifdef UCBEVAL
-    Params::blackdrops::ucb_evaluator::set_alpha(cmd_arguments.alpha());
-#endif
     Params::opt_cmaes::set_handle_uncertainty(cmd_arguments.uncertainty());
 
     std::cout << std::endl;
@@ -641,58 +405,18 @@ int main(int argc, char** argv)
     std::cout << "  tbb threads = " << cmd_arguments.threads() << std::endl;
     std::cout << std::endl;
     std::cout << "Policy parameters:" << std::endl;
-#ifndef GPPOLICY
     std::cout << "  Type: Neural Network with 1 hidden layer and " << PolicyParams::nn_policy::hidden_neurons() << " hidden neurons." << std::endl;
-#else
-    std::cout << "  Type: Gaussian Process with " << PolicyParams::gp_policy::pseudo_samples() << " pseudo samples." << std::endl;
-#endif
     std::cout << std::endl;
-#ifdef MEAN
-    std::cout << "Mean parameters: " << std::endl;
-    std::cout << "  Pole length (m): " << Params::mean_function::pole_length() << std::endl;
-    std::cout << "  Pole mass (kg): " << Params::mean_function::pole_mass() << std::endl;
-    std::cout << "  Cart mass (kg): " << Params::mean_function::cart_mass() << std::endl;
-    std::cout << "  Friction (N/m/s): " << Params::mean_function::friction() << std::endl;
-#endif
 
     using policy_opt_t = limbo::opt::Cmaes<Params>;
-
     using kernel_t = limbo::kernel::SquaredExpARD<Params>;
-#ifndef MEAN
     using mean_t = limbo::mean::Constant<Params>;
-#else
-    using mean_t = MeanFunc;
-#endif
 
-#ifndef MODELIDENT
-    using GP_t = blackdrops::model::MultiGP<Params, limbo::model::GP, kernel_t, mean_t, blackdrops::model::multi_gp::MultiGPParallelLFOpt<Params, blackdrops::model::gp::KernelLFOpt<Params>>>; //, limbo::opt::NLOptGrad<Params, nlopt::LD_SLSQP>>>;
-#else
-    using GP_t = blackdrops::model::MultiGP<Params, limbo::model::GP, kernel_t, mean_t, blackdrops::model::multi_gp::MultiGPWholeLFOpt<Params, limbo::opt::NLOptNoGrad<Params, nlopt::LN_SBPLX>>>;
-#endif
+    using GP_t = blackdrops::model::MultiGP<Params, limbo::model::GP, kernel_t, mean_t, blackdrops::model::multi_gp::MultiGPParallelLFOpt<Params, blackdrops::model::gp::KernelLFOpt<Params, limbo::opt::Rprop<Params>>>>;
 
-#ifdef SPGPS
-#ifndef MODELIDENT
-    using SPGP_t = blackdrops::model::MultiGP<Params, limbo::model::SparsifiedGP, kernel_t, mean_t, blackdrops::model::multi_gp::MultiGPParallelLFOpt<Params, blackdrops::model::gp::KernelLFOpt<Params>>>;
-#else
-    using SPGP_t = blackdrops::model::MultiGP<Params, limbo::model::SparsifiedGP, kernel_t, mean_t, blackdrops::model::multi_gp::MultiGPWholeLFOpt<Params, limbo::opt::NLOptNoGrad<Params, nlopt::LN_SBPLX>, blackdrops::model::gp::KernelLFOpt<Params>>>;
-#endif
-    using GPMM_t = blackdrops::GPMultiModel<Params, GP_t, SPGP_t>;
-    using MGP_t = blackdrops::GPModel<Params, GPMM_t>;
-#else
     using MGP_t = blackdrops::GPModel<Params, GP_t>;
-#endif
 
-#ifndef UCBEVAL
-    using Evaluator = blackdrops::MeanEvaluator;
-#else
-    using Evaluator = UCBEvaluator<Params>;
-#endif
-
-#ifndef GPPOLICY
-    blackdrops::BlackDROPS<Params, MGP_t, CartPole, blackdrops::policy::NNPolicy<PolicyParams>, policy_opt_t, RewardFunction, Evaluator> cp_system;
-#else
-    blackdrops::BlackDROPS<Params, MGP_t, CartPole, blackdrops::policy::GPPolicy<PolicyParams>, policy_opt_t, RewardFunction, Evaluator> cp_system;
-#endif
+    blackdrops::BlackDROPS<Params, MGP_t, CartPole, blackdrops::policy::NNPolicy<PolicyParams>, policy_opt_t, RewardFunction> cp_system;
 
     cp_system.learn(1, 15);
 
