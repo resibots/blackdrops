@@ -330,7 +330,7 @@ namespace blackdrops {
                 execute_and_record_data();
                 std::cout << "Executed policy..." << std::endl;
                 std::cout << "Optimization time: " << optimize_ms * 1e-3 << "s" << std::endl;
-                _ofs_opt << (optimize_ms * 1e-3) << std::endl;
+                _ofs_opt << (optimize_ms * 1e-3) << " " << _opt_iters * ((Params::blackdrops::stochastic_evaluation()) ? Params::blackdrops::opt_evals() : 1) << std::endl;
                 _ofs_traj_real.close();
             }
             _ofs_real.close();
