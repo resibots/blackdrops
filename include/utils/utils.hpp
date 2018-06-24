@@ -56,9 +56,11 @@
 #ifndef UTILS_UTILS_HPP
 #define UTILS_UTILS_HPP
 
-#include <Eigen/Core>
-
 #include <random>
+#include <string>
+#include <sys/stat.h>
+
+#include <Eigen/Core>
 
 #include <limbo/tools/random_generator.hpp>
 
@@ -118,6 +120,21 @@ inline double angle_dist(double a, double b)
     while (theta > M_PI)
         theta -= 2 * M_PI;
     return theta;
+}
+
+inline bool file_exists(const std::string& name)
+{
+    struct stat buffer;
+    return (stat(name.c_str(), &buffer) == 0);
+}
+
+bool replace_string(std::string& str, const std::string& from, const std::string& to)
+{
+    size_t start_pos = str.find(from);
+    if (start_pos == std::string::npos)
+        return false;
+    str.replace(start_pos, from.length(), to);
+    return true;
 }
 
 #endif
