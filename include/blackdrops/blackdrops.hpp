@@ -173,6 +173,7 @@ namespace blackdrops {
             Eigen::write_binary("policy_params_starting_" + std::to_string(i) + ".bin", params_starting);
 
             _opt_iters = 0;
+            _model_evals = 0;
             _max_reward = -std::numeric_limits<double>::max();
             if (_boundary == 0) {
                 std::cout << "Optimizing policy... " << std::flush;
@@ -329,7 +330,7 @@ namespace blackdrops {
                 execute_and_record_data();
                 std::cout << "Executed policy..." << std::endl;
                 std::cout << "Optimization time: " << optimize_ms * 1e-3 << "s" << std::endl;
-                _ofs_opt << (optimize_ms * 1e-3) << " " << _opt_iters * ((Params::blackdrops::stochastic_evaluation()) ? Params::blackdrops::opt_evals() : 1) << std::endl;
+                _ofs_opt << (optimize_ms * 1e-3) << " " << _model_evals << std::endl;
                 _ofs_traj_real.close();
             }
             _ofs_real.close();
@@ -351,7 +352,7 @@ namespace blackdrops {
         Eigen::VectorXd _params_starting;
         double _best;
         bool _random_policies;
-        int _opt_iters;
+        int _opt_iters, _model_evals;
         double _max_reward;
         Eigen::VectorXd _max_params;
         double _boundary;
@@ -385,6 +386,7 @@ namespace blackdrops {
 
             _iter_mutex.lock();
             _opt_iters++;
+            _model_evals += N;
             _iter_mutex.unlock();
             if (_max_reward < r) {
                 _max_reward = r;
