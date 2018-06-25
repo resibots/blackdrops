@@ -315,13 +315,6 @@ namespace blackdrops {
                     std::cout << "Learning time: " << learn_reward_ms * 1e-3 << "s" << std::endl;
                 }
 
-                if (Params::blackdrops::verbose()) {
-                    Eigen::VectorXd errors, sigmas;
-                    std::tie(errors, sigmas) = get_accuracy();
-                    std::cout << "Errors: " << errors.transpose() << std::endl;
-                    std::cout << "Sigmas: " << sigmas.transpose() << std::endl;
-                }
-
                 time_start = std::chrono::steady_clock::now();
                 optimize_policy(i + 1);
                 double optimize_ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - time_start).count();
@@ -396,55 +389,6 @@ namespace blackdrops {
             }
 
             return limbo::opt::no_grad(r);
-        }
-
-        std::tuple<Eigen::VectorXd, Eigen::VectorXd> get_accuracy(double perc = 0.75) const
-        {
-            // get data
-            int sample_size = _observations.size();
-            int training_size = perc * sample_size;
-            int test_size = sample_size - training_size;
-            std::vector<std::tuple<Eigen::VectorXd, Eigen::VectorXd, Eigen::VectorXd>> observations = _observations;
-
-            // shuffle data
-            std::random_shuffle(observations.begin(), observations.end());
-
-            std::vector<std::tuple<Eigen::VectorXd, Eigen::VectorXd, Eigen::VectorXd>>::const_iterator first = observations.begin();
-            std::vector<std::tuple<Eigen::VectorXd, Eigen::VectorXd, Eigen::VectorXd>>::const_iterator last = observations.begin() + training_size;
-            std::vector<std::tuple<Eigen::VectorXd, Eigen::VectorXd, Eigen::VectorXd>> training_samples(first, last);
-
-            first = observations.begin() + training_size;
-            last = observations.end();
-            std::vector<std::tuple<Eigen::VectorXd, Eigen::VectorXd, Eigen::VectorXd>> test_samples(first, last);
-
-            // create model
-            Model model;
-            model.learn(training_samples);
-
-            // Get errors and sigmas
-            Eigen::VectorXd errors = Eigen::VectorXd::Zero(Params::blackdrops::model_pred_dim());
-            Eigen::VectorXd sigmas = Eigen::VectorXd::Zero(Params::blackdrops::model_pred_dim());
-
-            for (size_t i = 0; i < test_samples.size(); i++) {
-                Eigen::VectorXd st, act, pred;
-                st = std::get<0>(test_samples[i]);
-                act = std::get<1>(test_samples[i]);
-                pred = std::get<2>(test_samples[i]);
-
-                Eigen::VectorXd s(st.size() + act.size());
-                s.head(st.size()) = st;
-                s.tail(act.size()) = act;
-
-                Eigen::VectorXd mu, sigma;
-                std::tie(mu, sigma) = model.predictm(s);
-                errors.array() += (mu - pred).array().square().sqrt();
-                sigmas.array() += sigma.array();
-            }
-
-            errors.array() = errors.array() / double(test_size);
-            sigmas.array() = sigmas.array() / double(test_size);
-
-            return std::make_tuple(errors, sigmas);
         }
     }; // namespace blackdrops
 } // namespace blackdrops
