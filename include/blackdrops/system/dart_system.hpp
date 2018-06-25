@@ -69,7 +69,7 @@
 #include <robot_dart/graphics/graphics.hpp>
 #endif
 
-#include <utils/utils.hpp>
+#include <blackdrops/utils/utils.hpp>
 
 namespace blackdrops {
     namespace system {

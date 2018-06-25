@@ -57,14 +57,14 @@
 #include <limbo/kernel/squared_exp_ard.hpp>
 #include <limbo/mean/constant.hpp>
 #include <limbo/model/gp.hpp>
+#include <limbo/model/multi_gp.hpp>
+#include <limbo/model/multi_gp/parallel_lf_opt.hpp>
 #include <limbo/opt/cmaes.hpp>
 
 #include <blackdrops/blackdrops.hpp>
 #include <blackdrops/gp_model.hpp>
 #include <blackdrops/gp_multi_model.hpp>
 #include <blackdrops/model/gp/kernel_lf_opt.hpp>
-#include <blackdrops/model/multi_gp.hpp>
-#include <blackdrops/model/multi_gp/multi_gp_parallel_opt.hpp>
 #include <blackdrops/system/ode_system.hpp>
 
 // TO-CHANGE (optional): You can include other policies as well (GP and linear policy already implemented)
@@ -73,8 +73,8 @@
 // TO-CHANGE (optional): You can include other reward types as well (GPReward is already implemented)
 #include <blackdrops/reward/reward.hpp>
 
-#include <utils/cmd_args.hpp>
-#include <utils/utils.hpp>
+#include <blackdrops/utils/cmd_args.hpp>
+#include <blackdrops/utils/utils.hpp>
 
 #if defined(USE_SDL) && !defined(NODSP)
 #include <SDL2/SDL.h>
@@ -334,7 +334,7 @@ int main(int argc, char** argv)
     using kernel_t = limbo::kernel::SquaredExpARD<Params>;
     using mean_t = limbo::mean::Constant<Params>;
 
-    using GP_t = blackdrops::model::MultiGP<Params, limbo::model::GP, kernel_t, mean_t, blackdrops::model::multi_gp::MultiGPParallelLFOpt<Params, blackdrops::model::gp::KernelLFOpt<Params>>>;
+    using GP_t = limbo::model::MultiGP<Params, limbo::model::GP, kernel_t, mean_t, limbo::model::multi_gp::ParallelLFOpt<Params, blackdrops::model::gp::KernelLFOpt<Params>>>;
 
     using MGP_t = blackdrops::GPModel<Params, GP_t>;
 

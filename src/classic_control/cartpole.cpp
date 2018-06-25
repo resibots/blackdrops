@@ -71,8 +71,8 @@
 
 #include <blackdrops/reward/reward.hpp>
 
-#include <utils/cmd_args.hpp>
-#include <utils/utils.hpp>
+#include <blackdrops/utils/cmd_args.hpp>
+#include <blackdrops/utils/utils.hpp>
 
 #if defined(USE_SDL) && !defined(NODSP)
 #include <SDL2/SDL.h>
@@ -232,7 +232,7 @@ struct CartPole : public blackdrops::system::ODESystem<Params, blackdrops::Rollo
     {
         constexpr double sigma = 0.001;
 
-        Eigen::VectorXd st = utils::gaussian_rand(Eigen::VectorXd::Zero(4), sigma);
+        Eigen::VectorXd st = blackdrops::utils::gaussian_rand(Eigen::VectorXd::Zero(4), sigma);
 
         return st;
     }
@@ -251,7 +251,7 @@ struct CartPole : public blackdrops::system::ODESystem<Params, blackdrops::Rollo
     {
         constexpr double sigma = 0.01;
 
-        Eigen::VectorXd noisy = utils::gaussian_rand(original_state, sigma);
+        Eigen::VectorXd noisy = blackdrops::utils::gaussian_rand(original_state, sigma);
 
         return noisy;
     }
@@ -316,9 +316,9 @@ BO_DECLARE_DYN_PARAM(int, Params::opt_cmaes, elitism);
 BO_DECLARE_DYN_PARAM(int, Params::opt_cmaes, lambda);
 BO_DECLARE_DYN_PARAM(bool, Params::opt_cmaes, handle_uncertainty);
 
-class CartpoleArgs : public utils::CmdArgs {
+class CartpoleArgs : public blackdrops::utils::CmdArgs {
 public:
-    CartpoleArgs() : utils::CmdArgs()
+    CartpoleArgs() : blackdrops::utils::CmdArgs()
     {
         // clang-format off
         this->_desc.add_options()
@@ -328,7 +328,7 @@ public:
 
     int parse(int argc, char** argv)
     {
-        int ret = utils::CmdArgs::parse(argc, argv);
+        int ret = blackdrops::utils::CmdArgs::parse(argc, argv);
         if (ret >= 0)
             return ret;
 

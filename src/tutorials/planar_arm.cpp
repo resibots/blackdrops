@@ -69,8 +69,8 @@
 
 #include <blackdrops/reward/reward.hpp>
 
-#include <utils/cmd_args.hpp>
-#include <utils/utils.hpp>
+#include <blackdrops/utils/cmd_args.hpp>
+#include <blackdrops/utils/utils.hpp>
 
 #if defined(USE_SDL) && !defined(NODSP)
 #include <SDL2/SDL.h>
@@ -295,7 +295,7 @@ BO_DECLARE_DYN_PARAM(bool, Params::opt_cmaes, handle_uncertainty);
 
 int main(int argc, char** argv)
 {
-    utils::CmdArgs cmd_arguments;
+    blackdrops::utils::CmdArgs cmd_arguments;
     int ret = cmd_arguments.parse(argc, argv);
     if (ret >= 0)
         return ret;

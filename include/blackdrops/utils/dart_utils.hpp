@@ -53,115 +53,29 @@
 //| The fact that you are presently reading this means that you have had
 //| knowledge of the CeCILL-C license and that you accept its terms.
 //|
-#ifndef UTILS_UTILS_HPP
-#define UTILS_UTILS_HPP
+#ifndef UTILS_DART_UTILS_HPP
+#define UTILS_DART_UTILS_HPP
 
+#include <dart/dart.hpp>
+#include <dart/utils/SkelParser.hpp>
+#include <fstream>
+#include <streambuf>
 #include <string>
-#include <sys/stat.h>
-#include <utility>
 
-#include <Eigen/Core>
+namespace blackdrops {
+    namespace utils {
+        inline dart::dynamics::SkeletonPtr load_skel(const std::string& filename, const std::string& robot_name)
+        {
+            // Load file into string
+            std::ifstream t(filename);
+            std::string str((std::istreambuf_iterator<char>(t)),
+                std::istreambuf_iterator<char>());
 
-#include <limbo/tools/random_generator.hpp>
+            dart::simulation::WorldPtr world = dart::utils::SkelParser::readWorldXML(str);
 
-namespace utils {
-    inline Eigen::VectorXd gaussian_rand(const Eigen::VectorXd& mean)
-    {
-        static std::mt19937 gen(randutils::auto_seed_128{}.base());
-        static std::normal_distribution<double> gaussian(0., 1.);
-
-        Eigen::VectorXd result(mean.size());
-        for (int i = 0; i < mean.size(); i++) {
-            result(i) = mean(i) + gaussian(gen);
+            return world->getSkeleton(robot_name);
         }
-
-        return result;
-    }
-
-    inline Eigen::VectorXd gaussian_rand(const Eigen::VectorXd& mean, const Eigen::MatrixXd& covar)
-    {
-        assert(mean.size() == covar.rows() && covar.rows() == covar.cols());
-
-        Eigen::LLT<Eigen::MatrixXd> cholSolver(covar);
-        Eigen::MatrixXd transform = cholSolver.matrixL();
-
-        return transform * gaussian_rand(Eigen::VectorXd::Zero(mean.size())) + mean;
-    }
-
-    inline Eigen::VectorXd gaussian_rand(const Eigen::VectorXd& mean, const Eigen::VectorXd& sigma)
-    {
-        assert(mean.size() == sigma.size());
-
-        Eigen::MatrixXd covar = Eigen::MatrixXd::Zero(mean.size(), mean.size());
-        covar.diagonal() = sigma.array().square();
-
-        return gaussian_rand(mean, covar);
-    }
-
-    inline Eigen::VectorXd gaussian_rand(const Eigen::VectorXd& mean, double sigma)
-    {
-        Eigen::VectorXd sig = Eigen::VectorXd::Constant(mean.size(), sigma);
-
-        return gaussian_rand(mean, sig);
-    }
-
-    inline double gaussian_rand(double mean, double sigma)
-    {
-        Eigen::VectorXd m(1);
-        m << mean;
-
-        return gaussian_rand(m, sigma)[0];
-    }
-
-    inline double angle_dist(double a, double b)
-    {
-        double theta = b - a;
-        while (theta < -M_PI)
-            theta += 2 * M_PI;
-        while (theta > M_PI)
-            theta -= 2 * M_PI;
-        return theta;
-    }
-
-    // Sample mean and covariance
-    inline std::pair<Eigen::VectorXd, Eigen::MatrixXd> sample_statistics(const std::vector<Eigen::VectorXd>& points)
-    {
-        assert(points.size());
-
-        // Get the sample mean
-        Eigen::VectorXd mean = Eigen::VectorXd::Zero(points[0].size());
-
-        for (size_t i = 0; i < points.size(); i++) {
-            mean.array() += points[i].array();
-        }
-
-        mean = mean.array() / double(points.size());
-
-        // Calculate the sample covariance matrix
-        Eigen::MatrixXd cov = Eigen::MatrixXd::Zero(points[0].size(), points[0].size());
-        for (size_t i = 0; i < points.size(); i++) {
-            cov = cov + points[i] * points[i].transpose();
-        }
-
-        cov = (cov.array() - (double(points.size()) * mean * mean.transpose()).array()) / (double(points.size()) - 1.0);
-
-        return {mean, cov};
-    }
-
-    inline bool file_exists(const std::string& name)
-    {
-        struct stat buffer;
-        return (stat(name.c_str(), &buffer) == 0);
-    }
-
-    bool replace_string(std::string& str, const std::string& from, const std::string& to)
-    {
-        size_t start_pos = str.find(from);
-        if (start_pos == std::string::npos)
-            return false;
-        str.replace(start_pos, from.length(), to);
-        return true;
-    }
-} // namespace utils
+    } // namespace utils
+} // namespace blackdrops
 
 #endif

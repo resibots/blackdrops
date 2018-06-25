@@ -69,9 +69,9 @@
 
 #include <blackdrops/reward/gp_reward.hpp>
 
-#include <utils/cmd_args.hpp>
-#include <utils/dart_utils.hpp>
-#include <utils/utils.hpp>
+#include <blackdrops/utils/cmd_args.hpp>
+#include <blackdrops/utils/dart_utils.hpp>
+#include <blackdrops/utils/utils.hpp>
 
 struct Params {
     struct blackdrops : public ::blackdrops::defaults::blackdrops {
@@ -326,12 +326,12 @@ struct RewardFunction : public blackdrops::reward::GPReward<RewardFunction, blac
 
 void init_simu(const std::string& robot_file)
 {
-    global::global_robot = std::make_shared<robot_dart::Robot>(utils::load_skel(robot_file, "arm"));
+    global::global_robot = std::make_shared<robot_dart::Robot>(blackdrops::utils::load_skel(robot_file, "arm"));
     Eigen::Isometry3d tf = global::global_robot->skeleton()->getRootBodyNode()->getParentJoint()->getTransformFromParentBodyNode();
     tf.translation() = Eigen::Vector3d(0., 0.01, 0.);
     global::global_robot->skeleton()->getRootBodyNode()->getParentJoint()->setTransformFromParentBodyNode(tf);
 
-    global::global_floor = utils::load_skel(robot_file, "ground skeleton");
+    global::global_floor = blackdrops::utils::load_skel(robot_file, "ground skeleton");
 
     global::goal = Eigen::Vector3d(0.1, 0.01, -0.1);
 
@@ -354,7 +354,7 @@ BO_DECLARE_DYN_PARAM(bool, Params::opt_cmaes, handle_uncertainty);
 
 int main(int argc, char** argv)
 {
-    utils::CmdArgs cmd_arguments;
+    blackdrops::utils::CmdArgs cmd_arguments;
     int ret = cmd_arguments.parse(argc, argv);
     if (ret >= 0)
         return ret;

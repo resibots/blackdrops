@@ -63,7 +63,7 @@
 #include <limbo/model/gp.hpp>
 
 #include <blackdrops/reward/reward.hpp>
-#include <utils/utils.hpp>
+#include <blackdrops/utils/utils.hpp>
 
 namespace blackdrops {
 

@@ -57,7 +57,7 @@
 #define BLACKDROPS_SYSTEM_ODE_SYSTEM_HPP
 
 #include <boost/numeric/odeint.hpp>
-#include <utils/utils.hpp>
+#include <blackdrops/utils/utils.hpp>
 
 namespace blackdrops {
     namespace system {
