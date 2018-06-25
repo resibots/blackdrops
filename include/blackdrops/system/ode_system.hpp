@@ -208,7 +208,7 @@ namespace blackdrops {
                     if (Params::blackdrops::stochastic()) {
                         sigma = sigma.array().sqrt();
                         for (int i = 0; i < mu.size(); i++) {
-                            double s = gaussian_rand(mu(i), sigma(i));
+                            double s = utils::gaussian_rand(mu(i), sigma(i));
                             mu(i) = std::max(mu(i) - sigma(i),
                                 std::min(s, mu(i) + sigma(i)));
                         }

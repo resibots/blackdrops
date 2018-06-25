@@ -58,10 +58,6 @@
 
 #include <Eigen/Core>
 
-#include <vector>
-
-#include <utils/utils.hpp>
-
 namespace blackdrops {
     namespace reward {
 

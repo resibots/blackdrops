@@ -56,11 +56,14 @@
 #ifndef BLACKDROPS_REWARD_GP_REWARD_HPP
 #define BLACKDROPS_REWARD_GP_REWARD_HPP
 
-#include <blackdrops/reward/reward.hpp>
+#include <vector>
 
 #include <limbo/kernel/squared_exp_ard.hpp>
 #include <limbo/mean/constant.hpp>
 #include <limbo/model/gp.hpp>
+
+#include <blackdrops/reward/reward.hpp>
+#include <utils/utils.hpp>
 
 namespace blackdrops {
 
@@ -110,7 +113,7 @@ namespace blackdrops {
                 double sigma;
                 std::tie(mu, sigma) = _model.query(static_cast<const MyReward*>(this)->get_sample(info, from_state, action, to_state));
 
-                return std::min(mu[0] + std::sqrt(sigma), std::max(mu[0] - std::sqrt(sigma), gaussian_rand(mu[0], sigma)));
+                return std::min(mu[0] + std::sqrt(sigma), std::max(mu[0] - std::sqrt(sigma), utils::gaussian_rand(mu[0], sigma)));
             }
 
             bool learn()

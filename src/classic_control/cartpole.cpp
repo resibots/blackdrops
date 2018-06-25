@@ -232,7 +232,7 @@ struct CartPole : public blackdrops::system::ODESystem<Params, blackdrops::Rollo
     {
         constexpr double sigma = 0.001;
 
-        Eigen::VectorXd st = gaussian_rand(Eigen::VectorXd::Zero(4), sigma);
+        Eigen::VectorXd st = utils::gaussian_rand(Eigen::VectorXd::Zero(4), sigma);
 
         return st;
     }
@@ -251,7 +251,7 @@ struct CartPole : public blackdrops::system::ODESystem<Params, blackdrops::Rollo
     {
         constexpr double sigma = 0.01;
 
-        Eigen::VectorXd noisy = gaussian_rand(original_state, sigma);
+        Eigen::VectorXd noisy = utils::gaussian_rand(original_state, sigma);
 
         return noisy;
     }
