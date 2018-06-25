@@ -86,6 +86,7 @@ namespace blackdrops {
     class BlackDROPS {
     public:
         BlackDROPS() : _best(-std::numeric_limits<double>::max()) {}
+        BlackDROPS(const PolicyOptimizer& optimizer) : _policy_optimizer(optimizer), _best(-std::numeric_limits<double>::max()) {}
         ~BlackDROPS() {}
 
         void execute_and_record_data()
@@ -165,8 +166,6 @@ namespace blackdrops {
 
         void optimize_policy(size_t i)
         {
-            PolicyOptimizer policy_optimizer;
-
             Eigen::VectorXd params_star;
             Eigen::VectorXd params_starting = _policy.params();
             if (_random_policies)
@@ -177,14 +176,14 @@ namespace blackdrops {
             _max_reward = -std::numeric_limits<double>::max();
             if (_boundary == 0) {
                 std::cout << "Optimizing policy... " << std::flush;
-                params_star = policy_optimizer(
+                params_star = _policy_optimizer(
                     std::bind(&BlackDROPS::_optimize_policy, this, std::placeholders::_1, std::placeholders::_2),
                     params_starting,
                     false);
             }
             else {
                 std::cout << "Optimizing policy bounded to [-" << _boundary << ", " << _boundary << "]... " << std::flush;
-                params_star = policy_optimizer(
+                params_star = _policy_optimizer(
                     std::bind(&BlackDROPS::_optimize_policy, this, std::placeholders::_1, std::placeholders::_2),
                     params_starting,
                     true);
@@ -347,6 +346,7 @@ namespace blackdrops {
         Policy _policy;
         Model _model;
         RewardFunction _reward;
+        PolicyOptimizer _policy_optimizer;
         std::ofstream _ofs_real, _ofs_esti, _ofs_traj_real, _ofs_traj_dummy, _ofs_results, _ofs_exp, _ofs_opt, _ofs_model;
         Eigen::VectorXd _params_starting;
         double _best;
