@@ -335,6 +335,9 @@ namespace blackdrops {
             std::cout << "Experiment finished" << std::endl;
         }
 
+        PolicyOptimizer& policy_optimizer() { return _policy_optimizer; }
+        const PolicyOptimizer& policy_optimizer() const { return _policy_optimizer; }
+
     protected:
         Robot _robot;
         Policy _policy;
