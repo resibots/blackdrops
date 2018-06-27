@@ -147,20 +147,11 @@ namespace blackdrops {
             }
         }
 
-        std::tuple<Eigen::VectorXd, double> predict(const Eigen::VectorXd& x) const
+        std::tuple<Eigen::VectorXd, Eigen::VectorXd> predict(const Eigen::VectorXd& x, bool compute_variance = true) const
         {
-            Eigen::VectorXd ms;
-            Eigen::VectorXd ss;
-            std::tie(ms, ss) = predictm(x);
-            return std::make_tuple(ms, ss.mean());
-        }
-
-        std::tuple<Eigen::VectorXd, Eigen::VectorXd> predictm(const Eigen::VectorXd& x) const
-        {
-            Eigen::VectorXd ms(_gp_model.dim_out());
-            Eigen::VectorXd ss(_gp_model.dim_out());
-
-            return _gp_model.query(x);
+            if (compute_variance)
+                return _gp_model.query(x);
+            return std::make_tuple(_gp_model.mu(x), Eigen::VectorXd::Zero(_gp_model.dim_out()));
         }
 
         Eigen::MatrixXd samples() const

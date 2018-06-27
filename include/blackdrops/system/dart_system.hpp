@@ -189,7 +189,7 @@ namespace blackdrops {
 
                     Eigen::VectorXd mu;
                     Eigen::VectorXd sigma;
-                    std::tie(mu, sigma) = model.predictm(query_vec);
+                    std::tie(mu, sigma) = model.predict(query_vec);
 
                     Eigen::VectorXd final = init_diff + mu;
 
@@ -229,7 +229,7 @@ namespace blackdrops {
 
                     Eigen::VectorXd mu;
                     Eigen::VectorXd sigma;
-                    std::tie(mu, sigma) = model.predictm(query_vec);
+                    std::tie(mu, sigma) = model.predict(query_vec);
 
                     if (Params::blackdrops::stochastic()) {
                         sigma = sigma.array().sqrt();

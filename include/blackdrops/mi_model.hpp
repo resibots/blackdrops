@@ -112,7 +112,7 @@ namespace blackdrops {
             }
         }
 
-        std::tuple<Eigen::VectorXd, Eigen::VectorXd> predictm(const Eigen::VectorXd& x) const
+        std::tuple<Eigen::VectorXd, Eigen::VectorXd> predict(const Eigen::VectorXd& x, bool) const
         {
             Eigen::VectorXd mu = _mean(x, x);
             Eigen::VectorXd ss = Eigen::VectorXd::Zero(mu.size());
@@ -142,6 +142,6 @@ namespace blackdrops {
             return limbo::opt::no_grad(-mse);
         }
     };
-}
+} // namespace blackdrops
 
 #endif
