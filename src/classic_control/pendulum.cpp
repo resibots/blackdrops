@@ -62,8 +62,8 @@
 #include <limbo/opt/rprop.hpp>
 
 #include <blackdrops/blackdrops.hpp>
-#include <blackdrops/gp_model.hpp>
 #include <blackdrops/model/gp/kernel_lf_opt.hpp>
+#include <blackdrops/model/gp_model.hpp>
 #include <blackdrops/system/ode_system.hpp>
 
 #include <blackdrops/policy/gp_policy.hpp>
@@ -380,7 +380,7 @@ int main(int argc, char** argv)
     using GP_t = limbo::model::MultiGP<Params, limbo::model::GP, kernel_t, mean_t, limbo::model::multi_gp::ParallelLFOpt<Params, blackdrops::model::gp::KernelLFOpt<Params, limbo::opt::Rprop<Params>>>>;
 
     using policy_opt_t = limbo::opt::Cmaes<Params>;
-    using MGP_t = blackdrops::GPModel<Params, GP_t>;
+    using MGP_t = blackdrops::model::GPModel<Params, GP_t>;
 #ifdef GPPOLICY
     blackdrops::BlackDROPS<Params, MGP_t, Pendulum, blackdrops::policy::GPPolicy<PolicyParams>, policy_opt_t, RewardFunction> pend_system;
 #elif defined(LINEAR)

@@ -62,9 +62,9 @@
 #include <limbo/opt/cmaes.hpp>
 
 #include <blackdrops/blackdrops.hpp>
-#include <blackdrops/gp_model.hpp>
-#include <blackdrops/gp_multi_model.hpp>
 #include <blackdrops/model/gp/kernel_lf_opt.hpp>
+#include <blackdrops/model/gp_model.hpp>
+#include <blackdrops/model/gp_multi_model.hpp>
 #include <blackdrops/system/ode_system.hpp>
 
 // TO-CHANGE (optional): You can include other policies as well (GP and linear policy already implemented)
@@ -336,7 +336,7 @@ int main(int argc, char** argv)
 
     using GP_t = limbo::model::MultiGP<Params, limbo::model::GP, kernel_t, mean_t, limbo::model::multi_gp::ParallelLFOpt<Params, blackdrops::model::gp::KernelLFOpt<Params>>>;
 
-    using MGP_t = blackdrops::GPModel<Params, GP_t>;
+    using MGP_t = blackdrops::model::GPModel<Params, GP_t>;
 
     // TO-CHANGE: change the MyODESystem to your struct name
     blackdrops::BlackDROPS<Params, MGP_t, MyODESystem, blackdrops::policy::NNPolicy<PolicyParams>, policy_opt_t, RewardFunction> my_system;

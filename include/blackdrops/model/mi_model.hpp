@@ -59,89 +59,91 @@
 #include <Eigen/binary_matrix.hpp>
 
 namespace blackdrops {
-    template <typename Params, typename MeanFunction, typename Optimizer>
-    class MIModel {
-    public:
-        MIModel() { _init = false; }
+    namespace model {
+        template <typename Params, typename MeanFunction, typename Optimizer>
+        class MIModel {
+        public:
+            MIModel() { _init = false; }
 
-        void learn(const std::vector<std::tuple<Eigen::VectorXd, Eigen::VectorXd, Eigen::VectorXd>>& observations, bool only_limits = false)
-        {
-            std::vector<Eigen::VectorXd> samples, observs;
-            for (size_t i = 0; i < observations.size(); i++) {
-                Eigen::VectorXd st, act, pred;
-                st = std::get<0>(observations[i]);
-                act = std::get<1>(observations[i]);
-                pred = std::get<2>(observations[i]);
+            void learn(const std::vector<std::tuple<Eigen::VectorXd, Eigen::VectorXd, Eigen::VectorXd>>& observations, bool only_limits = false)
+            {
+                std::vector<Eigen::VectorXd> samples, observs;
+                for (size_t i = 0; i < observations.size(); i++) {
+                    Eigen::VectorXd st, act, pred;
+                    st = std::get<0>(observations[i]);
+                    act = std::get<1>(observations[i]);
+                    pred = std::get<2>(observations[i]);
 
-                Eigen::VectorXd s(st.size() + act.size());
-                s.head(st.size()) = st;
-                s.tail(act.size()) = act;
+                    Eigen::VectorXd s(st.size() + act.size());
+                    s.head(st.size()) = st;
+                    s.tail(act.size()) = act;
 
-                samples.push_back(s);
-                observs.push_back(pred);
-            }
-
-            _samples = samples;
-            _observations = observs;
-
-            if (!_init) {
-                _mean = MeanFunction(_samples[0].size());
-                _init = true;
-            }
-
-            Optimizer optimizer;
-            Eigen::VectorXd best_params = optimizer(std::bind(&MIModel::_optimize_model, this, std::placeholders::_1, std::placeholders::_2), _mean.h_params(), true);
-
-            std::cout << "Mean: " << best_params.transpose() << std::endl;
-
-            _mean.set_h_params(best_params);
-        }
-
-        void save_data(const std::string& filename) const
-        {
-            std::ofstream ofs_data(filename);
-            for (size_t i = 0; i < _samples.size(); ++i) {
-                if (i != 0)
-                    ofs_data << std::endl;
-                for (size_t j = 0; j < _samples[0].size(); ++j) {
-                    ofs_data << _samples[i](j) << " ";
+                    samples.push_back(s);
+                    observs.push_back(pred);
                 }
-                for (size_t j = 0; j < _observations[0].size(); ++j) {
-                    ofs_data << _observations[i](j) << " ";
+
+                _samples = samples;
+                _observations = observs;
+
+                if (!_init) {
+                    _mean = MeanFunction(_samples[0].size());
+                    _init = true;
+                }
+
+                Optimizer optimizer;
+                Eigen::VectorXd best_params = optimizer(std::bind(&MIModel::_optimize_model, this, std::placeholders::_1, std::placeholders::_2), _mean.h_params(), true);
+
+                std::cout << "Mean: " << best_params.transpose() << std::endl;
+
+                _mean.set_h_params(best_params);
+            }
+
+            void save_data(const std::string& filename) const
+            {
+                std::ofstream ofs_data(filename);
+                for (size_t i = 0; i < _samples.size(); ++i) {
+                    if (i != 0)
+                        ofs_data << std::endl;
+                    for (size_t j = 0; j < _samples[0].size(); ++j) {
+                        ofs_data << _samples[i](j) << " ";
+                    }
+                    for (size_t j = 0; j < _observations[0].size(); ++j) {
+                        ofs_data << _observations[i](j) << " ";
+                    }
                 }
             }
-        }
 
-        std::tuple<Eigen::VectorXd, Eigen::VectorXd> predict(const Eigen::VectorXd& x, bool) const
-        {
-            Eigen::VectorXd mu = _mean(x, x);
-            Eigen::VectorXd ss = Eigen::VectorXd::Zero(mu.size());
+            std::tuple<Eigen::VectorXd, Eigen::VectorXd> predict(const Eigen::VectorXd& x, bool) const
+            {
+                Eigen::VectorXd mu = _mean(x, x);
+                Eigen::VectorXd ss = Eigen::VectorXd::Zero(mu.size());
 
-            return std::make_tuple(mu, ss);
-        }
-
-    protected:
-        std::vector<Eigen::VectorXd> _samples, _observations;
-        MeanFunction _mean;
-        bool _init;
-
-        limbo::opt::eval_t _optimize_model(const Eigen::VectorXd& params, bool eval_grad = false) const
-        {
-            assert(_samples.size());
-            MeanFunction mean(_samples[0].size());
-            mean.set_h_params(params);
-
-            double mse = 0.;
-            for (size_t i = 0; i < _samples.size(); i++) {
-                Eigen::VectorXd mu = mean(_samples[i], _samples[i]);
-                Eigen::VectorXd val = _observations[i];
-
-                mse += (mu - val).squaredNorm();
+                return std::make_tuple(mu, ss);
             }
 
-            return limbo::opt::no_grad(-mse);
-        }
-    };
+        protected:
+            std::vector<Eigen::VectorXd> _samples, _observations;
+            MeanFunction _mean;
+            bool _init;
+
+            limbo::opt::eval_t _optimize_model(const Eigen::VectorXd& params, bool eval_grad = false) const
+            {
+                assert(_samples.size());
+                MeanFunction mean(_samples[0].size());
+                mean.set_h_params(params);
+
+                double mse = 0.;
+                for (size_t i = 0; i < _samples.size(); i++) {
+                    Eigen::VectorXd mu = mean(_samples[i], _samples[i]);
+                    Eigen::VectorXd val = _observations[i];
+
+                    mse += (mu - val).squaredNorm();
+                }
+
+                return limbo::opt::no_grad(-mse);
+            }
+        };
+    } // namespace model
 } // namespace blackdrops
 
 #endif

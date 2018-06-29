@@ -61,8 +61,8 @@
 #include <limbo/opt/cmaes.hpp>
 
 #include <blackdrops/blackdrops.hpp>
-#include <blackdrops/gp_model.hpp>
 #include <blackdrops/model/gp/kernel_lf_opt.hpp>
+#include <blackdrops/model/gp_model.hpp>
 #include <blackdrops/system/ode_system.hpp>
 
 #include <blackdrops/policy/nn_policy.hpp>
@@ -374,7 +374,7 @@ int main(int argc, char** argv)
 
     using policy_opt_t = limbo::opt::Cmaes<Params>;
 
-    using MGP_t = blackdrops::GPModel<Params, GP_t>;
+    using MGP_t = blackdrops::model::GPModel<Params, GP_t>;
 
     blackdrops::BlackDROPS<Params, MGP_t, PlanarArm, blackdrops::policy::NNPolicy<PolicyParams>, policy_opt_t, RewardFunction> planar_arm_system;
 
