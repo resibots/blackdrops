@@ -53,82 +53,20 @@
 //| The fact that you are presently reading this means that you have had
 //| knowledge of the CeCILL-C license and that you accept its terms.
 //|
-#ifndef BLACKDROPS_MODEL_MI_MODEL_HPP
-#define BLACKDROPS_MODEL_MI_MODEL_HPP
+#ifndef BLACKDROPS_MODEL_BASE_MODEL_HPP
+#define BLACKDROPS_MODEL_BASE_MODEL_HPP
 
-#include <Eigen/binary_matrix.hpp>
-
-#include <blackdrops/model/base_model.hpp>
+#include <Eigen/Core>
 
 namespace blackdrops {
     namespace model {
-        template <typename Params, typename MeanFunction, typename Optimizer>
-        class MIModel : public BaseModel {
+        class BaseModel {
         public:
-            MIModel() { _init = false; }
+            virtual void learn(const std::vector<std::tuple<Eigen::VectorXd, Eigen::VectorXd, Eigen::VectorXd>>& observations) = 0;
 
-            void learn(const std::vector<std::tuple<Eigen::VectorXd, Eigen::VectorXd, Eigen::VectorXd>>& observations)
-            {
-                std::vector<Eigen::VectorXd> samples, observs;
-                for (size_t i = 0; i < observations.size(); i++) {
-                    Eigen::VectorXd st, act, pred;
-                    st = std::get<0>(observations[i]);
-                    act = std::get<1>(observations[i]);
-                    pred = std::get<2>(observations[i]);
+            virtual void save_model(size_t iteration) const {}
 
-                    Eigen::VectorXd s(st.size() + act.size());
-                    s.head(st.size()) = st;
-                    s.tail(act.size()) = act;
-
-                    samples.push_back(s);
-                    observs.push_back(pred);
-                }
-
-                _samples = samples;
-                _observations = observs;
-
-                if (!_init) {
-                    _mean = MeanFunction(_samples[0].size());
-                    _init = true;
-                }
-
-                Optimizer optimizer;
-                Eigen::VectorXd best_params = optimizer(std::bind(&MIModel::_optimize_model, this, std::placeholders::_1, std::placeholders::_2), _mean.h_params(), true);
-
-                std::cout << "Mean: " << best_params.transpose() << std::endl;
-
-                _mean.set_h_params(best_params);
-            }
-
-            std::tuple<Eigen::VectorXd, Eigen::VectorXd> predict(const Eigen::VectorXd& x, bool) const
-            {
-                Eigen::VectorXd mu = _mean(x, x);
-                Eigen::VectorXd ss = Eigen::VectorXd::Zero(mu.size());
-
-                return std::make_tuple(mu, ss);
-            }
-
-        protected:
-            std::vector<Eigen::VectorXd> _samples, _observations;
-            MeanFunction _mean;
-            bool _init;
-
-            limbo::opt::eval_t _optimize_model(const Eigen::VectorXd& params, bool eval_grad = false) const
-            {
-                assert(_samples.size());
-                MeanFunction mean(_samples[0].size());
-                mean.set_h_params(params);
-
-                double mse = 0.;
-                for (size_t i = 0; i < _samples.size(); i++) {
-                    Eigen::VectorXd mu = mean(_samples[i], _samples[i]);
-                    Eigen::VectorXd val = _observations[i];
-
-                    mse += (mu - val).squaredNorm();
-                }
-
-                return limbo::opt::no_grad(-mse);
-            }
+            virtual std::tuple<Eigen::VectorXd, Eigen::VectorXd> predict(const Eigen::VectorXd& x, bool compute_variance) const = 0;
         };
     } // namespace model
 } // namespace blackdrops

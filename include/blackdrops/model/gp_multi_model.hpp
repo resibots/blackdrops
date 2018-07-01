@@ -53,8 +53,10 @@
 //| The fact that you are presently reading this means that you have had
 //| knowledge of the CeCILL-C license and that you accept its terms.
 //|
-#ifndef BLACKDROPS_GP_MULTI_MODEL_HPP
-#define BLACKDROPS_GP_MULTI_MODEL_HPP
+#ifndef BLACKDROPS_MODEL_GP_MULTI_MODEL_HPP
+#define BLACKDROPS_MODEL_GP_MULTI_MODEL_HPP
+
+#include <Eigen/Core>
 
 namespace blackdrops {
     namespace defaults {
@@ -158,6 +160,42 @@ namespace blackdrops {
             {
                 assert(_dim_out != -1); // need to compute first !
                 return _dim_out;
+            }
+
+            /// save the parameters and the data for the GP to the archive (text or binary)
+            template <typename A>
+            void save(const std::string& directory) const
+            {
+                A archive(directory);
+                save(archive);
+            }
+
+            /// save the parameters and the data for the GP to the archive (text or binary)
+            template <typename A>
+            void save(const A& archive) const
+            {
+                _gp_low->template save<A>(archive.directory() + "/low");
+                _gp_high->template save<A>(archive.directory() + "/high");
+            }
+
+            /// load the parameters and the data for the GP from the archive (text or binary)
+            /// if recompute is true, we do not read the kernel matrix
+            /// but we recompute it given the data and the hyperparameters
+            template <typename A>
+            void load(const std::string& directory, bool recompute = true)
+            {
+                A archive(directory);
+                load(archive, recompute);
+            }
+
+            /// load the parameters and the data for the GP from the archive (text or binary)
+            /// if recompute is true, we do not read the kernel matrix
+            /// but we recompute it given the data and the hyperparameters
+            template <typename A>
+            void load(const A& archive, bool recompute = true)
+            {
+                _gp_low->template load<A>(archive.directory() + "/low", recompute);
+                _gp_high->template load<A>(archive.directory() + "/high", recompute);
             }
 
         private:

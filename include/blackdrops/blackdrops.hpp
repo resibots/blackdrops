@@ -303,7 +303,7 @@ namespace blackdrops {
                 learn_model();
                 double learn_model_ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - time_start).count();
                 _ofs_model << (learn_model_ms * 1e-3) << std::endl;
-                _model.save_data("model_learn_" + std::to_string(i) + ".dat");
+                _model.save_model(i);
 
                 std::cout << "Learned model..." << std::endl;
                 std::cout << "Learning time: " << learn_model_ms * 1e-3 << "s" << std::endl;
