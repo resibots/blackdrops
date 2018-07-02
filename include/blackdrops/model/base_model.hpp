@@ -56,6 +56,8 @@
 #ifndef BLACKDROPS_MODEL_BASE_MODEL_HPP
 #define BLACKDROPS_MODEL_BASE_MODEL_HPP
 
+#include <string>
+
 #include <Eigen/Core>
 
 namespace blackdrops {
@@ -65,6 +67,8 @@ namespace blackdrops {
             virtual void learn(const std::vector<std::tuple<Eigen::VectorXd, Eigen::VectorXd, Eigen::VectorXd>>& observations) = 0;
 
             virtual void save_model(size_t iteration) const {}
+
+            virtual void load_model(const std::string& directory) {}
 
             virtual std::tuple<Eigen::VectorXd, Eigen::VectorXd> predict(const Eigen::VectorXd& x, bool compute_variance) const = 0;
         };

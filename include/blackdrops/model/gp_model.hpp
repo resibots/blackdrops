@@ -114,6 +114,11 @@ namespace blackdrops {
                 _gp_model.template save<limbo::serialize::BinaryArchive>(std::string("model_learn_" + std::to_string(iteration)));
             }
 
+            void load_model(const std::string& directory)
+            {
+                _gp_model.template load<limbo::serialize::BinaryArchive>(directory);
+            }
+
         protected:
             GP_t _gp_model;
             bool _initialized = false;
