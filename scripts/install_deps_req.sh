@@ -61,5 +61,7 @@ make install
 # go back to original directory
 cd ../..
 
-# just as fail-safe
-sudo ldconfig
+# just as fail-safe in Linux
+if [ $OS = "Linux" ]; then
+    sudo ldconfig
+fi
