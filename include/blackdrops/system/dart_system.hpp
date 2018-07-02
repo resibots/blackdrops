@@ -69,16 +69,17 @@
 #include <robot_dart/graphics/graphics.hpp>
 #endif
 
+#include <blackdrops/system/system.hpp>
 #include <blackdrops/utils/utils.hpp>
 
 namespace blackdrops {
     namespace system {
         template <typename Params, typename PolicyController, typename RolloutInfo>
-        struct DARTSystem {
+        struct DARTSystem : public System<Params, DARTSystem<Params, PolicyController, RolloutInfo>, RolloutInfo> {
             using robot_simu_t = robot_dart::RobotDARTSimu;
 
             template <typename Policy, typename Reward>
-            std::vector<std::tuple<Eigen::VectorXd, Eigen::VectorXd, Eigen::VectorXd>> execute(const Policy& policy, Reward& world, double T, std::vector<double>& R, bool display = true, RolloutInfo* info = nullptr)
+            std::vector<std::tuple<Eigen::VectorXd, Eigen::VectorXd, Eigen::VectorXd>> execute(const Policy& policy, Reward& world, double T, std::vector<double>& R, bool display = true)
             {
                 // Make sure that the simulation step is smaller than the sampling/control rate
                 assert(Params::dart_system::sim_step() < Params::blackdrops::dt());
@@ -96,9 +97,7 @@ namespace blackdrops {
                 simu.set_step(Params::dart_system::sim_step());
 
                 // Get the information of the rollout
-                RolloutInfo rollout_info = get_rollout_info();
-                if (info != nullptr)
-                    *info = rollout_info;
+                RolloutInfo rollout_info = this->get_rollout_info();
 
                 // setup robot
                 Eigen::VectorXd pp = policy.params();
@@ -133,10 +132,10 @@ namespace blackdrops {
                 std::vector<Eigen::VectorXd> states = controller->get_states();
                 std::vector<Eigen::VectorXd> noiseless_states = controller->get_noiseless_states();
                 if (display)
-                    _last_states = states;
+                    this->_last_states = states;
                 std::vector<Eigen::VectorXd> commands = controller->get_commands();
                 if (display)
-                    _last_commands = commands;
+                    this->_last_commands = commands;
 
                 for (size_t j = 0; j < states.size() - 1; j++) {
                     Eigen::VectorXd init = states[j];
@@ -161,173 +160,14 @@ namespace blackdrops {
                 return res;
             }
 
-            template <typename Policy, typename Model, typename Reward>
-            void execute_dummy(const Policy& policy, const Model& model, const Reward& world, double T, std::vector<double>& R, bool display = true)
-            {
-                std::vector<Eigen::VectorXd> states, commands;
-
-                int H = std::ceil(T / Params::blackdrops::dt());
-                R = std::vector<double>();
-
-                // Get the information of the rollout
-                RolloutInfo rollout_info = get_rollout_info();
-
-                // Get initial state from info
-                Eigen::VectorXd init_diff = rollout_info.init_state;
-
-                Eigen::VectorXd init = this->transform_state(init_diff);
-
-                states.push_back(init_diff);
-
-                for (int i = 0; i < H; i++) {
-                    Eigen::VectorXd query_vec(Params::blackdrops::model_input_dim() + Params::blackdrops::action_dim());
-                    Eigen::VectorXd u = policy.next(this->policy_transform(init, &rollout_info));
-                    query_vec.head(Params::blackdrops::model_input_dim()) = init;
-                    query_vec.tail(Params::blackdrops::action_dim()) = u;
-
-                    commands.push_back(u);
-
-                    Eigen::VectorXd mu;
-                    Eigen::VectorXd sigma;
-                    std::tie(mu, sigma) = model.predict(query_vec);
-
-                    Eigen::VectorXd final = init_diff + mu;
-
-                    double r = world.query(rollout_info, init_diff, u, final);
-                    R.push_back(r);
-
-                    states.push_back(final);
-
-                    init_diff = final;
-                    init = this->transform_state(init_diff);
-                    rollout_info.t += Params::blackdrops::dt();
-                }
-
-                _last_dummy_states = states;
-                _last_dummy_commands = commands;
-            }
-
-            template <typename Policy, typename Model, typename Reward>
-            double predict_policy(const Policy& policy, const Model& model, const Reward& world, double T) const
-            {
-                int H = std::ceil(T / Params::blackdrops::dt());
-                double reward = 0.0;
-
-                // Get the information of the rollout
-                RolloutInfo rollout_info = get_rollout_info();
-
-                // Get initial state from info
-                Eigen::VectorXd init_diff = rollout_info.init_state;
-
-                Eigen::VectorXd init = this->transform_state(init_diff);
-
-                for (int i = 0; i < H; i++) {
-                    Eigen::VectorXd query_vec(Params::blackdrops::model_input_dim() + Params::blackdrops::action_dim());
-                    Eigen::VectorXd u = policy.next(this->policy_transform(init, &rollout_info));
-                    query_vec.head(Params::blackdrops::model_input_dim()) = init;
-                    query_vec.tail(Params::blackdrops::action_dim()) = u;
-
-                    Eigen::VectorXd mu;
-                    Eigen::VectorXd sigma;
-                    std::tie(mu, sigma) = model.predict(query_vec);
-
-                    if (Params::blackdrops::stochastic()) {
-                        sigma = sigma.array().sqrt();
-                        for (int i = 0; i < mu.size(); i++) {
-                            double s = utils::gaussian_rand(mu(i), sigma(i));
-                            mu(i) = std::max(mu(i) - sigma(i),
-                                std::min(s, mu(i) + sigma(i)));
-                        }
-                    }
-
-                    Eigen::VectorXd final = init_diff + mu;
-
-                    reward += world.query(rollout_info, init_diff, u, final);
-                    init_diff = final;
-                    init = this->transform_state(init_diff);
-                    rollout_info.t += Params::blackdrops::dt();
-                }
-
-                return reward;
-            }
-
-            // get information for rollout (i.e., initial state, target, etc.)
-            // this is useful if you wish to generate some different conditions
-            // that are constant throughout the same rollout, but different in different rollouts
-            // by default, we only get the initial state
-            virtual RolloutInfo get_rollout_info() const
-            {
-                RolloutInfo info;
-                info.init_state = this->init_state();
-                info.t = 0;
-
-                return info;
-            }
-
             // override this to add extra stuff to the robot_dart simulator
             virtual void add_extra_to_simu(robot_simu_t& simu, const RolloutInfo& rollout_info) const {}
-
-            // transform the state input to the GPs and policy if needed
-            // by default, no transformation is applied
-            virtual Eigen::VectorXd transform_state(const Eigen::VectorXd& original_state) const
-            {
-                return original_state;
-            }
-
-            // add noise to the observed state if desired
-            // by default, no noise is added
-            virtual Eigen::VectorXd add_noise(const Eigen::VectorXd& original_state) const
-            {
-                return original_state;
-            }
-
-            // transform the state variables that go to the policy if needed
-            // by default, no transformation is applied
-            virtual Eigen::VectorXd policy_transform(const Eigen::VectorXd& original_state, RolloutInfo* info) const
-            {
-                return original_state;
-            }
-
-            // return the initial state of the system
-            // by default, the zero state is returned
-            virtual Eigen::VectorXd init_state() const
-            {
-                return Eigen::VectorXd::Zero(Params::blackdrops::model_pred_dim());
-            }
-
-            // get states from last execution
-            std::vector<Eigen::VectorXd> get_last_states() const
-            {
-                return _last_states;
-            }
-
-            // get commands from last execution
-            std::vector<Eigen::VectorXd> get_last_commands() const
-            {
-                return _last_commands;
-            }
-
-            // get states from last dummy execution
-            std::vector<Eigen::VectorXd> get_last_dummy_states() const
-            {
-                return _last_dummy_states;
-            }
-
-            // get commands from lastd ummy execution
-            std::vector<Eigen::VectorXd> get_last_dummy_commands() const
-            {
-                return _last_dummy_commands;
-            }
 
             // you should override this, to define how your simulated robot_dart::Robot will be constructed
             virtual std::shared_ptr<robot_dart::Robot> get_robot() const = 0;
 
             // override this if you want to set in a specific way the initial state of your robot
             virtual void set_robot_state(const std::shared_ptr<robot_dart::Robot>& robot, const Eigen::VectorXd& state) const {}
-
-        protected:
-            std::vector<Eigen::VectorXd> _last_states, _last_commands;
-            std::vector<Eigen::VectorXd> _last_dummy_states, _last_dummy_commands;
         };
 
         template <typename Params, typename Policy>
