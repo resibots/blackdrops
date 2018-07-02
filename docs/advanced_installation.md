@@ -24,7 +24,7 @@ sudo apt-get install libeigen3-dev libboost-serialization-dev libboost-filesyste
 For OSX with brew:
 
 ```bash
-brew install eigen3
+brew install eigen
 brew install boost
 ```
 
