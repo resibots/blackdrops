@@ -65,53 +65,55 @@
 #include <limbo/tools/random_generator.hpp>
 
 namespace blackdrops {
+    namespace rng {
+        static thread_local limbo::tools::rgen_gauss_t gauss_rng(0., 1.);
+        static thread_local limbo::tools::rgen_double_t uniform_rng(0., 1.);
+    } // namespace rng
+
     namespace utils {
-        inline Eigen::VectorXd gaussian_rand(const Eigen::VectorXd& mean)
+        inline Eigen::VectorXd uniform_rand(int size, limbo::tools::rgen_double_t& rgen = rng::uniform_rng)
         {
-            static std::mt19937 gen(randutils::auto_seed_128{}.base());
-            static std::normal_distribution<double> gaussian(0., 1.);
-
-            Eigen::VectorXd result(mean.size());
-            for (int i = 0; i < mean.size(); i++) {
-                result(i) = mean(i) + gaussian(gen);
-            }
-
-            return result;
+            return limbo::tools::random_vec(size, rgen);
         }
 
-        inline Eigen::VectorXd gaussian_rand(const Eigen::VectorXd& mean, const Eigen::MatrixXd& covar)
+        inline Eigen::VectorXd gaussian_rand(const Eigen::VectorXd& mean, limbo::tools::rgen_gauss_t& rgen = rng::gauss_rng)
+        {
+            return limbo::tools::random_vec(mean.size(), rgen) + mean;
+        }
+
+        inline Eigen::VectorXd gaussian_rand(const Eigen::VectorXd& mean, const Eigen::MatrixXd& covar, limbo::tools::rgen_gauss_t& rgen = rng::gauss_rng)
         {
             assert(mean.size() == covar.rows() && covar.rows() == covar.cols());
 
             Eigen::LLT<Eigen::MatrixXd> cholSolver(covar);
             Eigen::MatrixXd transform = cholSolver.matrixL();
 
-            return transform * gaussian_rand(Eigen::VectorXd::Zero(mean.size())) + mean;
+            return transform * gaussian_rand(Eigen::VectorXd::Zero(mean.size()), rgen) + mean;
         }
 
-        inline Eigen::VectorXd gaussian_rand(const Eigen::VectorXd& mean, const Eigen::VectorXd& sigma)
+        inline Eigen::VectorXd gaussian_rand(const Eigen::VectorXd& mean, const Eigen::VectorXd& sigma, limbo::tools::rgen_gauss_t& rgen = rng::gauss_rng)
         {
             assert(mean.size() == sigma.size());
 
             Eigen::MatrixXd covar = Eigen::MatrixXd::Zero(mean.size(), mean.size());
             covar.diagonal() = sigma.array().square();
 
-            return gaussian_rand(mean, covar);
+            return gaussian_rand(mean, covar, rgen);
         }
 
-        inline Eigen::VectorXd gaussian_rand(const Eigen::VectorXd& mean, double sigma)
+        inline Eigen::VectorXd gaussian_rand(const Eigen::VectorXd& mean, double sigma, limbo::tools::rgen_gauss_t& rgen = rng::gauss_rng)
         {
             Eigen::VectorXd sig = Eigen::VectorXd::Constant(mean.size(), sigma);
 
-            return gaussian_rand(mean, sig);
+            return gaussian_rand(mean, sig, rgen);
         }
 
-        inline double gaussian_rand(double mean, double sigma)
+        inline double gaussian_rand(double mean, double sigma, limbo::tools::rgen_gauss_t& rgen = rng::gauss_rng)
         {
             Eigen::VectorXd m(1);
             m << mean;
 
-            return gaussian_rand(m, sigma)[0];
+            return gaussian_rand(m, sigma, rgen)[0];
         }
 
         inline double angle_dist(double a, double b)
