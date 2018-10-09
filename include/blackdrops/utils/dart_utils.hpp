@@ -57,7 +57,16 @@
 #define UTILS_DART_UTILS_HPP
 
 #include <dart/dart.hpp>
+#if DART_MAJOR_VERSION > 6
+#include <dart/io/SkelParser.hpp>
+#else
 #include <dart/utils/SkelParser.hpp>
+
+// namespace alias for compatibility
+namespace dart {
+    namespace io = utils;
+}
+#endif
 #include <fstream>
 #include <streambuf>
 #include <string>
@@ -71,7 +80,7 @@ namespace blackdrops {
             std::string str((std::istreambuf_iterator<char>(t)),
                 std::istreambuf_iterator<char>());
 
-            dart::simulation::WorldPtr world = dart::utils::SkelParser::readWorldXML(str);
+            dart::simulation::WorldPtr world = dart::io::SkelParser::readWorldXML(str);
 
             return world->getSkeleton(robot_name);
         }
