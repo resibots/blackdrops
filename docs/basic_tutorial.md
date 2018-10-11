@@ -210,15 +210,15 @@ If you are having trouble with completing some parts of the tutorial, you can ch
 
 The Black-DROPS code produces several statistics files:
 
-- **blackdrops_data.bin** - binary file with an *Eigen::MatrixXd* (Nx(D+E), where N is the number of data points, D the dimension of the input to the model and E the dimension of the prediction of the model) stored with the data gathered from the system
 - **estimates.dat** - text file where the i-th line contains the immediate rewards received at each time step on the i-th execution on the mean model
-- **model_learn_***i***.dat** - text file with the data gathered from the system up until the i-th episode on the real system
+- **expected.dat** - text file where the i-th line contains the expected cumulative reward of the policy at the i-th episode (**important:** this is not given to the algorithm and is solely here for evaluation). If there's no uncertainty in the system (i.e., no noise, one initial state), then this file is identical to *results.dat*.
+- **model_learn_***i* - folder where the i-th episode's model is saved (usually a *limbo* GP model that you can load later)
 - **policy_params_***i***.bin** - binary file containing the *Eigen::VectorXd* of the policy parameters executed on the i-th learning episode
 - **policy_params_starting_***i***.bin** - binary file containing the *Eigen::VectorXd* of the policy parameters that were used as a starting point on the i-th learning episode
 - **random_policy_params_***i***.bin** - binary file containing the *Eigen::VectorXd* of the policy parameters executed on the i-th random episode
 - **real.dat** - text file where the i-th line contains the immediate rewards received at each time step on the i-th execution on the robot
 - **results.dat** - text file where the i-th line contains the cumulative reward received at the i-th execution on the robot
-- **times.dat** - text file where the i-th line contains the time in seconds the optimization of the policy took in the i-th learning episode
+- **times.dat** - text file where the i-th line contains the time in seconds (and the number of function calls) the optimization of the policy took in the i-th learning episode
 - **times_model.dat** - text file where the i-th line contains the time in seconds the training of the model took in the i-th learning episode
 - **traj_real_***i***.dat** - text file where the j-th line contains the state/action pair observed at the j-th time step in the i-th execution on the robot (the last action is always zeros as no action was taken in the real system)
 - **traj_dummy_***i***.dat** - text file where the j-th line contains the state/action pair observed at the j-th time step in the i-th execution on the dummy model (the last action is always zeros as no action was taken -- the dummy model is ran once every optimization of the policy)

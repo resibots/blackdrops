@@ -61,13 +61,6 @@
 #include <limbo/model/multi_gp/parallel_lf_opt.hpp>
 #include <limbo/opt/cmaes.hpp>
 
-#include <robot_dart/position_control.hpp>
-#include <robot_dart/robot_dart_simu.hpp>
-
-#ifdef GRAPHIC
-#include <robot_dart/graphics.hpp>
-#endif
-
 #include <blackdrops/blackdrops.hpp>
 #include <blackdrops/model/gp/kernel_lf_opt.hpp>
 #include <blackdrops/model/gp_model.hpp>
