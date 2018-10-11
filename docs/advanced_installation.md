@@ -116,7 +116,7 @@ If you do not have TBB installed, you should use: `cmake -DUSE_TBB=OFF -DUSE_OPE
 
 If you want to compile and create [DART](http://dartsim.github.io/)-based scenarios, you will need to install the upstream DART by source.
 
-For **Ubuntu systems**, please follow the detailed installation instructions on the [DART documentation website](http://dartsim.github.io/install_dart_on_ubuntu.html#install-required-dependencies). Make sure that you don't forget to add the PPAs as detailed [here](http://dartsim.github.io/install_dart_on_ubuntu.html#adding-personal-package-archives-ppas-for-dart-and-dependencies). What is more, you need to enable the `-DART_ENABLE_SIMD` flag in the CMake configuration. In addition, you need the following optional dependencies: **DART Parsers** and **OpenSceneGraph GUI**. Lastly, you need to checkout to the `release-6.4` branch (and not the one provided in DART's documentation).
+For **Ubuntu systems**, please follow the detailed installation instructions on the [DART documentation website](http://dartsim.github.io/install_dart_on_ubuntu.html#install-required-dependencies). Make sure that you don't forget to add the PPAs as detailed [here](http://dartsim.github.io/install_dart_on_ubuntu.html#adding-personal-package-archives-ppas-for-dart-and-dependencies). What is more, you need to enable the `-DART_ENABLE_SIMD` flag in the CMake configuration. In addition, you need the following optional dependencies: **DART Parsers** and **OpenSceneGraph GUI**. Lastly, you need to checkout to the `release-6.7` branch (and not the one provided in DART's documentation).
 
 For **Ubuntu <= 14.04** one more step is needed:
 
@@ -141,7 +141,7 @@ sudo apt-get install liburdfdom-dev liburdfdom-headers-dev
 cd /path/to/tmp/folder
 git clone git://github.com/dartsim/dart.git
 cd dart
-git checkout release-6.4
+git checkout release-6.7
 
 mkdir build
 cd build
@@ -169,7 +169,7 @@ brew install ros/deps/urdfdom
 cd /path/to/tmp/folder
 git clone git://github.com/dartsim/dart.git
 cd dart
-git checkout release-6.4
+git checkout release-6.7
 
 mkdir build
 cd build
