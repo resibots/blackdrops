@@ -86,6 +86,8 @@ def configure(conf):
 
     conf.env.LIB_THREADS = ['pthread']
 
+    conf.env['CXXFLAGS'] = conf.env['CXXFLAGS'] + ['-faligned-new']
+
 
 def build(bld):
     bld.recurse('src/')
