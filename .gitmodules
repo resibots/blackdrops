@@ -10,3 +10,6 @@
 [submodule "deps/libcmaes"]
 	path = deps/libcmaes
 	url = https://github.com/resibots/libcmaes.git
+[submodule "deps/simple_nn"]
+	path = deps/simple_nn
+	url = https://github.com/resibots/simple_nn.git

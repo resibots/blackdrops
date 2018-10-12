@@ -206,6 +206,20 @@ For OSX systems:
 brew install sdl2
 ```
 
+### Installing simple_nn
+
+For neural network policies, we are using the [simple_nn](https://github.com/resibots/simple_nn) library.
+
+You should do the following:
+
+```bash
+cd /path/to/tmp/folder
+git clone https://github.com/resibots/simple_nn.git
+cd simple_nn
+./waf configure
+sudo ./waf install
+```
+
 ### Compiling the Black-DROPS code
 
 We've now reached the point where we can compile the Black-DROPS code. You should do the following:
