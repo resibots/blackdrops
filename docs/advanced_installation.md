@@ -42,7 +42,7 @@ sudo make install
 
 If you want to install NLOpt somewhere else than `/usr/local/`, you add the `--prefix=/path/to/install/folder` in the `./configure` command.
 
-Now that the basic dependencies of limbo have been installed, we can proceed in cloning the limbo framework (we need the `spt` branch):
+Now that the basic dependencies of limbo have been installed, we can proceed in cloning the limbo framework (we need the `master` branch):
 
 ```bash
 cd /path/to/code/folder
