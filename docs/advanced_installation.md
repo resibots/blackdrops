@@ -185,6 +185,7 @@ cd /path/to/tmp/folder
 git clone https://github.com/resibots/robot_dart.git
 cd robot_dart
 ./waf configure
+./waf
 sudo ./waf install
 ```
 
@@ -217,6 +218,7 @@ cd /path/to/tmp/folder
 git clone https://github.com/resibots/simple_nn.git
 cd simple_nn
 ./waf configure
+./waf
 sudo ./waf install
 ```
 
