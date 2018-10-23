@@ -57,8 +57,10 @@
 #define BLACKDROPS_POLICY_GP_POLICY_HPP
 
 #include <Eigen/Core>
-#include <limbo/limbo.hpp>
-#include <limbo/tools.hpp>
+
+#include <limbo/kernel/squared_exp_ard.hpp>
+#include <limbo/mean/null_function.hpp>
+#include <limbo/model/gp.hpp>
 #include <limbo/tools/macros.hpp>
 #include <limbo/tools/random_generator.hpp>
 
@@ -69,13 +71,14 @@ namespace blackdrops {
             BO_PARAM(double, pseudo_samples, 10);
             BO_PARAM(double, noise, 0.01);
         };
-    }
+    } // namespace defaults
 
     namespace policy {
         template <typename Params>
         struct GPPolicy {
+        public:
             using kernel_t = limbo::kernel::SquaredExpARD<Params>;
-            using mean_t = limbo::mean::Data<Params>;
+            using mean_t = limbo::mean::NullFunction<Params>; // TO-DO: Maybe this needs to be the NullFunction
             using gp_t = limbo::model::GP<Params, kernel_t, mean_t>;
 
             GPPolicy()
@@ -86,6 +89,7 @@ namespace blackdrops {
                 _adim = Params::gp_policy::action_dim();
                 _ps = Params::gp_policy::pseudo_samples();
                 _params = Eigen::VectorXd::Zero(_ps * _sdim + _adim * (_ps + _sdim));
+
                 _limits = Eigen::VectorXd::Constant(Params::gp_policy::state_dim(), 1.0);
 
                 // Get the limits
@@ -107,7 +111,7 @@ namespace blackdrops {
                 //--- Query the GPs with state
                 Eigen::VectorXd nstate = state.array() / _limits.array();
                 Eigen::VectorXd action(_adim);
-                tbb::parallel_for(size_t(0), _adim, size_t(1), [&](size_t i) {
+                limbo::tools::par::loop(0, _adim, [&](size_t i) {
                     Eigen::VectorXd a = _gp_policies[i].mu(nstate);
                     action(i) = Params::gp_policy::max_u(i) * (9.0 * std::sin(a(0)) / 8.0 + std::sin(3 * a(0)) / 8.0);
                 });
@@ -147,7 +151,7 @@ namespace blackdrops {
                     Eigen::VectorXd ell = _params.segment(_ps * (_sdim + _adim) + j * _sdim, _sdim);
                     Eigen::VectorXd sigma_ell(ell.size() + 1);
                     sigma_ell.head(ell.size()) = ell;
-                    sigma_ell.tail(1) = limbo::tools::make_vector(1.0);
+                    sigma_ell.tail(1) = limbo::tools::make_vector(0.0);
                     ells.push_back(sigma_ell);
 
                     //--- extract pseudo observations
@@ -161,7 +165,7 @@ namespace blackdrops {
 
                 //-- instantiating gp policy
                 _gp_policies.resize(_adim, gp_t(_sdim, 1));
-                tbb::parallel_for(size_t(0), _adim, size_t(1), [&](size_t i) {
+                limbo::tools::par::loop(0, _adim, [&](size_t i) {
                     _gp_policies[i].kernel_function().set_h_params(ells[i]);
                     _gp_policies[i].compute(pseudo_samples, pseudo_observations[i]);
                 });
@@ -183,11 +187,8 @@ namespace blackdrops {
             double _boundary;
 
             std::vector<gp_t> _gp_policies;
-
-            Eigen::VectorXd _means;
-            Eigen::MatrixXd _sigmas;
             Eigen::VectorXd _limits;
         };
-    }
-}
+    } // namespace policy
+} // namespace blackdrops
 #endif

@@ -53,81 +53,98 @@
 //| The fact that you are presently reading this means that you have had
 //| knowledge of the CeCILL-C license and that you accept its terms.
 //|
-#ifndef BLACKDROPS_POLICY_LINEAR_POLICY_HPP
-#define BLACKDROPS_POLICY_LINEAR_POLICY_HPP
+#ifndef BLACKDROPS_MODEL_GP_MODEL_HPP
+#define BLACKDROPS_MODEL_GP_MODEL_HPP
 
-#include <Eigen/Core>
+#include <limbo/serialize/binary_archive.hpp>
 
-#include <limbo/tools/random_generator.hpp>
+#include <blackdrops/model/base_model.hpp>
 
 namespace blackdrops {
-    namespace policy {
-        template <typename Params>
-        struct LinearPolicy {
+    namespace model {
+        template <typename Params, typename GP_t>
+        class GPModel : public BaseModel {
         public:
-            LinearPolicy() { _random = false; }
+            GPModel() { init(); }
 
-            Eigen::VectorXd next(const Eigen::VectorXd& state) const
+            void init()
             {
-                if (_random || _params.size() == 0) {
-                    Eigen::VectorXd act = (limbo::tools::random_vector(Params::linear_policy::action_dim()).array() * 2 - 1.0);
-                    for (int i = 0; i < act.size(); i++) {
-                        act(i) = act(i) * Params::linear_policy::max_u(i);
-                    }
-                    return act;
+                _gp_model = GP_t(Params::blackdrops::model_input_dim() + Params::blackdrops::action_dim(), Params::blackdrops::model_pred_dim());
+                _initialized = true;
+            }
+
+            void learn(const std::vector<std::tuple<Eigen::VectorXd, Eigen::VectorXd, Eigen::VectorXd>>& observations)
+            {
+                std::vector<Eigen::VectorXd> samples, observs;
+                Eigen::MatrixXd obs(observations.size(), std::get<2>(observations[0]).size());
+                for (size_t i = 0; i < observations.size(); i++) {
+                    Eigen::VectorXd st, act, pred;
+                    st = std::get<0>(observations[i]);
+                    act = std::get<1>(observations[i]);
+                    pred = std::get<2>(observations[i]);
+
+                    Eigen::VectorXd s(st.size() + act.size());
+                    s.head(st.size()) = st;
+                    s.tail(act.size()) = act;
+
+                    samples.push_back(s);
+                    obs.row(i) = pred;
+                    observs.push_back(pred);
+                    // std::cout << s.transpose() << std::endl;
+                    // std::cout << pred.transpose() << std::endl;
                 }
 
-                Eigen::VectorXd act = _alpha * state + _constant;
+                std::cout << "GP Samples: " << samples.size() << std::endl;
+                if (!_initialized)
+                    init();
 
-                for (int i = 0; i < act.size(); i++) {
-                    act(i) = Params::linear_policy::max_u(i) * (9 * std::sin(act(i)) / 8.0 + std::sin(3 * act(i)) / 8.0);
-                }
-
-                return act;
+                _gp_model.compute(samples, observs, true);
+                _gp_model.optimize_hyperparams();
             }
 
-            void set_random_policy()
+            std::tuple<Eigen::VectorXd, Eigen::VectorXd> predict(const Eigen::VectorXd& x, bool compute_variance = true) const
             {
-                _random = true;
+                if (compute_variance)
+                    return _gp_model.query(x);
+                return std::make_tuple(_gp_model.mu(x), Eigen::VectorXd::Zero(_gp_model.dim_out()));
             }
 
-            bool random() const
+            void save_model(size_t iteration) const
             {
-                return _random;
+                _gp_model.template save<limbo::serialize::BinaryArchive>(std::string("model_learn_" + std::to_string(iteration)));
             }
 
-            void set_params(const Eigen::VectorXd& params)
+            void load_model(const std::string& directory)
             {
-                size_t M = Params::linear_policy::action_dim();
-                size_t N = Params::linear_policy::state_dim();
-
-                _params = params;
-                _alpha = Eigen::MatrixXd::Zero(M, N);
-                _constant = Eigen::VectorXd::Zero(M);
-                for (size_t i = 0; i < M; i++) {
-                    for (size_t j = 0; j < N; j++) {
-                        _alpha(i, j) = params(i * M + j);
-                    }
-                }
-
-                for (size_t i = N * M; i < (N + 1) * M; i++)
-                    _constant(i - N * M) = params(i);
-
-                _random = false;
-            }
-
-            Eigen::VectorXd params() const
-            {
-                if (_random || _params.size() == 0)
-                    return limbo::tools::random_vector((Params::linear_policy::state_dim() + 1) * Params::linear_policy::action_dim());
-                return _params;
+                _gp_model.template load<limbo::serialize::BinaryArchive>(directory);
             }
 
         protected:
-            Eigen::MatrixXd _alpha;
-            Eigen::VectorXd _constant, _params;
-            bool _random;
+            GP_t _gp_model;
+            bool _initialized = false;
+
+            std::vector<Eigen::VectorXd> _to_vector(const Eigen::MatrixXd& m) const
+            {
+                std::vector<Eigen::VectorXd> result(m.rows());
+                for (size_t i = 0; i < result.size(); ++i) {
+                    result[i] = m.row(i);
+                }
+                return result;
+            }
+            std::vector<Eigen::VectorXd> _to_vector(Eigen::MatrixXd& m) const { return _to_vector(m); }
+
+            Eigen::MatrixXd _to_matrix(const std::vector<Eigen::VectorXd>& xs) const
+            {
+                Eigen::MatrixXd result(xs.size(), xs[0].size());
+                for (size_t i = 0; i < (size_t)result.rows(); ++i) {
+                    result.row(i) = xs[i];
+                }
+                return result;
+            }
+
+            Eigen::MatrixXd _to_matrix(std::vector<Eigen::VectorXd>& xs) const { return _to_matrix(xs); }
         };
-    } // namespace policy
+    } // namespace model
 } // namespace blackdrops
+
 #endif

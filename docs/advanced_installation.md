@@ -42,13 +42,14 @@ sudo make install
 
 If you want to install NLOpt somewhere else than `/usr/local/`, you add the `--prefix=/path/to/install/folder` in the `./configure` command.
 
-Now that the basic dependencies of limbo have been installed, we can proceed in cloning the limbo framework (we need the `spt` branch):
+Now that the basic dependencies of limbo have been installed, we can proceed in cloning the limbo framework (we need the `master` branch):
 
 ```bash
 cd /path/to/code/folder
 git clone https://github.com/resibots/limbo.git
 cd limbo
-git checkout spt
+./waf configure
+./waf
 ```
 
 You can also clone with ssh if desired: ``git clone git@github.com:resibots/limbo.git``.
@@ -115,11 +116,18 @@ If you do not have TBB installed, you should use: `cmake -DUSE_TBB=OFF -DUSE_OPE
 
 If you want to compile and create [DART](http://dartsim.github.io/)-based scenarios, you will need to install the upstream DART by source.
 
-For **Ubuntu systems**, please follow the detailed installation instructions on the [DART documentation website](http://dartsim.github.io/install_dart_on_ubuntu.html#install-required-dependencies). Make sure that you don't forget to add the PPAs as detailed [here](http://dartsim.github.io/install_dart_on_ubuntu.html#adding-personal-package-archives-ppas-for-dart-and-dependencies). What is more, you need to enable the `-DART_ENABLE_SIMD` flag in the CMake configuration. In addition, you need the following optional dependencies: **DART Parsers** and **OpenSceneGraph GUI**. Lastly, you need to checkout to the `244d89c044b53f262443ad460647b731d296c175` commit (and not the one provided in DART's documentation). In short you should do the following:
+For **Ubuntu systems**, please follow the detailed installation instructions on the [DART documentation website](http://dartsim.github.io/install_dart_on_ubuntu.html#install-required-dependencies). Make sure that you don't forget to add the PPAs as detailed [here](http://dartsim.github.io/install_dart_on_ubuntu.html#adding-personal-package-archives-ppas-for-dart-and-dependencies). What is more, you need to enable the `-DART_ENABLE_SIMD` flag in the CMake configuration. In addition, you need the following optional dependencies: **DART Parsers** and **OpenSceneGraph GUI**. Lastly, you need to checkout to the `release-6.7` branch (and not the one provided in DART's documentation).
+
+For **Ubuntu <= 14.04** one more step is needed:
 
 ```bash
 sudo apt-add-repository ppa:libccd-debs/ppa
 sudo apt-add-repository ppa:fcl-debs/ppa
+```
+
+Here's what you should do:
+
+```bash
 sudo apt-add-repository ppa:dartsim/ppa
 sudo apt-get update
 
@@ -133,7 +141,7 @@ sudo apt-get install liburdfdom-dev liburdfdom-headers-dev
 cd /path/to/tmp/folder
 git clone git://github.com/dartsim/dart.git
 cd dart
-git checkout 244d89c044b53f262443ad460647b731d296c175
+git checkout release-6.7
 
 mkdir build
 cd build
@@ -161,7 +169,7 @@ brew install ros/deps/urdfdom
 cd /path/to/tmp/folder
 git clone git://github.com/dartsim/dart.git
 cd dart
-git checkout 244d89c044b53f262443ad460647b731d296c175
+git checkout release-6.7
 
 mkdir build
 cd build
@@ -177,6 +185,7 @@ cd /path/to/tmp/folder
 git clone https://github.com/resibots/robot_dart.git
 cd robot_dart
 ./waf configure
+./waf
 sudo ./waf install
 ```
 
@@ -196,6 +205,21 @@ For OSX systems:
 
 ```bash
 brew install sdl2
+```
+
+### Installing simple_nn
+
+For neural network policies, we are using the [simple_nn](https://github.com/resibots/simple_nn) library.
+
+You should do the following:
+
+```bash
+cd /path/to/tmp/folder
+git clone https://github.com/resibots/simple_nn.git
+cd simple_nn
+./waf configure
+./waf
+sudo ./waf install
 ```
 
 ### Compiling the Black-DROPS code

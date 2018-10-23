@@ -64,7 +64,7 @@ namespace blackdrops {
     namespace model {
         namespace gp {
             ///optimize the likelihood of the kernel only
-            template <typename Params, typename Optimizer = limbo::opt::ParallelRepeater<Params, limbo::opt::Rprop<Params>>>
+            template <typename Params, typename Optimizer = limbo::opt::Rprop<Params>>
             struct KernelLFOpt : public limbo::model::gp::HPOpt<Params, Optimizer> {
             public:
                 template <typename GP>
@@ -178,7 +178,7 @@ namespace blackdrops {
                     const GP& _original_gp;
                 };
             };
-        }
-    }
-}
+        } // namespace gp
+    } // namespace model
+} // namespace blackdrops
 #endif

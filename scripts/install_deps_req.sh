@@ -61,6 +61,14 @@ make install
 # go back to original directory
 cd ../..
 
+# install simple_nn
+cd deps/simple_nn
+./waf configure --prefix=${cwd}/install
+./waf
+./waf install
+# go back to original directory
+cd ../..
+
 # just as fail-safe in Linux
 if [ $OS = "Linux" ]; then
     sudo ldconfig

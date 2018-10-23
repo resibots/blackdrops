@@ -59,6 +59,8 @@
 #include <cmath>
 #include <fstream>
 
+#include <Eigen/Core>
+
 namespace Eigen {
     template <class Matrix>
     void write_binary(const std::string filename, const Matrix& matrix)

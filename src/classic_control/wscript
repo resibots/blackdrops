@@ -59,19 +59,9 @@ import limbo
 import glob
 
 def build(bld):
-    libs = 'TBB EIGEN BOOST LIMBO LIBCMAES NLOPT SFERES2 BOOST_CHRONO RT SDL '
+    libs = 'TBB EIGEN BOOST LIMBO LIBCMAES NLOPT SFERES2 SDL SIMPLE_NN '
 
     cxxflags = bld.get_env()['CXXFLAGS']
-
-    limbo.create_variants(bld,
-                      source='cartpole.cpp',
-                      includes='. ../../../../src ../ ../../include',
-                      target='cartpole',
-                      uselib=libs,
-                      uselib_local='limbo',
-                      cxxflags = cxxflags + ['-D NODSP'],
-                      variants = ['SIMU', 'SIMU SPGPS', 'SIMU GPPOLICY', 'SIMU GPPOLICY SPGPS'])
-                    #   variants = ['SIMU', 'SIMU MEAN', 'SIMU MEAN MODELIDENT', 'SIMU MEAN MODELIDENT ONLYMI', 'SIMU SPGPS', 'SIMU GPPOLICY', 'SIMU GPPOLICY SPGPS'])
 
     limbo.create_variants(bld,
                       source='pendulum.cpp',
@@ -82,25 +72,7 @@ def build(bld):
                       cxxflags = cxxflags + ['-D NODSP'],
                       variants = ['SIMU', 'SIMU GPPOLICY', 'SIMU LINEAR'])
 
-    limbo.create_variants(bld,
-                      source='pendubot.cpp',
-                      includes='. ../../../../src ../ ../../include',
-                      target='pendubot',
-                      uselib=libs,
-                      uselib_local='limbo',
-                      cxxflags = cxxflags + ['-D NODSP'],
-                      variants = ['SIMU', 'SIMU MEAN', 'SIMU MEAN MODELIDENT', 'SIMU MEAN MODELIDENT ONLYMI'])
-
     if bld.env.DEFINES_SDL:
-        limbo.create_variants(bld,
-                        source='cartpole.cpp',
-                        includes='. ../../../../src ../ ../../include',
-                        target='cartpole',
-                        uselib=libs,
-                        uselib_local='limbo',
-                        cxxflags = cxxflags,
-                        variants = ['GRAPHIC', 'GRAPHIC SPGPS', 'GRAPHIC GPPOLICY', 'GRAPHIC GPPOLICY SPGPS'])
-                        # variants = ['GRAPHIC', 'GRAPHIC MEAN', 'GRAPHIC MEAN MODELIDENT', 'GRAPHIC MEAN MODELIDENT ONLYMI', 'GRAPHIC SPGPS', 'GRAPHIC GPPOLICY', 'GRAPHIC GPPOLICY SPGPS'])
         limbo.create_variants(bld,
                         source='pendulum.cpp',
                         includes='. ../../../../src ../ ../../include',
@@ -109,14 +81,6 @@ def build(bld):
                         uselib_local='limbo',
                         cxxflags = cxxflags,
                         variants = ['GRAPHIC', 'GRAPHIC GPPOLICY', 'GRAPHIC LINEAR'])
-        limbo.create_variants(bld,
-                      source='pendubot.cpp',
-                      includes='. ../../../../src ../ ../../include',
-                      target='pendubot',
-                      uselib=libs,
-                      uselib_local='limbo',
-                      cxxflags = cxxflags,
-                      variants = ['GRAPHIC', 'GRAPHIC MEAN', 'GRAPHIC MEAN MODELIDENT', 'GRAPHIC MEAN MODELIDENT ONLYMI'])
 
     # Find new targets
     files = glob.glob(bld.path.abspath()+"/*.cpp")
@@ -124,7 +88,7 @@ def build(bld):
     for f in files:
         target_name = f[f.rfind('/')+1:-4]
         # Ignore our sample scenarios
-        if target_name != 'cartpole' and target_name != 'pendulum' and target_name != 'pendubot':
+        if target_name != 'pendulum':
             new_targets.append(target_name)
 
     # Compile new targets

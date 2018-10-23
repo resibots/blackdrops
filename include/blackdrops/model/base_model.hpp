@@ -53,81 +53,26 @@
 //| The fact that you are presently reading this means that you have had
 //| knowledge of the CeCILL-C license and that you accept its terms.
 //|
-#ifndef BLACKDROPS_POLICY_LINEAR_POLICY_HPP
-#define BLACKDROPS_POLICY_LINEAR_POLICY_HPP
+#ifndef BLACKDROPS_MODEL_BASE_MODEL_HPP
+#define BLACKDROPS_MODEL_BASE_MODEL_HPP
+
+#include <string>
 
 #include <Eigen/Core>
 
-#include <limbo/tools/random_generator.hpp>
-
 namespace blackdrops {
-    namespace policy {
-        template <typename Params>
-        struct LinearPolicy {
+    namespace model {
+        class BaseModel {
         public:
-            LinearPolicy() { _random = false; }
+            virtual void learn(const std::vector<std::tuple<Eigen::VectorXd, Eigen::VectorXd, Eigen::VectorXd>>& observations) = 0;
 
-            Eigen::VectorXd next(const Eigen::VectorXd& state) const
-            {
-                if (_random || _params.size() == 0) {
-                    Eigen::VectorXd act = (limbo::tools::random_vector(Params::linear_policy::action_dim()).array() * 2 - 1.0);
-                    for (int i = 0; i < act.size(); i++) {
-                        act(i) = act(i) * Params::linear_policy::max_u(i);
-                    }
-                    return act;
-                }
+            virtual void save_model(size_t iteration) const {}
 
-                Eigen::VectorXd act = _alpha * state + _constant;
+            virtual void load_model(const std::string& directory) {}
 
-                for (int i = 0; i < act.size(); i++) {
-                    act(i) = Params::linear_policy::max_u(i) * (9 * std::sin(act(i)) / 8.0 + std::sin(3 * act(i)) / 8.0);
-                }
-
-                return act;
-            }
-
-            void set_random_policy()
-            {
-                _random = true;
-            }
-
-            bool random() const
-            {
-                return _random;
-            }
-
-            void set_params(const Eigen::VectorXd& params)
-            {
-                size_t M = Params::linear_policy::action_dim();
-                size_t N = Params::linear_policy::state_dim();
-
-                _params = params;
-                _alpha = Eigen::MatrixXd::Zero(M, N);
-                _constant = Eigen::VectorXd::Zero(M);
-                for (size_t i = 0; i < M; i++) {
-                    for (size_t j = 0; j < N; j++) {
-                        _alpha(i, j) = params(i * M + j);
-                    }
-                }
-
-                for (size_t i = N * M; i < (N + 1) * M; i++)
-                    _constant(i - N * M) = params(i);
-
-                _random = false;
-            }
-
-            Eigen::VectorXd params() const
-            {
-                if (_random || _params.size() == 0)
-                    return limbo::tools::random_vector((Params::linear_policy::state_dim() + 1) * Params::linear_policy::action_dim());
-                return _params;
-            }
-
-        protected:
-            Eigen::MatrixXd _alpha;
-            Eigen::VectorXd _constant, _params;
-            bool _random;
+            virtual std::tuple<Eigen::VectorXd, Eigen::VectorXd> predict(const Eigen::VectorXd& x, bool compute_variance) const = 0;
         };
-    } // namespace policy
+    } // namespace model
 } // namespace blackdrops
+
 #endif

@@ -12,7 +12,7 @@ ln -s ../../../ blackdrops
 # go back to limbo
 cd ..
 
-# save current directory
+# configure
 ./waf configure --libcmaes=${cwd}/install --nlopt=${cwd}/install --dart=${cwd}/install --robot_dart=${cwd}/install --exp blackdrops
 
 # go back to original directory

@@ -53,30 +53,92 @@
 //| The fact that you are presently reading this means that you have had
 //| knowledge of the CeCILL-C license and that you accept its terms.
 //|
-#ifndef UTILS_UTILS_HPP
-#define UTILS_UTILS_HPP
+#ifndef BLACKDROPS_REWARD_GP_REWARD_HPP
+#define BLACKDROPS_REWARD_GP_REWARD_HPP
 
-#include <random>
+#include <vector>
 
-template <typename T>
-inline T gaussian_rand(T m = 0.0, T v = 1.0)
-{
-    static std::random_device rd;
-    static std::mt19937 gen(rd());
+#include <limbo/kernel/squared_exp_ard.hpp>
+#include <limbo/mean/constant.hpp>
+#include <limbo/model/gp.hpp>
 
-    std::normal_distribution<T> gaussian(m, v);
+#include <blackdrops/reward/reward.hpp>
+#include <blackdrops/utils/utils.hpp>
 
-    return gaussian(gen);
-}
+namespace blackdrops {
 
-inline double angle_dist(double a, double b)
-{
-    double theta = b - a;
-    while (theta < -M_PI)
-        theta += 2 * M_PI;
-    while (theta > M_PI)
-        theta -= 2 * M_PI;
-    return theta;
-}
+    struct reward_defaults {
+        struct kernel : public limbo::defaults::kernel {
+            BO_PARAM(bool, optimize_noise, true);
+        };
+
+        struct kernel_squared_exp_ard : public limbo::defaults::kernel_squared_exp_ard {
+        };
+
+        struct mean_constant {
+            BO_PARAM(double, constant, 0.);
+        };
+
+        struct opt_rprop : public limbo::defaults::opt_rprop {
+            BO_PARAM(int, iterations, 300);
+            BO_PARAM(double, eps_stop, 1e-4);
+        };
+    };
+
+    template <typename Params>
+    using RewardGP = limbo::model::GP<Params, limbo::kernel::SquaredExpARD<Params>, limbo::mean::Constant<Params>, blackdrops::model::gp::KernelLFOpt<Params, limbo::opt::Rprop<Params>>>;
+
+    namespace reward {
+
+        template <typename MyReward, typename GP = RewardGP<reward_defaults>>
+        struct GPReward : public Reward<MyReward> {
+            template <typename RolloutInfo>
+            double observe(const RolloutInfo& info, const Eigen::VectorXd& from_state, const Eigen::VectorXd& action, const Eigen::VectorXd& to_state, bool keep = true)
+            {
+                double val = (*static_cast<const MyReward*>(this))(info, from_state, action, to_state);
+
+                if (keep) {
+                    Eigen::VectorXd sample = static_cast<const MyReward*>(this)->get_sample(info, from_state, action, to_state);
+                    _samples.push_back(sample);
+                    _obs.push_back(limbo::tools::make_vector(val));
+                }
+
+                return val;
+            }
+
+            template <typename RolloutInfo>
+            double query(const RolloutInfo& info, const Eigen::VectorXd& from_state, const Eigen::VectorXd& action, const Eigen::VectorXd& to_state) const
+            {
+                Eigen::VectorXd mu;
+                double sigma;
+                std::tie(mu, sigma) = _model.query(static_cast<const MyReward*>(this)->get_sample(info, from_state, action, to_state));
+
+                return std::min(mu[0] + std::sqrt(sigma), std::max(mu[0] - std::sqrt(sigma), utils::gaussian_rand(mu[0], sigma)));
+            }
+
+            bool learn()
+            {
+                _model.compute(_samples, _obs, false);
+                _model.optimize_hyperparams();
+
+                return true;
+            }
+
+            template <typename RolloutInfo>
+            Eigen::VectorXd get_sample(const RolloutInfo& info, const Eigen::VectorXd& from_state, const Eigen::VectorXd& action, const Eigen::VectorXd& to_state) const
+            {
+                Eigen::VectorXd vec(to_state.size() + action.size());
+                vec.head(to_state.size()) = to_state;
+                vec.tail(action.size()) = action;
+
+                return vec;
+            }
+
+        protected:
+            std::vector<Eigen::VectorXd> _samples, _obs;
+            GP _model;
+        };
+    } // namespace reward
+} // namespace blackdrops
 
 #endif

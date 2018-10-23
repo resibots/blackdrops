@@ -53,48 +53,44 @@
 //| The fact that you are presently reading this means that you have had
 //| knowledge of the CeCILL-C license and that you accept its terms.
 //|
-#include <limbo/limbo.hpp>
-
-#include <boost/program_options.hpp>
-
-#include <robot_dart/position_control.hpp>
-#include <robot_dart/robot_dart_simu.hpp>
-
-#ifdef GRAPHIC
-#include <robot_dart/graphics.hpp>
-#endif
+// #define MEAN // TO-CHANGE (optional): uncomment this if you want to use a mean function
+#include <limbo/kernel/squared_exp_ard.hpp>
+#include <limbo/mean/constant.hpp>
+#include <limbo/model/gp.hpp>
+#include <limbo/model/multi_gp.hpp>
+#include <limbo/model/multi_gp/parallel_lf_opt.hpp>
+#include <limbo/opt/cmaes.hpp>
 
 #include <blackdrops/blackdrops.hpp>
-#include <blackdrops/gp_model.hpp>
 #include <blackdrops/model/gp/kernel_lf_opt.hpp>
-#include <blackdrops/model/multi_gp.hpp>
-#include <blackdrops/model/multi_gp/multi_gp_parallel_opt.hpp>
+#include <blackdrops/model/gp_model.hpp>
 #include <blackdrops/system/dart_system.hpp>
 
 // TO-CHANGE (optional): You can include other policies as well (GP and linear policy already implemented)
 #include <blackdrops/policy/nn_policy.hpp>
 
-#include <utils/dart_utils.hpp>
-#include <utils/utils.hpp>
+// TO-CHANGE (optional): You can include other reward types as well (GPReward is already implemented)
+#include <blackdrops/reward/reward.hpp>
+
+#include <blackdrops/utils/cmd_args.hpp>
+#include <blackdrops/utils/dart_utils.hpp>
+#include <blackdrops/utils/utils.hpp>
 
 struct Params {
-#ifdef GRAPHIC
-    struct graphics : robot_dart::defaults::graphics {
-    };
-#endif
-
-    struct blackdrops {
+    struct blackdrops : public ::blackdrops::defaults::blackdrops {
         // TO-CHANGE: Here you should set your parameters
         BO_PARAM(size_t, action_dim, @int_value); // action space # of dimensions
         BO_PARAM(size_t, model_input_dim, @int_value); // transformed input # of dimensions (input to the GPs and policy)
         BO_PARAM(size_t, model_pred_dim, @int_value); // state space # of dimensions
         BO_PARAM(double, dt, @double_value); // sampling/control rate
         BO_PARAM(double, T, @double_value); // duration of each episode
-        BO_DYN_PARAM(double, boundary);
         BO_DYN_PARAM(bool, verbose);
+        BO_DYN_PARAM(bool, stochastic);
+        BO_DYN_PARAM(double, boundary);
     };
 
     struct dart_system {
+        // TO-CHANGE: This is the simulation step for the DART simulation, you can set it to whatever you want (it should be smaller than `dt` above)
         BO_PARAM(double, sim_step, 0.001);
     };
 
@@ -120,13 +116,15 @@ struct Params {
     };
 
     struct opt_cmaes : public limbo::defaults::opt_cmaes {
-        BO_DYN_PARAM(double, max_fun_evals);
+        BO_DYN_PARAM(int, max_fun_evals);
         BO_DYN_PARAM(double, fun_tolerance);
         BO_DYN_PARAM(int, restarts);
         BO_DYN_PARAM(int, elitism);
         BO_DYN_PARAM(bool, handle_uncertainty);
 
-        BO_PARAM(int, variant, aBIPOP_CMAES);
+        BO_DYN_PARAM(int, lambda);
+
+        BO_PARAM(int, variant, aIPOP_CMAES);
         BO_PARAM(bool, verbose, false);
         BO_PARAM(bool, fun_compute_initial, true);
         BO_DYN_PARAM(double, ubound);
@@ -136,10 +134,6 @@ struct Params {
     struct opt_rprop : public limbo::defaults::opt_rprop {
         BO_PARAM(int, iterations, 300);
         BO_PARAM(double, eps_stop, 1e-4);
-    };
-
-    struct opt_parallelrepeater : public limbo::defaults::opt_parallelrepeater {
-        BO_PARAM(int, repeats, 3);
     };
 };
 
@@ -151,30 +145,11 @@ struct PolicyParams {
         BO_PARAM(size_t, state_dim, Params::blackdrops::model_input_dim());
         BO_PARAM(size_t, action_dim, Params::blackdrops::action_dim());
         // TO-CHANGE: fill in the appropriate values
-        BO_PARAM_ARRAY(double, max_u, @double_values_separated_by_comma); // max (absolute) values for the actions (one per dimension)
+        BO_PARAM_ARRAY(double, max_u, @double_values_separated_by_comma); // max (absolute) values for the actions (one per dimension): [-max, max]
         BO_PARAM_ARRAY(double, limits, @double_values_separated_by_comma); // normalization factor for the inputs of the neural network policy
         BO_DYN_PARAM(int, hidden_neurons);
         // TO-CHANGE (optional): if you want your NN policy to produce actions closer to 0, change the value of af to something close to zero (i.e., 0.2)
         BO_PARAM(double, af, 1.0);
-    };
-};
-
-struct RewardParams {
-    struct kernel : public limbo::defaults::kernel {
-        BO_PARAM(double, noise, 1e-12);
-        BO_PARAM(bool, optimize_noise, true);
-    };
-
-    struct kernel_squared_exp_ard : public limbo::defaults::kernel_squared_exp_ard {
-    };
-
-    struct opt_rprop : public limbo::defaults::opt_rprop {
-        BO_PARAM(int, iterations, 300);
-        BO_PARAM(double, eps_stop, 1e-4);
-    };
-
-    struct opt_parallelrepeater : public limbo::defaults::opt_parallelrepeater {
-        BO_PARAM(int, repeats, 3);
     };
 };
 
@@ -185,34 +160,55 @@ namespace global {
     using policy_t = blackdrops::policy::NNPolicy<PolicyParams>;
 
     // TO-CHANGE: You may want to define some global helper variables
-}
+} // namespace global
 
 struct PolicyControl : public blackdrops::system::BaseDARTPolicyControl<Params, global::policy_t> {
     using base_t = blackdrops::system::BaseDARTPolicyControl<Params, global::policy_t>;
 
     PolicyControl() : base_t() {}
-    PolicyControl(const std::vector<double>& ctrl, base_t::robot_t robot) : base_t(ctrl, robot) {}
+    PolicyControl(const std::vector<double>& ctrl) : base_t(ctrl) {}
 
-    Eigen::VectorXd get_state(const base_t::robot_t& robot, bool full) const
+    Eigen::VectorXd get_state(const robot_t& robot) const
     {
         // TO-CHANGE: write code to get the state of your robot
-        // if full equals true, then you should return the transformed state
+    }
+
+    std::shared_ptr<robot_dart::control::RobotControl> clone() const override
+    {
+        return std::make_shared<PolicyControl>(*this);
     }
 };
 
 // TO-CHANGE: Change the MyDARTSystem to your desired name
-struct MyDARTSystem : public blackdrops::system::DARTSystem<Params, PolicyControl> {
-    using base_t = blackdrops::system::DARTSystem<Params, PolicyControl>;
+// TO-CHANGE: Change the third template argument to your desired RolloutInfo structure
+struct MyDARTSystem : public blackdrops::system::DARTSystem<Params, PolicyControl, blackdrops::RolloutInfo> {
+    using base_t = blackdrops::system::DARTSystem<Params, PolicyControl, blackdrops::RolloutInfo>;
 
     Eigen::VectorXd init_state() const
     {
         // TO-CHANGE: return my initial state
+        // if you omit this function, the zero state is returned
     }
 
     Eigen::VectorXd transform_state(const Eigen::VectorXd& original_state) const
     {
         // TO-CHANGE: Code to transform your state (for GP and policy input) if needed
         // if not needed, just return the original state
+        // if you omit this function, no transformation is applied
+    }
+
+    Eigen::VectorXd add_noise(const Eigen::VectorXd& original_state) const
+    {
+        // TO-CHANGE: Code to add observation noise to the system
+        // you should return the full noisy state, not just the noise
+        // if no noise is desired, just return the original state
+        // if you omit this function, no noise is added
+    }
+
+    Eigen::VectorXd policy_transform(const Eigen::VectorXd& original_state, RolloutInfo* info) const
+    {
+        // TO-CHANGE: Code to transform the state variables that go to the policy if needed
+        // the input original_state is the transformed state (by the transform_state variable)
     }
 
     std::shared_ptr<robot_dart::Robot> get_robot() const
@@ -223,16 +219,23 @@ struct MyDARTSystem : public blackdrops::system::DARTSystem<Params, PolicyContro
         return simulated_robot;
     }
 
-    void add_extra_to_simu(base_t::robot_simu_t& simu) const
+    void add_extra_to_simu(base_t::robot_simu_t& simu, const blackdrops::RolloutInfo& info) const
     {
         // TO-CHANGE: if you want, you can add some extra to your simulator object (this is called once before its episode on a newly-created simulator object)
     }
+
+    void set_robot_state(const std::shared_ptr<robot_dart::Robot>& robot, const Eigen::VectorXd& state) const
+    {
+        // TO-CHANGE: This is called whenever is needed to set the robot in a specific state
+    }
 };
 
-struct RewardFunction {
-    double operator()(const Eigen::VectorXd& from_state, const Eigen::VectorXd& action, const Eigen::VectorXd& to_state, bool certain = false) const
+struct RewardFunction : public blackdrops::reward::Reward<RewardFunction> {
+    template <typename RolloutInfo>
+    double operator()(const RolloutInfo& info, const Eigen::VectorXd& from_state, const Eigen::VectorXd& action, const Eigen::VectorXd& to_state) const
     {
         // TO-CHANGE: return the immediate reward function r(x,u,x')
+        // the RolloutInfo can contain information needed for the computation of the reward function
     }
 };
 
@@ -240,7 +243,7 @@ void init_simu(const std::string& robot_file)
 {
     // TO-CHANGE: write code to load your robot
     // if you want to load a SKEL file, use std::make_shared<robot_dart::Robot>(utils::load_skel(robot_file, "name_of_the_skeleton"))
-    // if you want to load a URDF or an SDF file, use std::make_shared<robot_dart::Robot>(robot_dart::Robot(robot_file, {}, "give_a_name_to_your_robot", true));
+    // if you want to load a URDF or an SDF file, use std::make_shared<robot_dart::Robot>(robot_dart::Robot(robot_file, "give_a_name_to_your_robot"));
 
     // global::global_robot = ....;
 }
@@ -248,118 +251,45 @@ void init_simu(const std::string& robot_file)
 BO_DECLARE_DYN_PARAM(int, PolicyParams::nn_policy, hidden_neurons);
 BO_DECLARE_DYN_PARAM(double, Params::blackdrops, boundary);
 BO_DECLARE_DYN_PARAM(bool, Params::blackdrops, verbose);
+BO_DECLARE_DYN_PARAM(bool, Params::blackdrops, stochastic);
+BO_DECLARE_DYN_PARAM(double, Params::blackdrops, boundary);
 
-BO_DECLARE_DYN_PARAM(double, Params::opt_cmaes, max_fun_evals);
+BO_DECLARE_DYN_PARAM(int, Params::opt_cmaes, max_fun_evals);
 BO_DECLARE_DYN_PARAM(double, Params::opt_cmaes, fun_tolerance);
 BO_DECLARE_DYN_PARAM(double, Params::opt_cmaes, lbound);
 BO_DECLARE_DYN_PARAM(double, Params::opt_cmaes, ubound);
 BO_DECLARE_DYN_PARAM(int, Params::opt_cmaes, restarts);
 BO_DECLARE_DYN_PARAM(int, Params::opt_cmaes, elitism);
+BO_DECLARE_DYN_PARAM(int, Params::opt_cmaes, lambda);
 BO_DECLARE_DYN_PARAM(bool, Params::opt_cmaes, handle_uncertainty);
 
 int main(int argc, char** argv)
 {
-    bool uncertainty = false;
-    bool verbose = false;
-    int threads = tbb::task_scheduler_init::automatic;
-    namespace po = boost::program_options;
-    po::options_description desc("Command line arguments");
-    // clang-format off
-    desc.add_options()("help,h", "Prints this help message")
-                      ("hidden_neurons,n", po::value<int>(), "Number of hidden neurons in NN policy.")
-                      ("boundary,b", po::value<double>(), "Boundary of the values during the optimization.")
-                      ("max_evals,m", po::value<int>(), "Max function evaluations to optimize the policy.")
-                      ("tolerance,t", po::value<double>(), "Maximum tolerance to continue optimizing the function.")
-                      ("restarts,r", po::value<int>(), "Max number of restarts to use during optimization.")
-                      ("elitism,e", po::value<int>(), "Elitism mode to use [0 to 3].")
-                      ("uncertainty,u", po::bool_switch(&uncertainty)->default_value(false), "Enable uncertainty handling.")
-                      ("threads,d", po::value<int>(), "Max number of threads used by TBB")
-                      ("verbose,v", po::bool_switch(&verbose)->default_value(false), "Enable verbose mode.");
-    // clang-format on
+    utils::CmdArgs cmd_arguments;
+    int ret = cmd_arguments.parse(argc, argv);
+    if (ret >= 0)
+        return ret;
 
-    try {
-        po::variables_map vm;
-        po::store(po::parse_command_line(argc, argv, desc), vm);
-        if (vm.count("help")) {
-            std::cout << desc << std::endl;
-            return 0;
-        }
+    PolicyParams::nn_policy::set_hidden_neurons(cmd_arguments.neurons());
+    // PolicyParams::gp_policy::set_pseudo_samples(cmd_arguments.pseudo_samples());
 
-        po::notify(vm);
+    Params::blackdrops::set_boundary(cmd_arguments.boundary());
+    Params::opt_cmaes::set_lbound(-cmd_arguments.boundary());
+    Params::opt_cmaes::set_ubound(cmd_arguments.boundary());
 
-        if (vm.count("threads")) {
-            threads = vm["threads"].as<int>();
-        }
-        if (vm.count("hidden_neurons")) {
-            int c = vm["hidden_neurons"].as<int>();
-            if (c < 1)
-                c = 1;
-            PolicyParams::nn_policy::set_hidden_neurons(c);
-        }
-        else {
-            PolicyParams::nn_policy::set_hidden_neurons(5);
-        }
-        if (vm.count("boundary")) {
-            double c = vm["boundary"].as<double>();
-            if (c < 0)
-                c = 0;
-            Params::blackdrops::set_boundary(c);
-            Params::opt_cmaes::set_lbound(-c);
-            Params::opt_cmaes::set_ubound(c);
-        }
-        else {
-            Params::blackdrops::set_boundary(0);
-            Params::opt_cmaes::set_lbound(-6);
-            Params::opt_cmaes::set_ubound(6);
-        }
-
-        // Cmaes parameters
-        if (vm.count("max_evals")) {
-            int c = vm["max_evals"].as<int>();
-            Params::opt_cmaes::set_max_fun_evals(c);
-        }
-        else {
-            Params::opt_cmaes::set_max_fun_evals(10000);
-        }
-        if (vm.count("tolerance")) {
-            double c = vm["tolerance"].as<double>();
-            if (c < 0.1)
-                c = 0.1;
-            Params::opt_cmaes::set_fun_tolerance(c);
-        }
-        else {
-            Params::opt_cmaes::set_fun_tolerance(1);
-        }
-        if (vm.count("restarts")) {
-            int c = vm["restarts"].as<int>();
-            if (c < 1)
-                c = 1;
-            Params::opt_cmaes::set_restarts(c);
-        }
-        else {
-            Params::opt_cmaes::set_restarts(3);
-        }
-        if (vm.count("elitism")) {
-            int c = vm["elitism"].as<int>();
-            if (c < 0 || c > 3)
-                c = 0;
-            Params::opt_cmaes::set_elitism(c);
-        }
-        else {
-            Params::opt_cmaes::set_elitism(0);
-        }
-    }
-    catch (po::error& e) {
-        std::cerr << "[Exception caught while parsing command line arguments]: " << e.what() << std::endl;
-        return 1;
-    }
+    Params::opt_cmaes::set_max_fun_evals(cmd_arguments.max_fun_evals());
+    Params::opt_cmaes::set_fun_tolerance(cmd_arguments.fun_tolerance());
+    Params::opt_cmaes::set_restarts(cmd_arguments.restarts());
+    Params::opt_cmaes::set_elitism(cmd_arguments.elitism());
+    Params::opt_cmaes::set_lambda(cmd_arguments.lambda());
 
 #ifdef USE_TBB
-    static tbb::task_scheduler_init init(threads);
+    static tbb::task_scheduler_init init(cmd_arguments.threads());
 #endif
 
-    Params::blackdrops::set_verbose(verbose);
-    Params::opt_cmaes::set_handle_uncertainty(uncertainty);
+    Params::blackdrops::set_verbose(cmd_arguments.verbose());
+    Params::blackdrops::set_stochastic(cmd_arguments.stochastic());
+    Params::opt_cmaes::set_handle_uncertainty(cmd_arguments.uncertainty());
 
     std::cout << std::endl;
     std::cout << "Cmaes parameters:" << std::endl;
@@ -368,8 +298,13 @@ int main(int argc, char** argv)
     std::cout << "  restarts = " << Params::opt_cmaes::restarts() << std::endl;
     std::cout << "  elitism = " << Params::opt_cmaes::elitism() << std::endl;
     std::cout << "  handle_uncertainty = " << Params::opt_cmaes::handle_uncertainty() << std::endl;
+    std::cout << "  stochastic rollouts = " << Params::blackdrops::stochastic() << std::endl;
     std::cout << "  boundary = " << Params::blackdrops::boundary() << std::endl;
-    std::cout << "  tbb threads = " << threads << std::endl;
+    std::cout << "  tbb threads = " << cmd_arguments.threads() << std::endl;
+    std::cout << std::endl;
+    std::cout << "Policy parameters:" << std::endl;
+    // TO-CHANGE: Here you can log your policy if you are not using a neural network
+    std::cout << "  Type: Neural Network with 1 hidden layer and " << PolicyParams::nn_policy::hidden_neurons() << " hidden neurons." << std::endl;
     std::cout << std::endl;
 
     // TO-CHANGE: change @path_to_file to your file: /URDF/my_robot.urdf
@@ -381,14 +316,16 @@ int main(int argc, char** argv)
     using kernel_t = limbo::kernel::SquaredExpARD<Params>;
     using mean_t = limbo::mean::Constant<Params>;
 
-    using GP_t = blackdrops::model::MultiGP<Params, limbo::model::GP, kernel_t, mean_t, blackdrops::model::multi_gp::MultiGPParallelLFOpt<Params, limbo::model::gp::KernelLFOpt<Params>>>;
+    using GP_t = limbo::model::MultiGP<Params, limbo::model::GP, kernel_t, mean_t, limbo::model::multi_gp::ParallelLFOpt<Params, blackdrops::model::gp::KernelLFOpt<Params>>>;
 
-    using MGP_t = blackdrops::GPModel<Params, GP_t>;
+    using MGP_t = blackdrops::model::GPModel<Params, GP_t>;
 
     // TO-CHANGE: Change the MyDARTSystem to your desired name
     blackdrops::BlackDROPS<Params, MGP_t, MyDARTSystem, global::policy_t, policy_opt_t, RewardFunction> my_system;
 
-    my_system.learn(2, 15, true);
+    // TO-CHANGE: fill in the data
+    my_system.learn(@initial_random_trials, @learning_episodes, @random_policies, [@policy_file]); // @random_policies -- this should be true if you want to always start the policy optimization from the best so far tried policy (if false, the optimization will start from the previous policy tried on the robot)
+    // @policy_file is an optional argument that if you are using a mean function, you can set it to the path to an initial policy to try
 
     return 0;
 }

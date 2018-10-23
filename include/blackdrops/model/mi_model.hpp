@@ -53,32 +53,84 @@
 //| The fact that you are presently reading this means that you have had
 //| knowledge of the CeCILL-C license and that you accept its terms.
 //|
-#ifndef BLACKDROPS_MODEL_MULTI_GP_MULTI_GP_PARALLEL_OPT_HPP
-#define BLACKDROPS_MODEL_MULTI_GP_MULTI_GP_PARALLEL_OPT_HPP
+#ifndef BLACKDROPS_MODEL_MI_MODEL_HPP
+#define BLACKDROPS_MODEL_MI_MODEL_HPP
 
 #include <Eigen/binary_matrix.hpp>
-#include <limbo/model/gp/hp_opt.hpp>
-#include <limbo/model/gp/kernel_lf_opt.hpp>
+
+#include <blackdrops/model/base_model.hpp>
 
 namespace blackdrops {
     namespace model {
-        namespace multi_gp {
-            template <typename Params, typename Optimizer = limbo::opt::Rprop<Params>>
-            struct MultiGPParallelLFOpt : public limbo::model::gp::HPOpt<Params, Optimizer> {
-            public:
-                template <typename GP>
-                void operator()(GP& gp)
-                {
-                    this->_called = true;
-                    auto& gps = gp.gp_models();
-                    // for (auto& small_gp : gps)
-                    tbb::parallel_for(size_t(0), gps.size(), size_t(1), [&](size_t i) {
-                        Optimizer hp_optimize;
-                        hp_optimize(gps[i]);
-                    });
+        template <typename Params, typename MeanFunction, typename Optimizer>
+        class MIModel : public BaseModel {
+        public:
+            MIModel() { _init = false; }
+
+            void learn(const std::vector<std::tuple<Eigen::VectorXd, Eigen::VectorXd, Eigen::VectorXd>>& observations)
+            {
+                std::vector<Eigen::VectorXd> samples, observs;
+                for (size_t i = 0; i < observations.size(); i++) {
+                    Eigen::VectorXd st, act, pred;
+                    st = std::get<0>(observations[i]);
+                    act = std::get<1>(observations[i]);
+                    pred = std::get<2>(observations[i]);
+
+                    Eigen::VectorXd s(st.size() + act.size());
+                    s.head(st.size()) = st;
+                    s.tail(act.size()) = act;
+
+                    samples.push_back(s);
+                    observs.push_back(pred);
                 }
-            };
-        }
-    }
-}
+
+                _samples = samples;
+                _observations = observs;
+
+                if (!_init) {
+                    _mean = MeanFunction(_samples[0].size());
+                    _init = true;
+                }
+
+                Optimizer optimizer;
+                Eigen::VectorXd best_params = optimizer(std::bind(&MIModel::_optimize_model, this, std::placeholders::_1, std::placeholders::_2), _mean.h_params(), true);
+
+                std::cout << "Mean: " << best_params.transpose() << std::endl;
+
+                _mean.set_h_params(best_params);
+            }
+
+            std::tuple<Eigen::VectorXd, Eigen::VectorXd> predict(const Eigen::VectorXd& x, bool) const
+            {
+                Eigen::VectorXd mu = _mean(x, x);
+                Eigen::VectorXd ss = Eigen::VectorXd::Zero(mu.size());
+
+                return std::make_tuple(mu, ss);
+            }
+
+        protected:
+            std::vector<Eigen::VectorXd> _samples, _observations;
+            MeanFunction _mean;
+            bool _init;
+
+            limbo::opt::eval_t _optimize_model(const Eigen::VectorXd& params, bool eval_grad = false) const
+            {
+                assert(_samples.size());
+                MeanFunction mean(_samples[0].size());
+                mean.set_h_params(params);
+
+                double mse = 0.;
+                for (size_t i = 0; i < _samples.size(); i++) {
+                    Eigen::VectorXd mu = mean(_samples[i], _samples[i]);
+                    Eigen::VectorXd val = _observations[i];
+
+                    mse += (mu - val).squaredNorm();
+                }
+
+                return limbo::opt::no_grad(-mse);
+            }
+        };
+    } // namespace model
+} // namespace blackdrops
+
 #endif

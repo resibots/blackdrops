@@ -53,22 +53,27 @@
 //| The fact that you are presently reading this means that you have had
 //| knowledge of the CeCILL-C license and that you accept its terms.
 //|
-#include <limbo/limbo.hpp>
-
-#include <boost/program_options.hpp>
+#include <limbo/kernel/squared_exp_ard.hpp>
+#include <limbo/mean/constant.hpp>
+#include <limbo/model/gp.hpp>
+#include <limbo/model/multi_gp.hpp>
+#include <limbo/model/multi_gp/parallel_lf_opt.hpp>
+#include <limbo/opt/cmaes.hpp>
+#include <limbo/opt/rprop.hpp>
 
 #include <blackdrops/blackdrops.hpp>
-#include <blackdrops/gp_model.hpp>
 #include <blackdrops/model/gp/kernel_lf_opt.hpp>
-#include <blackdrops/model/multi_gp.hpp>
-#include <blackdrops/model/multi_gp/multi_gp_parallel_opt.hpp>
+#include <blackdrops/model/gp_model.hpp>
 #include <blackdrops/system/ode_system.hpp>
 
 #include <blackdrops/policy/gp_policy.hpp>
 #include <blackdrops/policy/linear_policy.hpp>
 #include <blackdrops/policy/nn_policy.hpp>
 
-#include <utils/utils.hpp>
+#include <blackdrops/reward/reward.hpp>
+
+#include <blackdrops/utils/cmd_args.hpp>
+#include <blackdrops/utils/utils.hpp>
 
 #if defined(USE_SDL) && !defined(NODSP)
 #include <SDL2/SDL.h>
@@ -154,13 +159,14 @@ struct Params {
     BO_PARAM(double, goal_pos, M_PI);
     BO_PARAM(double, goal_vel, 0.0);
 
-    struct blackdrops {
+    struct blackdrops : public ::blackdrops::defaults::blackdrops {
         BO_PARAM(size_t, action_dim, 1);
         BO_PARAM(size_t, model_input_dim, 3);
         BO_PARAM(size_t, model_pred_dim, 2);
         BO_PARAM(double, dt, 0.1);
         BO_PARAM(double, T, 4.0);
         BO_DYN_PARAM(bool, verbose);
+        BO_DYN_PARAM(bool, stochastic);
         BO_DYN_PARAM(double, boundary);
     };
 
@@ -172,10 +178,6 @@ struct Params {
         BO_PARAM(double, constant, 0.0);
     };
 
-    struct opt_nloptgrad : public limbo::defaults::opt_nloptgrad {
-        BO_PARAM(int, iterations, 1000);
-    };
-
     struct kernel : public limbo::defaults::kernel {
         BO_PARAM(double, noise, gp_model::noise());
         BO_PARAM(bool, optimize_noise, true);
@@ -184,14 +186,21 @@ struct Params {
     struct kernel_squared_exp_ard : public limbo::defaults::kernel_squared_exp_ard {
     };
 
+    struct opt_rprop : public limbo::defaults::opt_rprop {
+        BO_PARAM(int, iterations, 300);
+        BO_PARAM(double, eps_stop, 1e-4);
+    };
+
     struct opt_cmaes : public limbo::defaults::opt_cmaes {
-        BO_DYN_PARAM(double, max_fun_evals);
+        BO_DYN_PARAM(int, max_fun_evals);
         BO_DYN_PARAM(double, fun_tolerance);
         BO_DYN_PARAM(int, restarts);
         BO_DYN_PARAM(int, elitism);
         BO_DYN_PARAM(bool, handle_uncertainty);
 
-        BO_PARAM(int, variant, aBIPOP_CMAES);
+        BO_DYN_PARAM(int, lambda);
+
+        BO_PARAM(int, variant, aIPOP_CMAES);
         BO_PARAM(int, verbose, false);
         BO_PARAM(bool, fun_compute_initial, true);
         // BO_PARAM(double, fun_target, 30);
@@ -223,21 +232,21 @@ struct PolicyParams {
         BO_PARAM(size_t, state_dim, Params::blackdrops::model_input_dim());
         BO_PARAM(size_t, action_dim, Params::blackdrops::action_dim());
         BO_PARAM_ARRAY(double, max_u, 2.5);
-        BO_PARAM(double, pseudo_samples, 20);
-        BO_PARAM(double, noise, 0.01);
+        // BO_PARAM(double, pseudo_samples, 20);
+        BO_DYN_PARAM(int, pseudo_samples);
+        BO_PARAM(double, noise, 0.01 * 0.01);
         BO_PARAM_ARRAY(double, limits, 10., 1., 1.);
     };
 
     struct kernel : public limbo::defaults::kernel {
         BO_PARAM(double, noise, gp_policy::noise());
-        BO_PARAM(double, sigma_sq, 1.0);
     };
 
     struct kernel_squared_exp_ard : public limbo::defaults::kernel_squared_exp_ard {
     };
 };
 
-struct Pendulum : public blackdrops::system::ODESystem<Params> {
+struct Pendulum : public blackdrops::system::ODESystem<Params, blackdrops::RolloutInfo> {
     Eigen::VectorXd init_state() const
     {
         return Eigen::VectorXd::Zero(2);
@@ -281,8 +290,9 @@ struct Pendulum : public blackdrops::system::ODESystem<Params> {
     }
 };
 
-struct RewardFunction {
-    double operator()(const Eigen::VectorXd& from_state, const Eigen::VectorXd& action, const Eigen::VectorXd& to_state) const
+struct RewardFunction : public blackdrops::reward::Reward<RewardFunction> {
+    template <typename RolloutInfo>
+    double operator()(const RolloutInfo& info, const Eigen::VectorXd& from_state, const Eigen::VectorXd& action, const Eigen::VectorXd& to_state) const
     {
         double s_c_sq = 0.5 * 0.5;
 
@@ -295,112 +305,40 @@ struct RewardFunction {
 };
 
 BO_DECLARE_DYN_PARAM(int, PolicyParams::nn_policy, hidden_neurons);
+BO_DECLARE_DYN_PARAM(int, PolicyParams::gp_policy, pseudo_samples);
 BO_DECLARE_DYN_PARAM(bool, Params::blackdrops, verbose);
+BO_DECLARE_DYN_PARAM(bool, Params::blackdrops, stochastic);
 BO_DECLARE_DYN_PARAM(double, Params::blackdrops, boundary);
 
-BO_DECLARE_DYN_PARAM(double, Params::opt_cmaes, max_fun_evals);
+BO_DECLARE_DYN_PARAM(int, Params::opt_cmaes, max_fun_evals);
 BO_DECLARE_DYN_PARAM(double, Params::opt_cmaes, fun_tolerance);
 BO_DECLARE_DYN_PARAM(double, Params::opt_cmaes, lbound);
 BO_DECLARE_DYN_PARAM(double, Params::opt_cmaes, ubound);
 BO_DECLARE_DYN_PARAM(int, Params::opt_cmaes, restarts);
 BO_DECLARE_DYN_PARAM(int, Params::opt_cmaes, elitism);
+BO_DECLARE_DYN_PARAM(int, Params::opt_cmaes, lambda);
 BO_DECLARE_DYN_PARAM(bool, Params::opt_cmaes, handle_uncertainty);
 
 int main(int argc, char** argv)
 {
-    bool uncertainty = false;
-    int threads = tbb::task_scheduler_init::automatic;
-    bool verbose = false;
-    namespace po = boost::program_options;
-    po::options_description desc("Command line arguments");
-    // clang-format off
-    desc.add_options()("help,h", "Prints this help message")
-                      ("hidden_neurons,n", po::value<int>(), "Number of hidden neurons in NN policy.")
-                      ("boundary,b", po::value<double>(), "Boundary of the values during the optimization.")
-                      ("max_evals,m", po::value<int>(), "Max function evaluations to optimize the policy.")
-                      ("tolerance,t", po::value<double>(), "Maximum tolerance to continue optimizing the function.")
-                      ("restarts,r", po::value<int>(), "Max number of restarts to use during optimization.")
-                      ("elitism,e", po::value<int>(), "Elitism mode to use [0 to 3].")
-                      ("uncertainty,u", po::bool_switch(&uncertainty)->default_value(false), "Enable uncertainty handling.")
-                      ("threads,d", po::value<int>(), "Max number of threads used by TBB")
-                      ("verbose,v", po::bool_switch(&verbose)->default_value(false), "Enable verbose mode.");
-    // clang-format on
+    blackdrops::utils::CmdArgs cmd_arguments;
+    int ret = cmd_arguments.parse(argc, argv);
+    if (ret >= 0)
+        return ret;
 
-    try {
-        po::variables_map vm;
-        po::store(po::parse_command_line(argc, argv, desc), vm);
-        if (vm.count("help")) {
-            std::cout << desc << std::endl;
-            return 0;
-        }
+    PolicyParams::nn_policy::set_hidden_neurons(cmd_arguments.neurons());
+    PolicyParams::gp_policy::set_pseudo_samples(cmd_arguments.pseudo_samples());
 
-        po::notify(vm);
+    Params::blackdrops::set_boundary(cmd_arguments.boundary());
+    Params::opt_cmaes::set_lbound(-cmd_arguments.boundary());
+    Params::opt_cmaes::set_ubound(cmd_arguments.boundary());
 
-        if (vm.count("threads"))
-            threads = vm["threads"].as<int>();
-        if (vm.count("hidden_neurons")) {
-            int c = vm["hidden_neurons"].as<int>();
-            if (c < 1)
-                c = 1;
-            PolicyParams::nn_policy::set_hidden_neurons(c);
-        }
-        else {
-            PolicyParams::nn_policy::set_hidden_neurons(5);
-        }
-        if (vm.count("boundary")) {
-            double c = vm["boundary"].as<double>();
-            if (c < 0)
-                c = 0;
-            Params::blackdrops::set_boundary(c);
-            Params::opt_cmaes::set_lbound(-c);
-            Params::opt_cmaes::set_ubound(c);
-        }
-        else {
-            Params::blackdrops::set_boundary(0);
-            Params::opt_cmaes::set_lbound(-6);
-            Params::opt_cmaes::set_ubound(6);
-        }
+    Params::opt_cmaes::set_max_fun_evals(cmd_arguments.max_fun_evals());
+    Params::opt_cmaes::set_fun_tolerance(cmd_arguments.fun_tolerance());
+    Params::opt_cmaes::set_restarts(cmd_arguments.restarts());
+    Params::opt_cmaes::set_elitism(cmd_arguments.elitism());
+    Params::opt_cmaes::set_lambda(cmd_arguments.lambda());
 
-        // Cmaes parameters
-        if (vm.count("max_evals")) {
-            int c = vm["max_evals"].as<int>();
-            Params::opt_cmaes::set_max_fun_evals(c);
-        }
-        else {
-            Params::opt_cmaes::set_max_fun_evals(10000);
-        }
-        if (vm.count("tolerance")) {
-            double c = vm["tolerance"].as<double>();
-            if (c < 0.1)
-                c = 0.1;
-            Params::opt_cmaes::set_fun_tolerance(c);
-        }
-        else {
-            Params::opt_cmaes::set_fun_tolerance(1);
-        }
-        if (vm.count("restarts")) {
-            int c = vm["restarts"].as<int>();
-            if (c < 1)
-                c = 1;
-            Params::opt_cmaes::set_restarts(c);
-        }
-        else {
-            Params::opt_cmaes::set_restarts(3);
-        }
-        if (vm.count("elitism")) {
-            int c = vm["elitism"].as<int>();
-            if (c < 0 || c > 3)
-                c = 0;
-            Params::opt_cmaes::set_elitism(c);
-        }
-        else {
-            Params::opt_cmaes::set_elitism(0);
-        }
-    }
-    catch (po::error& e) {
-        std::cerr << "[Exception caught while parsing command line arguments]: " << e.what() << std::endl;
-        return 1;
-    }
 #if defined(USE_SDL) && !defined(NODSP)
     //Initialize
     if (!sdl_init()) {
@@ -409,11 +347,12 @@ int main(int argc, char** argv)
 #endif
 
 #ifdef USE_TBB
-    static tbb::task_scheduler_init init(threads);
+    static tbb::task_scheduler_init init(cmd_arguments.threads());
 #endif
 
-    Params::blackdrops::set_verbose(verbose);
-    Params::opt_cmaes::set_handle_uncertainty(uncertainty);
+    Params::blackdrops::set_verbose(cmd_arguments.verbose());
+    Params::blackdrops::set_stochastic(cmd_arguments.stochastic());
+    Params::opt_cmaes::set_handle_uncertainty(cmd_arguments.uncertainty());
 
     std::cout << std::endl;
     std::cout << "Cmaes parameters:" << std::endl;
@@ -422,16 +361,26 @@ int main(int argc, char** argv)
     std::cout << "  restarts = " << Params::opt_cmaes::restarts() << std::endl;
     std::cout << "  elitism = " << Params::opt_cmaes::elitism() << std::endl;
     std::cout << "  handle_uncertainty = " << Params::opt_cmaes::handle_uncertainty() << std::endl;
+    std::cout << "  stochastic rollouts = " << Params::blackdrops::stochastic() << std::endl;
     std::cout << "  boundary = " << Params::blackdrops::boundary() << std::endl;
+    std::cout << "  tbb threads = " << cmd_arguments.threads() << std::endl;
+    std::cout << std::endl;
+    std::cout << "Policy parameters:" << std::endl;
+#ifdef GPPOLICY
+    std::cout << "  Type: Gaussian Process with " << PolicyParams::gp_policy::pseudo_samples() << " pseudo samples." << std::endl;
+#elif defined(LINEAR)
+    std::cout << "  Type: Linear Policy." << std::endl;
+#else
+    std::cout << "  Type: Neural Network with 1 hidden layer and " << PolicyParams::nn_policy::hidden_neurons() << " hidden neurons." << std::endl;
+#endif
     std::cout << std::endl;
 
     using kernel_t = limbo::kernel::SquaredExpARD<Params>;
     using mean_t = limbo::mean::Constant<Params>;
-    using GP_t = blackdrops::model::MultiGP<Params, limbo::model::GP, kernel_t, mean_t, blackdrops::model::multi_gp::MultiGPParallelLFOpt<Params, blackdrops::model::gp::KernelLFOpt<Params, limbo::opt::NLOptGrad<Params, nlopt::LD_SLSQP>>>>;
+    using GP_t = limbo::model::MultiGP<Params, limbo::model::GP, kernel_t, mean_t, limbo::model::multi_gp::ParallelLFOpt<Params, blackdrops::model::gp::KernelLFOpt<Params, limbo::opt::Rprop<Params>>>>;
 
     using policy_opt_t = limbo::opt::Cmaes<Params>;
-    //using policy_opt_t = limbo::opt::NLOptGrad<Params>;
-    using MGP_t = blackdrops::GPModel<Params, GP_t>;
+    using MGP_t = blackdrops::model::GPModel<Params, GP_t>;
 #ifdef GPPOLICY
     blackdrops::BlackDROPS<Params, MGP_t, Pendulum, blackdrops::policy::GPPolicy<PolicyParams>, policy_opt_t, RewardFunction> pend_system;
 #elif defined(LINEAR)

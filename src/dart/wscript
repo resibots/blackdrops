@@ -60,7 +60,7 @@ import glob
 from waflib import Logs
 
 def build(bld):
-    dart_libs = 'TBB EIGEN BOOST LIMBO LIBCMAES NLOPT SFERES2 BOOST_CHRONO RT ROBOT_DART DART BOOST_DART THREADS '
+    dart_libs = 'TBB EIGEN BOOST LIMBO LIBCMAES NLOPT SFERES2 ROBOT_DART DART BOOST_DART THREADS SIMPLE_NN '
     dart_libs_graphic = dart_libs + 'DART_GRAPHIC'
 
     path = bld.path.abspath()[:-len('src/dart')] + 'res'
@@ -71,39 +71,15 @@ def build(bld):
 
     cxxflags = bld.get_env()['CXXFLAGS']
 
-    limbo.create_variants(bld,
-                      source='simple_arm.cpp',
-                      includes='. ../../../../src ../ ../../include',
-                      target='simple_arm',
-                      uselib=dart_libs,
-                      uselib_local='limbo',
-                      cxxflags = cxxflags + ['-DRESPATH="' + path + '"'],
-                      variants = ['SIMU'])
-
-    if bld.get_env()['BUILD_GRAPHIC'] == True:
-        limbo.create_variants(bld,
-                          source='simple_arm.cpp',
-                          includes='. ../../../../src ../ ../../include',
-                          target='simple_arm',
-                          uselib=dart_libs_graphic,
-                          uselib_local='limbo',
-                          cxxflags = cxxflags + ['-DRESPATH="' + path + '"'],
-                          variants = ['GRAPHIC'])
-
     # Find new targets
     files = glob.glob(bld.path.abspath()+"/*.cpp")
     new_targets = []
     for f in files:
         target_name = f[f.rfind('/')+1:-4]
-        # Ignore our sample scenarios
-        if target_name != 'simple_arm':
-            new_targets.append(target_name)
+        new_targets.append(target_name)
 
     # Compile new targets
     for target in new_targets:
-        # ignore hexapod experiment if no hexapod_controller is found
-        if target == 'hexapod_walk' and len(bld.env.INCLUDES_HEXAPOD_CONTROLLER) == 0:
-            continue
         limbo.create_variants(bld,
                         source=target+'.cpp',
                         includes='. ../../../../src ../ ../../include',

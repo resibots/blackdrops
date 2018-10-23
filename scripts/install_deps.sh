@@ -99,3 +99,11 @@ cd deps/robot_dart
 ./waf install
 # go back to original directory
 cd ../..
+
+# install simple_nn
+cd deps/simple_nn
+./waf configure --prefix=${cwd}/install
+./waf
+./waf install
+# go back to original directory
+cd ../..
