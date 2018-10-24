@@ -85,7 +85,9 @@ def configure(conf):
 
     conf.env.LIB_THREADS = ['pthread']
 
-    if not (conf.env.CXX_NAME in ["icc", "icpc"]) and not (conf.env.CXX_NAME in ["clang"]):
+    if conf.env.CXX_NAME in ["clang"]:
+        conf.env['CXXFLAGS'] = conf.env['CXXFLAGS'] + ['-faligned-new']
+    elif not (conf.env.CXX_NAME in ["icc", "icpc"]):
         gcc_version = int(conf.env['CC_VERSION'][0]+conf.env['CC_VERSION'][1])
         if gcc_version >= 71 and "-march=native" in conf.env['CXXFLAGS']:
             conf.env['CXXFLAGS'] = conf.env['CXXFLAGS'] + ['-faligned-new']
