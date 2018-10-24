@@ -80,6 +80,9 @@ def check_robot_dart(conf, *k, **kw):
     includes_check = ['/usr/local/include', '/usr/include']
     libs_check = ['/usr/local/lib', '/usr/lib']
 
+    # OSX/Mac uses .dylib and GNU/Linux .so
+    lib_suffix = 'dylib' if conf.env['DEST_OS'] == 'darwin' else 'so'
+
     # # You can customize where you want to check
     # # e.g. here we search also in a folder defined by an environmental variable
     # if 'RESIBOTS_DIR' in os.environ:
@@ -105,7 +108,7 @@ def check_robot_dart(conf, *k, **kw):
         conf.env.INCLUDES_ROBOT_DART = dirs
 
         conf.start_msg('Checking for robot_dart library')
-        libs_ext = ['.a', '.so']
+        libs_ext = ['.a', lib_suffix]
         lib_found = False
         type_lib = '.a'
         for lib in libs_ext:
