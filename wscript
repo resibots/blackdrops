@@ -61,6 +61,7 @@ sys.path.insert(0, sys.path[0]+'/waf_tools')
 
 import os
 import limbo
+from waflib import Logs
 
 def options(opt):
     opt.load('sdl')
@@ -84,7 +85,12 @@ def configure(conf):
 
     conf.env.LIB_THREADS = ['pthread']
 
-    conf.env['CXXFLAGS'] = conf.env['CXXFLAGS'] + ['-faligned-new']
+    if not (conf.env.CXX_NAME in ["icc", "icpc"]) and not (conf.env.CXX_NAME in ["clang"]):
+        gcc_version = int(conf.env['CC_VERSION'][0]+conf.env['CC_VERSION'][1])
+        if gcc_version >= 71 and "-march=native" in conf.env['CXXFLAGS']:
+            conf.env['CXXFLAGS'] = conf.env['CXXFLAGS'] + ['-faligned-new']
+
+    Logs.pprint('NORMAL', 'CXXFLAGS (Blackdrops): %s' % conf.env['CXXFLAGS'])
 
 
 def build(bld):
