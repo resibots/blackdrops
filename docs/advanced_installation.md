@@ -184,6 +184,7 @@ The last step to be able to run and create DART-based scenarios with the Black-D
 cd /path/to/tmp/folder
 git clone https://github.com/resibots/robot_dart.git
 cd robot_dart
+git checkout osg_gui
 ./waf configure
 ./waf
 sudo ./waf install
