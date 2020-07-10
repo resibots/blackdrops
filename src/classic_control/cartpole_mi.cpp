@@ -318,7 +318,7 @@ struct MeanModel : limbo::mean::BaseMean<Params> {
         double dt = Params::blackdrops::dt();
 
         boost::numeric::odeint::integrate_const(boost::numeric::odeint::make_dense_output(1.0e-12, 1.0e-12, _stepper),
-            std::bind(&MeanModel::dynamics, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, u),
+            std::bind(&MeanModel::dynamics, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, x.tail(1)),
             robot_state, t, t + dt, dt / 4.0);
 
         Eigen::VectorXd final = Eigen::VectorXd::Map(robot_state.data(), robot_state.size());
