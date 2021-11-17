@@ -92,8 +92,8 @@ struct Params {
     };
 
     struct dart_policy_control {
-        // BO_PARAM(dart::dynamics::Joint::ActuatorType, joint_type, dart::dynamics::Joint::SERVO);
-        BO_PARAM(dart::dynamics::Joint::ActuatorType, joint_type, dart::dynamics::Joint::FORCE);
+        // BO_PARAM_STRING(joint_type, "servo");
+        BO_PARAM_STRING(joint_type, "torque");
     };
 
     struct gp_model {
@@ -199,7 +199,7 @@ struct PolicyControl : public blackdrops::system::BaseDARTPolicyControl<Params, 
     using base_t = blackdrops::system::BaseDARTPolicyControl<Params, global::policy_t>;
 
     PolicyControl() : base_t() {}
-    PolicyControl(const std::vector<double>& ctrl) : base_t(ctrl) {}
+    PolicyControl(const Eigen::VectorXd& ctrl) : base_t(ctrl) {}
 
     Eigen::VectorXd get_state(const base_t::robot_t& robot) const
     {
@@ -265,12 +265,20 @@ struct DARTReacher : public blackdrops::system::DARTSystem<Params, PolicyControl
         simu.add_robot(floor_robot);
 
 #ifdef GRAPHIC
-        Eigen::Vector3d camera_pos = Eigen::Vector3d(0., 2., 0.);
-        Eigen::Vector3d look_at = Eigen::Vector3d(0., 0., 0.);
-        Eigen::Vector3d up = Eigen::Vector3d(0., 1., 0.);
-        std::static_pointer_cast<robot_dart::graphics::Graphics>(simu.graphics())->look_at(camera_pos, look_at, up);
-        // slow down visualization because 0.5 seconds is too fast
-        simu.graphics()->set_render_period(0.03);
+        // Add 2 directional lights without shadows
+        auto graphics = std::static_pointer_cast<robot_dart::gui::magnum::Graphics>(simu.graphics());
+        graphics->clear_lights();
+        robot_dart::gui::magnum::gs::Material mat;
+        mat.diffuse_color() = {1.f, 1.f, 1.f, 1.f};
+        mat.specular_color() = {1.f, 1.f, 1.f, 1.f};
+        Magnum::Vector3 dir = {-0.5f, -0.5f, -0.5f};
+        robot_dart::gui::magnum::gs::Light light = robot_dart::gui::magnum::gs::create_directional_light(dir, mat);
+        light.set_casts_shadows(false);
+        graphics->add_light(light);
+        dir = {0.5f, -0.5f, 0.5f};
+        light = robot_dart::gui::magnum::gs::create_directional_light(dir, mat);
+        light.set_casts_shadows(false);
+        graphics->add_light(light);
 #endif
     }
 

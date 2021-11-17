@@ -89,7 +89,7 @@ struct Params {
     };
 
     struct dart_policy_control {
-        BO_PARAM(dart::dynamics::Joint::ActuatorType, joint_type, dart::dynamics::Joint::VELOCITY);
+        BO_PARAM_STRING(joint_type, "velocity");
     };
 
     struct gp_model {
@@ -181,7 +181,7 @@ struct PolicyControl : public blackdrops::system::BaseDARTPolicyControl<Params, 
     using base_t = blackdrops::system::BaseDARTPolicyControl<Params, global::policy_t>;
 
     PolicyControl() : base_t() {}
-    PolicyControl(const std::vector<double>& ctrl) : base_t(ctrl) {}
+    PolicyControl(const Eigen::VectorXd& ctrl) : base_t(ctrl) {}
 
     Eigen::VectorXd get_state(const robot_t& robot) const
     {
@@ -229,10 +229,8 @@ struct SimpleArm : public blackdrops::system::DARTSystem<Params, PolicyControl, 
         goal_pose.tail(3) = global::goal;
         // dims, pose, type, mass, color, name
         auto ellipsoid = robot_dart::Robot::create_ellipsoid({0.1, 0.1, 0.1}, goal_pose, "fixed", 1., dart::Color::Green(1.0), "goal_marker");
-        // remove collisions from goal marker
-        ellipsoid->skeleton()->getRootBodyNode()->setCollidable(false);
         // add ellipsoid to simu
-        simu.add_robot(ellipsoid);
+        simu.add_robot(ellipsoid->clone_ghost("ghost_goal", {0., 1., 0., 0.8}));
     }
 };
 

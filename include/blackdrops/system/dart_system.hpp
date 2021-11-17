@@ -66,7 +66,7 @@
 #include <dart/dynamics/BodyNode.hpp>
 
 #ifdef GRAPHIC
-#include <robot_dart/graphics/graphics.hpp>
+#include <robot_dart/gui/magnum/graphics.hpp>
 #endif
 
 #include <blackdrops/system/system.hpp>
@@ -90,25 +90,21 @@ namespace blackdrops {
 
                 robot_simu_t simu;
 #ifdef GRAPHIC
-                simu.set_graphics(std::make_shared<robot_dart::graphics::Graphics>(simu.world()));
+                simu.set_graphics(std::make_shared<robot_dart::gui::magnum::Graphics>());
                 simu.graphics()->set_enable(display);
 #endif
                 // simulation step different from sampling rate -- we need a stable simulation
-                simu.set_step(Params::dart_system::sim_step());
+                simu.set_timestep(Params::dart_system::sim_step());
 
                 // Get the information of the rollout
                 RolloutInfo rollout_info = this->get_rollout_info();
 
                 // setup robot
-                Eigen::VectorXd pp = policy.params();
-                std::vector<double> params(pp.size());
-                Eigen::VectorXd::Map(params.data(), pp.size()) = pp;
-
                 std::shared_ptr<robot_dart::Robot> simulated_robot = this->get_robot();
                 simulated_robot->set_actuator_types(Params::dart_policy_control::joint_type());
 
                 // setup the controller
-                auto controller = std::make_shared<PolicyController>(params);
+                auto controller = std::make_shared<PolicyController>(policy.params());
                 controller->set_transform_state(std::bind(&DARTSystem::transform_state, this, std::placeholders::_1));
                 controller->set_noise_function(std::bind(&DARTSystem::add_noise, this, std::placeholders::_1));
                 controller->set_update_function(std::bind([&](double t) { rollout_info.t = t; }, std::placeholders::_1));
@@ -176,7 +172,7 @@ namespace blackdrops {
             using robot_t = std::shared_ptr<robot_dart::Robot>;
 
             BaseDARTPolicyControl() {}
-            BaseDARTPolicyControl(const std::vector<double>& ctrl, bool full_control = false)
+            BaseDARTPolicyControl(const Eigen::VectorXd& ctrl, bool full_control = false)
                 : robot_dart::control::RobotControl(ctrl, full_control)
             {
                 // set some default functions in case the user does not define them
@@ -192,7 +188,7 @@ namespace blackdrops {
                 _t = 0.0;
                 _first = true;
 
-                _policy.set_params(Eigen::VectorXd::Map(_ctrl.data(), _ctrl.size()));
+                _policy.set_params(_ctrl);
 
                 _states.clear();
                 _noiseless_states.clear();
@@ -217,7 +213,7 @@ namespace blackdrops {
                     _states.push_back(q);
                     _coms.push_back(commands);
 
-                    ROBOT_DART_ASSERT(_control_dof == static_cast<size_t>(commands.size()), "BaseDARTPolicyControl: Policy output size is not the same as the control DOFs of the robot", Eigen::VectorXd::Zero(_control_dof));
+                    ROBOT_DART_ASSERT(_control_dof == commands.size(), "BaseDARTPolicyControl: Policy output size is not the same as the control DOFs of the robot", Eigen::VectorXd::Zero(_control_dof));
                     _prev_commands = commands;
                     _prev_time = _t;
                     _first = false;

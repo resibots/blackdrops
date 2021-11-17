@@ -64,17 +64,26 @@ from waflib.Configure import conf
 
 
 def options(opt):
-	pass
+    pass
 
 
 @conf
-def check_sdl(conf):
-	conf.start_msg('Checking for SDL (2.x - sdl2-config)')
-	try:
-		conf.check_cfg(path='sdl2-config', args='--cflags --libs', package='', uselib_store='SDL')
-	except:
-		conf.end_msg('sdl2-config not found in the PATH', 'RED')
-		return 1
-	conf.end_msg('ok')
-	conf.env.DEFINES_SDL += ['USE_SDL']
-	return 1
+def check_sdl(conf, *k, **kw):
+    def fail(msg, required):
+        if required:
+            conf.fatal(msg)
+        conf.end_msg(msg, 'RED')
+    def get_directory(filename, dirs):
+        res = conf.find_file(filename, dirs)
+        return res[:-len(filename)-1]
+
+    required = kw.get('required', False)
+    conf.start_msg('Checking for SDL (2.x - sdl2-config)')
+    try:
+        conf.check_cfg(path='sdl2-config', args='--cflags --libs', package='', uselib_store='SDL')
+    except:
+        fail('sdl2-config not found in the PATH', required)
+        return
+    conf.end_msg('OK')
+    conf.env.DEFINES_SDL += ['USE_SDL']
+    return
